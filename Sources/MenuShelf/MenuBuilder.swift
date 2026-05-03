@@ -635,6 +635,9 @@ final class MenuBuilder {
 
         menu.addItem(actionItem("Open", kind: .open, url: actionURL, folderID: config.id))
         menu.addItem(openWithItem(for: actionURL, folderID: config.id))
+        if isTextOrCodeFile(item) {
+            menu.addItem(actionItem("Copy Contents", kind: .copyContents, url: actionURL, folderID: config.id))
+        }
         menu.addItem(actionItem("Show in Finder", kind: .reveal, url: actionURL, folderID: config.id))
         menu.addItem(.separator())
         menu.addItem(actionItem("Move to Trash...", kind: .moveToTrash, url: actionURL, folderID: config.id))
@@ -665,6 +668,27 @@ final class MenuBuilder {
         }
 
         return menu
+    }
+
+    private func isTextOrCodeFile(_ item: FileMenuItem) -> Bool {
+        if let kind = item.kind {
+            if kind.conforms(to: .plainText) || kind.conforms(to: .sourceCode) {
+                return true
+            }
+        }
+        let ext = item.url.pathExtension.lowercased()
+        let textExtensions: Set<String> = [
+            "txt", "md", "markdown", "yml", "yaml", "json", "xml", "html", "htm",
+            "css", "js", "ts", "jsx", "tsx", "py", "rb", "sh", "bash", "zsh", "fish",
+            "swift", "c", "cpp", "cc", "h", "hpp", "m", "mm", "java", "kt", "kts",
+            "go", "rs", "php", "pl", "sql", "r", "scala", "lua", "vim", "config",
+            "ini", "plist", "log", "csv", "tsv", "diff", "patch", "toml", "env",
+            "gitignore", "gitattributes", "dockerfile", "makefile", "cmake", "gradle",
+            "podfile", "cartfile", "brewfile", "gemfile", "rakefile", "vue", "svelte",
+            "scss", "sass", "less", "graphql", "gql", "dart", "ps1", "bat",
+            "cmd", "vbs", "applescript", "jxa", "prisma", "proto"
+        ]
+        return textExtensions.contains(ext)
     }
 
     private func openWithItem(for url: URL, folderID: UUID?) -> NSMenuItem {

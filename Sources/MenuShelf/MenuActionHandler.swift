@@ -14,6 +14,7 @@ enum MenuActionKind {
     case reveal
     case copyPath
     case copyFile
+    case copyContents
     case copyDimensions
     case share
     case moveToTrash
@@ -213,6 +214,19 @@ final class MenuAction: NSObject {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.writeObjects([url as NSURL])
                 DiagnosticsLogger.shared.log("Copied file: \(url.path)")
+            }
+
+        case .copyContents:
+            guard let url = action.url else { return }
+            withFolderAccess(action.folderID) {
+                do {
+                    let content = try String(contentsOf: url, encoding: .utf8)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(content, forType: .string)
+                    DiagnosticsLogger.shared.log("Copied contents of: \(url.path)")
+                } catch {
+                    store.showError("Could not read file contents: \(error.localizedDescription)")
+                }
             }
 
         case .copyDimensions:
