@@ -535,9 +535,7 @@ final class MenuBuilder {
     private func addFolderFooter(to menu: NSMenu, config: FolderConfig, url: URL, isRoot: Bool) {
         menu.addItem(.separator())
         menu.addItem(actionItem("Open in Finder", kind: .open, url: url, folderID: config.id))
-        if isRoot || config.menuSettings.resolvedShowOpenWithForSubfolders {
-            menu.addItem(openWithItem(for: url, folderID: config.id))
-        }
+        menu.addItem(openWithItem(for: url, folderID: config.id))
         menu.addItem(actionItem("Show in Finder", kind: .reveal, url: url, folderID: config.id))
         menu.addItem(actionItem("Copy Path", kind: .copyPath, url: url, folderID: config.id))
 

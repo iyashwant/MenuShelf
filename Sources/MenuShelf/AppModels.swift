@@ -287,7 +287,7 @@ struct MenuSettings: Codable, Equatable {
         ignoredNames: [".DS_Store"],
         fileIconSize: .medium,
         showFolderTitle: true,
-        showOpenWithForSubfolders: false,
+        showOpenWithForSubfolders: true,
         showTips: true,
         enableModifierActions: true
     )

@@ -310,6 +310,7 @@ private struct MenuViewRow: View {
 private struct MenuViewDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     @Binding var view: MenuViewConfig
+    @State private var showingSymbolPicker = false
 
     var body: some View {
         ScrollView {
@@ -354,6 +355,7 @@ private struct MenuViewDetailView: View {
                         Button("Use Folder Icon") { view.icon = .folderIcon }
                         Button("Use Monogram") { view.icon = .monogram(String(view.title.prefix(1))) }
                         Button("Choose Custom Image") { store.selectCustomIconForMenuView(id: view.id) }
+                        Button("Browse Symbols") { showingSymbolPicker = true }
                     }
 
                     TextField("SF Symbol", text: Binding(
@@ -382,6 +384,15 @@ private struct MenuViewDetailView: View {
                     Button("Clear Color") {
                         view.iconColorHex = nil
                     }
+                }
+                .sheet(isPresented: $showingSymbolPicker) {
+                    SFSymbolPickerView(selectedSymbol: Binding(
+                        get: {
+                            if case .systemSymbol(let name, _) = view.icon { return name }
+                            return "folder"
+                        },
+                        set: { view.icon = .systemSymbol(name: $0, tint: nil) }
+                    ))
                 }
 
                 SettingsCard("View Contents") {
@@ -558,6 +569,7 @@ private struct FolderRow: View {
 private struct FolderDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     @Binding var config: FolderConfig
+    @State private var showingSymbolPicker = false
 
     var body: some View {
         ScrollView {
@@ -585,6 +597,7 @@ private struct FolderDetailView: View {
                         Button("Use Folder Icon") { config.icon = .folderIcon }
                         Button("Use Monogram") { config.icon = .monogram(String(config.displayName.prefix(1))) }
                         Button("Choose Custom Image") { store.selectCustomIcon(for: config.id) }
+                        Button("Browse Symbols") { showingSymbolPicker = true }
                     }
 
                     TextField("SF Symbol", text: Binding(
@@ -612,6 +625,15 @@ private struct FolderDetailView: View {
                         set: { value in
                             if !value.isEmpty { config.icon = .emoji(value) }
                         }
+                    ))
+                }
+                .sheet(isPresented: $showingSymbolPicker) {
+                    SFSymbolPickerView(selectedSymbol: Binding(
+                        get: {
+                            if case .systemSymbol(let name, _) = config.icon { return name }
+                            return "folder"
+                        },
+                        set: { config.icon = .systemSymbol(name: $0, tint: nil) }
                     ))
                 }
 
