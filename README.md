@@ -28,3 +28,17 @@ The generated app bundle is signed ad hoc with sandbox entitlements and uses `LS
 - File action submenus with reveal, copy path, copy file, share, trash, and metadata.
 - Alias and symlink resolution basics with loop protection.
 - Quick Look thumbnail/text preview support for file submenus.
+- Apple Shortcuts integration through `/usr/bin/shortcuts` for listing, organizing, and running Shortcuts app shortcuts from MenuShelf.
+- Linked Shortcuts folders, quick keys, Option-click editing, and the `menushelf://run-shortcut` URL scheme.
+
+## Shortcuts URL Scheme
+
+MenuShelf registers its own URL scheme to run Shortcuts app shortcuts silently without opening Shortcuts:
+
+```text
+menushelf://run-shortcut?name=My%20Shortcut
+menushelf://run-shortcut?id=A1B2C3D4-0000-1111-2222-ABCDEFABCDEF
+menushelf://run-shortcut?name=My%20Shortcut&input=text&text=Hello
+```
+
+Shortcuts that show alerts or request input may block when executed from the command line. Prefer shortcuts that can run unattended for menu bar and URL automation workflows.

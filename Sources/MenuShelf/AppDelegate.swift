@@ -24,6 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        container.shortcutURLRouter.handle(urls)
+    }
+
     private func installRescueStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: 72)
         item.length = 72

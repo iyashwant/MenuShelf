@@ -156,7 +156,7 @@ private struct MenuViewsSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $store.selectedMenuViewID) {
                     ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, sourceCount: view.items.count)
+                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count)
                             .tag(Optional(view.id))
                     }
                     .onMove { source, destination in
@@ -281,7 +281,7 @@ private struct SourcesSettingsView: View {
 
 private struct MenuViewRow: View {
     let view: MenuViewConfig
-    let sourceCount: Int
+    let itemCount: Int
 
     var body: some View {
         HStack(spacing: 10) {
@@ -291,7 +291,7 @@ private struct MenuViewRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(view.title)
                     .lineLimit(1)
-                Text("\(sourceCount) source\(sourceCount == 1 ? "" : "s")")
+                Text("\(itemCount) item\(itemCount == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -315,7 +315,7 @@ private struct MenuViewDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Header(title: view.title, subtitle: "Menu bar icon with \(view.items.count) source\(view.items.count == 1 ? "" : "s")", symbolName: "menubar.rectangle")
+                Header(title: view.title, subtitle: "Menu bar icon with \(contentCount) item\(contentCount == 1 ? "" : "s")", symbolName: "menubar.rectangle")
 
                 SettingsCard("Menu View") {
                     TextField("Title", text: $view.title)
@@ -421,6 +421,57 @@ private struct MenuViewDetailView: View {
                             Label("Add Existing Source", systemImage: "plus.square.on.square")
                         }
 
+                        Menu {
+                            let candidates = store.settings.resolvedMenuViews.filter { candidate in
+                                candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
+                            }
+
+                            if candidates.isEmpty {
+                                Text("No available views")
+                            } else {
+                                ForEach(candidates) { candidate in
+                                    Button(candidate.title) {
+                                        store.addLinkedMenuView(candidate.id, toMenuViewID: view.id)
+                                    }
+                                    .disabled(!store.canLinkMenuView(candidate.id, toMenuViewID: view.id))
+                                }
+                            }
+                        } label: {
+                            Label("Add Existing View", systemImage: "menubar.rectangle")
+                        }
+
+                        Menu {
+                            if store.availableShortcuts.isEmpty {
+                                Button("Refresh Shortcuts") {
+                                    store.refreshShortcutsCatalog()
+                                }
+                            } else {
+                                ForEach(store.availableShortcuts) { shortcut in
+                                    Button(shortcut.name) {
+                                        store.addShortcut(shortcut, toMenuViewID: view.id)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Add Shortcut", systemImage: "bolt.fill")
+                        }
+
+                        Menu {
+                            if store.availableShortcutFolders.isEmpty {
+                                Button("Refresh Shortcuts Folders") {
+                                    store.refreshShortcutsCatalog()
+                                }
+                            } else {
+                                ForEach(store.availableShortcutFolders) { folder in
+                                    Button(folder.name) {
+                                        store.addLinkedShortcutsFolder(folder, toMenuViewID: view.id)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
+                        }
+
                         Button {
                             if let id = store.selectedMenuViewItemID {
                                 store.removeMenuViewItem(viewID: view.id, itemID: id)
@@ -447,6 +498,66 @@ private struct MenuViewDetailView: View {
                     if let itemBinding = selectedItemBinding {
                         MenuViewItemEditor(item: itemBinding, source: store.folder(id: itemBinding.wrappedValue.sourceID))
                     }
+
+                    if !view.resolvedLinkedMenuViews.isEmpty {
+                        Divider()
+
+                        Text("Linked Menu Views")
+                            .font(.headline)
+
+                        ForEach(view.resolvedLinkedMenuViews) { linkedView in
+                            if let binding = linkedMenuViewBinding(for: linkedView.id) {
+                                LinkedMenuViewEditor(
+                                    linkedView: binding,
+                                    targetView: store.menuView(id: linkedView.menuViewID)
+                                ) {
+                                    removeLinkedMenuView(id: linkedView.id)
+                                }
+                            }
+                        }
+                    }
+
+                    if !view.resolvedShortcutItems.isEmpty {
+                        Divider()
+
+                        Text("Shortcuts")
+                            .font(.headline)
+
+                        ForEach(view.resolvedShortcutItems) { shortcut in
+                            if let binding = shortcutBinding(for: shortcut.id) {
+                                ShortcutMenuItemEditor(item: binding) {
+                                    removeShortcutItem(id: shortcut.id)
+                                }
+                            }
+                        }
+                    }
+
+                    if !view.resolvedLinkedShortcutsFolders.isEmpty {
+                        Divider()
+
+                        Text("Linked Shortcuts Folders")
+                            .font(.headline)
+
+                        ForEach(view.resolvedLinkedShortcutsFolders) { folder in
+                            if let binding = linkedFolderBinding(for: folder.id) {
+                                LinkedShortcutsFolderEditor(folder: binding) {
+                                    removeLinkedFolder(id: folder.id)
+                                }
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button("Refresh Shortcuts Catalog") {
+                            store.refreshShortcutsCatalog()
+                        }
+                        .disabled(store.isRefreshingShortcuts)
+
+                        if store.isRefreshingShortcuts {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
                 }
 
                 SettingsCard("Menu Behavior") {
@@ -456,6 +567,10 @@ private struct MenuViewDetailView: View {
             .padding(28)
             .frame(maxWidth: 760, alignment: .leading)
         }
+    }
+
+    private var contentCount: Int {
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count
     }
 
     private var selectedItemBinding: Binding<MenuViewItem>? {
@@ -472,6 +587,69 @@ private struct MenuViewDetailView: View {
                 view.items[index] = copy
             }
         )
+    }
+
+    private func linkedMenuViewBinding(for id: UUID) -> Binding<LinkedMenuViewConfig>? {
+        guard let index = view.resolvedLinkedMenuViews.firstIndex(where: { $0.id == id }) else { return nil }
+
+        return Binding(
+            get: { view.resolvedLinkedMenuViews[index] },
+            set: { updated in
+                var items = view.resolvedLinkedMenuViews
+                var copy = updated
+                copy.updatedAt = Date()
+                items[index] = copy
+                view.linkedMenuViews = items
+            }
+        )
+    }
+
+    private func shortcutBinding(for id: UUID) -> Binding<ShortcutMenuItemConfig>? {
+        guard let index = view.resolvedShortcutItems.firstIndex(where: { $0.id == id }) else { return nil }
+
+        return Binding(
+            get: { view.resolvedShortcutItems[index] },
+            set: { updated in
+                var items = view.resolvedShortcutItems
+                var copy = updated
+                copy.updatedAt = Date()
+                items[index] = copy
+                view.shortcutItems = items
+            }
+        )
+    }
+
+    private func linkedFolderBinding(for id: UUID) -> Binding<LinkedShortcutsFolderConfig>? {
+        guard let index = view.resolvedLinkedShortcutsFolders.firstIndex(where: { $0.id == id }) else { return nil }
+
+        return Binding(
+            get: { view.resolvedLinkedShortcutsFolders[index] },
+            set: { updated in
+                var folders = view.resolvedLinkedShortcutsFolders
+                var copy = updated
+                copy.updatedAt = Date()
+                folders[index] = copy
+                view.linkedShortcutsFolders = folders
+            }
+        )
+    }
+
+    private func removeShortcutItem(id: UUID) {
+        var items = view.resolvedShortcutItems
+        items.removeAll { $0.id == id }
+        view.shortcutItems = items
+    }
+
+    private func removeLinkedMenuView(id: UUID) {
+        var items = view.resolvedLinkedMenuViews
+        items.removeAll { $0.id == id }
+        view.linkedMenuViews = items
+    }
+
+    private func removeLinkedFolder(id: UUID) {
+        var folders = view.resolvedLinkedShortcutsFolders
+        folders.removeAll { $0.id == id }
+        view.linkedShortcutsFolders = folders
     }
 }
 
@@ -538,6 +716,166 @@ private struct MenuViewItemEditor: View {
                 ))
             }
         }
+    }
+}
+
+private struct ShortcutMenuItemEditor: View {
+    @Binding var item: ShortcutMenuItemConfig
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.displayTitle)
+                        .lineLimit(1)
+                    Text(item.shortcutIdentifier ?? item.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+
+                Button("Open in Shortcuts") {
+                    let identifierOrName = item.shortcutIdentifier ?? item.name
+                    Task {
+                        try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                    }
+                }
+
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+
+            HStack {
+                TextField("Title override", text: Binding(
+                    get: { item.titleOverride ?? "" },
+                    set: { item.titleOverride = $0.isEmpty ? nil : $0 }
+                ))
+
+                TextField("Section", text: Binding(
+                    get: { item.sectionName ?? "" },
+                    set: { item.sectionName = $0.isEmpty ? nil : $0 }
+                ))
+
+                TextField("Quick key", text: Binding(
+                    get: { item.quickKey ?? "" },
+                    set: { item.quickKey = normalizedQuickKey($0) }
+                ))
+                .frame(width: 82)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func normalizedQuickKey(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let first = trimmed.first else { return nil }
+        let key = String(first)
+        let allowed = "123456789abcdefghijklmnopqrstuvwxyz"
+        return allowed.contains(first) ? key : nil
+    }
+}
+
+private struct LinkedMenuViewEditor: View {
+    @Binding var linkedView: LinkedMenuViewConfig
+    let targetView: MenuViewConfig?
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "menubar.rectangle")
+                    .foregroundStyle(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayTitle)
+                        .lineLimit(1)
+                    Text(targetView?.title ?? "Menu View no longer exists")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+
+            HStack {
+                TextField("Title override", text: Binding(
+                    get: { linkedView.titleOverride ?? "" },
+                    set: { linkedView.titleOverride = $0.isEmpty ? nil : $0 }
+                ))
+
+                TextField("Section", text: Binding(
+                    get: { linkedView.sectionName ?? "" },
+                    set: { linkedView.sectionName = $0.isEmpty ? nil : $0 }
+                ))
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var displayTitle: String {
+        linkedView.displayTitle(fallbackTitle: targetView?.title ?? "Missing Menu View")
+    }
+}
+
+private struct LinkedShortcutsFolderEditor: View {
+    @Binding var folder: LinkedShortcutsFolderConfig
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "folder")
+                    .foregroundStyle(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(folder.folderName)
+                        .lineLimit(1)
+                    Text(folder.shortcutFolderIdentifier ?? "Shortcuts folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+
+                Picker("Display", selection: $folder.displayMode) {
+                    ForEach(LinkedShortcutsFolderConfig.DisplayMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+
+                Button("Refresh") {
+                    AppContainer.shared.store.refreshLinkedShortcutsFolder(folder.folderName)
+                }
+
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -873,12 +1211,73 @@ private struct ShortcutsSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     var body: some View {
-        FormContainer(title: "Shortcuts", subtitle: "Open Menu Views with global keyboard shortcuts and automate visibility from Shortcuts.") {
+        FormContainer(title: "Shortcuts", subtitle: "Run shortcuts from Apple's Shortcuts app directly from MenuShelf.") {
+            HStack {
+                Button("Refresh Shortcuts Catalog") {
+                    store.refreshShortcutsCatalog()
+                }
+                .disabled(store.isRefreshingShortcuts)
+
+                if store.isRefreshingShortcuts {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Spacer()
+
+                Button("Open Shortcuts") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+                }
+            }
+
+            Text("Loaded \(store.availableShortcuts.count) shortcut\(store.availableShortcuts.count == 1 ? "" : "s") and \(store.availableShortcutFolders.count) folder\(store.availableShortcutFolders.count == 1 ? "" : "s").")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Menu {
+                    ForEach(store.availableShortcuts) { shortcut in
+                        Button(shortcut.name) {
+                            store.addShortcut(shortcut, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
+                        }
+                    }
+
+                    if store.availableShortcuts.isEmpty {
+                        Button("Refresh Shortcuts") {
+                            store.refreshShortcutsCatalog()
+                        }
+                    }
+                } label: {
+                    Label("Add Shortcut to Selected View", systemImage: "bolt.fill")
+                }
+
+                Menu {
+                    ForEach(store.availableShortcutFolders) { folder in
+                        Button(folder.name) {
+                            store.addLinkedShortcutsFolder(folder, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
+                        }
+                    }
+
+                    if store.availableShortcutFolders.isEmpty {
+                        Button("Refresh Folders") {
+                            store.refreshShortcutsCatalog()
+                        }
+                    }
+                } label: {
+                    Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
+                }
+            }
+
+            Divider()
+
+            Text("Menu View Hotkeys")
+                .font(.headline)
+
             ForEach(store.settings.resolvedMenuViews) { view in
                 HStack {
                     VStack(alignment: .leading) {
                         Text(view.title)
-                        Text("\(view.items.count) source\(view.items.count == 1 ? "" : "s")")
+                        Text("\(view.items.count) source\(view.items.count == 1 ? "" : "s"), \(view.resolvedShortcutItems.count) shortcut\(view.resolvedShortcutItems.count == 1 ? "" : "s")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -900,11 +1299,15 @@ private struct ShortcutsSettingsView: View {
                 Divider()
             }
 
-            Button("Open Shortcuts") {
-                NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
-            }
+            Text("menushelf://run-shortcut?name=My%20Shortcut")
+                .font(.system(.footnote, design: .monospaced))
+                .textSelection(.enabled)
 
-            Text("Shortcuts exposes Set Menu View Visibility and Open Menu View actions for project workflows.")
+            Text("menushelf://run-shortcut?id=A1B2C3D4-0000-1111-2222-ABCDEFABCDEF")
+                .font(.system(.footnote, design: .monospaced))
+                .textSelection(.enabled)
+
+            Text("Option-click a shortcut menu item to open it for editing in Shortcuts. Shortcuts that show alerts or request input may block while running from the command line.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

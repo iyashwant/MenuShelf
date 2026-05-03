@@ -59,25 +59,33 @@ final class MenuBuilder {
     }
 
     func makeMenuViewMenu(for view: MenuViewConfig) -> NSMenu {
-        if let directMenu = makeDirectSingleFolderMenu(for: view) {
+        makeMenuViewMenu(for: view, includeManagement: true, visitedMenuViewIDs: [view.id])
+    }
+
+    private func makeMenuViewMenu(for view: MenuViewConfig, includeManagement: Bool, visitedMenuViewIDs: Set<UUID>) -> NSMenu {
+        if includeManagement, let directMenu = makeDirectSingleFolderMenu(for: view) {
             return directMenu
         }
 
         let menu = NSMenu(title: view.title)
         menu.autoenablesItems = false
 
-        let showManagementAtTop = shouldShowGlobalManagementMenuAtTop()
-        let showManagementAtBottom = shouldShowGlobalManagementMenuAtBottom()
+        let showManagementAtTop = includeManagement && shouldShowGlobalManagementMenuAtTop()
+        let showManagementAtBottom = includeManagement && shouldShowGlobalManagementMenuAtBottom()
+        let hasContent = !view.items.isEmpty
+            || !view.resolvedLinkedMenuViews.isEmpty
+            || !view.resolvedShortcutItems.isEmpty
+            || !view.resolvedLinkedShortcutsFolders.isEmpty
 
         if showManagementAtTop {
             menu.addItem(managementMenuItem(for: view))
-            if !view.items.isEmpty {
+            if hasContent {
                 menu.addItem(.separator())
             }
         }
 
-        if view.items.isEmpty {
-            addDisabled("No sources in this view", to: menu)
+        if !hasContent {
+            addDisabled("No items in this view", to: menu)
         } else {
             var currentSection: String?
             for viewItem in view.items {
@@ -92,6 +100,22 @@ final class MenuBuilder {
 
                 menu.addItem(menuViewRootItem(for: sourceConfig(source, item: viewItem, fallbackSettings: view.menuSettings)))
             }
+
+            if !view.items.isEmpty,
+               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty) {
+                menu.addItem(.separator())
+                currentSection = nil
+            }
+
+            addLinkedMenuViews(view.resolvedLinkedMenuViews, to: menu, currentSection: &currentSection, visitedMenuViewIDs: visitedMenuViewIDs)
+            if !view.resolvedLinkedMenuViews.isEmpty,
+               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty),
+               menu.items.last?.isSeparatorItem == false {
+                menu.addItem(.separator())
+                currentSection = nil
+            }
+            addShortcutItems(view.resolvedShortcutItems, to: menu, currentSection: &currentSection)
+            addLinkedShortcutFolders(view.resolvedLinkedShortcutsFolders, to: menu, currentSection: &currentSection)
         }
 
         if showManagementAtBottom {
@@ -105,6 +129,11 @@ final class MenuBuilder {
     private func makeDirectSingleFolderMenu(for view: MenuViewConfig) -> NSMenu? {
         let layout = view.resolvedLayout
         guard layout != .sourceList else { return nil }
+        guard view.resolvedLinkedMenuViews.isEmpty,
+              view.resolvedShortcutItems.isEmpty,
+              view.resolvedLinkedShortcutsFolders.isEmpty else {
+            return nil
+        }
         guard view.items.count == 1,
               let item = view.items.first,
               var source = store.folder(id: item.sourceID),
@@ -254,6 +283,9 @@ final class MenuBuilder {
         addFolder.keyEquivalentModifierMask = [.command]
         submenu.addItem(addFolder)
         submenu.addItem(actionItem("Add App...", kind: .addApp, menuViewID: view?.id))
+        if let view {
+            submenu.addItem(addExistingMenuViewMenuItem(for: view))
+        }
         submenu.addItem(.separator())
 
         submenu.addItem(toggleMenuViewsMenuItem())
@@ -278,11 +310,41 @@ final class MenuBuilder {
         moreSubmenu.autoenablesItems = false
         moreSubmenu.addItem(actionItem("Make All Menu Bar Items Icon Only", kind: .setAllIconOnly))
         moreSubmenu.addItem(actionItem("Open Shortcuts", kind: .openShortcutsApp))
+        moreSubmenu.addItem(actionItem("Refresh Shortcuts", kind: .refreshShortcuts))
         more.submenu = moreSubmenu
         submenu.addItem(more)
 
         submenu.addItem(.separator())
         submenu.addItem(actionItem("Quit MenuShelf", kind: .quit))
+        item.submenu = submenu
+        return item
+    }
+
+    private func addExistingMenuViewMenuItem(for view: MenuViewConfig) -> NSMenuItem {
+        let item = NSMenuItem(title: "Add Existing View", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Add Existing View")
+        submenu.autoenablesItems = false
+
+        let candidates = store.settings.resolvedMenuViews.filter { candidate in
+            candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
+        }
+
+        if candidates.isEmpty {
+            addDisabled("No available views", to: submenu)
+        } else {
+            for candidate in candidates {
+                let candidateItem = actionItem(
+                    candidate.title,
+                    kind: .addLinkedMenuView,
+                    menuViewID: view.id,
+                    linkedMenuViewID: candidate.id
+                )
+                candidateItem.image = icon(for: candidate, size: 16)
+                candidateItem.isEnabled = store.canLinkMenuView(candidate.id, toMenuViewID: view.id)
+                submenu.addItem(candidateItem)
+            }
+        }
+
         item.submenu = submenu
         return item
     }
@@ -443,6 +505,116 @@ final class MenuBuilder {
         let submenu = makeFileSubmenu(for: item, config: config)
         menuItem.submenu = submenu
         return menuItem
+    }
+
+    private func addShortcutItems(_ shortcuts: [ShortcutMenuItemConfig], to menu: NSMenu, currentSection: inout String?) {
+        for shortcut in shortcuts {
+            if let section = shortcut.sectionName, !section.isEmpty, section != currentSection {
+                if currentSection != nil || menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                }
+                addDisabled(section, to: menu)
+                currentSection = section
+            }
+
+            menu.addItem(shortcutMenuItem(for: shortcut))
+        }
+    }
+
+    private func addLinkedMenuViews(_ linkedMenuViews: [LinkedMenuViewConfig], to menu: NSMenu, currentSection: inout String?, visitedMenuViewIDs: Set<UUID>) {
+        for linkedMenuView in linkedMenuViews {
+            if let section = linkedMenuView.sectionName, !section.isEmpty, section != currentSection {
+                if currentSection != nil || menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                }
+                addDisabled(section, to: menu)
+                currentSection = section
+            }
+
+            guard let targetView = store.menuView(id: linkedMenuView.menuViewID) else {
+                addDisabled("Missing Menu View", to: menu)
+                continue
+            }
+
+            let title = linkedMenuView.displayTitle(fallbackTitle: targetView.title)
+            if visitedMenuViewIDs.contains(targetView.id) {
+                addDisabled("View Loop: \(title)", to: menu)
+                continue
+            }
+
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.image = icon(for: linkedMenuView, targetView: targetView, size: 16)
+
+            var nextVisited = visitedMenuViewIDs
+            nextVisited.insert(targetView.id)
+            item.submenu = makeMenuViewMenu(for: targetView, includeManagement: false, visitedMenuViewIDs: nextVisited)
+            menu.addItem(item)
+        }
+    }
+
+    private func addLinkedShortcutFolders(_ folders: [LinkedShortcutsFolderConfig], to menu: NSMenu, currentSection: inout String?) {
+        for folder in folders {
+            let shortcuts = store.shortcutsByFolder[folder.folderName]
+            if shortcuts == nil {
+                store.refreshLinkedShortcutsFolder(folder.folderName, showErrors: false)
+            }
+
+            switch folder.displayMode {
+            case .submenu:
+                let item = NSMenuItem(title: folder.folderName, action: nil, keyEquivalent: "")
+                item.image = icon(for: folder, size: 16)
+                let submenu = NSMenu(title: folder.folderName)
+                submenu.autoenablesItems = false
+                if let shortcuts, !shortcuts.isEmpty {
+                    for shortcut in shortcuts {
+                        submenu.addItem(shortcutMenuItem(for: .make(shortcut: shortcut)))
+                    }
+                } else if shortcuts == nil {
+                    addDisabled("Loading Shortcuts...", to: submenu)
+                    submenu.addItem(actionItem("Refresh Shortcuts", kind: .refreshShortcuts))
+                } else {
+                    addDisabled("No shortcuts in folder", to: submenu)
+                }
+                item.submenu = submenu
+                menu.addItem(item)
+
+            case .inlineSection:
+                if currentSection != nil || menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                }
+                addDisabled(folder.folderName, to: menu)
+                currentSection = folder.folderName
+
+                if let shortcuts, !shortcuts.isEmpty {
+                    for shortcut in shortcuts {
+                        menu.addItem(shortcutMenuItem(for: .make(shortcut: shortcut)))
+                    }
+                } else if shortcuts == nil {
+                    addDisabled("Loading Shortcuts...", to: menu)
+                    menu.addItem(actionItem("Refresh Shortcuts", kind: .refreshShortcuts))
+                } else {
+                    addDisabled("No shortcuts in folder", to: menu)
+                }
+            }
+        }
+    }
+
+    private func shortcutMenuItem(for shortcut: ShortcutMenuItemConfig) -> NSMenuItem {
+        let item = actionItem(
+            shortcut.displayTitle,
+            kind: .runShortcut,
+            shortcutID: shortcut.shortcutIdentifier,
+            shortcutName: shortcut.name
+        )
+        item.image = icon(for: shortcut, size: 16)
+
+        if let quickKey = shortcut.quickKey?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           quickKey.count == 1 {
+            item.keyEquivalent = quickKey
+            item.keyEquivalentModifierMask = []
+        }
+
+        return item
     }
 
     private func makeFileSubmenu(for item: FileMenuItem, config: FolderConfig) -> NSMenu {
@@ -666,7 +838,11 @@ final class MenuBuilder {
         stringValue: String? = nil,
         boolValue: Bool? = nil,
         sortKey: SortKey? = nil,
-        sortDirection: SortDirection? = nil
+        sortDirection: SortDirection? = nil,
+        shortcutID: String? = nil,
+        shortcutName: String? = nil,
+        shortcutTextInput: String? = nil,
+        linkedMenuViewID: UUID? = nil
     ) -> NSMenuItem {
         let item: NSMenuItem
 
@@ -687,7 +863,11 @@ final class MenuBuilder {
             stringValue: stringValue,
             boolValue: boolValue,
             sortKey: sortKey,
-            sortDirection: sortDirection
+            sortDirection: sortDirection,
+            shortcutID: shortcutID,
+            shortcutName: shortcutName,
+            shortcutTextInput: shortcutTextInput,
+            linkedMenuViewID: linkedMenuViewID
         )
         item.isEnabled = true
         return item
@@ -745,6 +925,59 @@ final class MenuBuilder {
             updatedAt: view.updatedAt
         )
         return icon(for: pseudoSource, size: size)
+    }
+
+    func icon(for shortcut: ShortcutMenuItemConfig, size: CGFloat) -> NSImage? {
+        let pseudoSource = FolderConfig(
+            id: shortcut.id,
+            displayName: shortcut.displayTitle,
+            bookmarkData: Data(),
+            originalPathHint: "",
+            itemKind: .folder,
+            isVisible: true,
+            displayModeOverride: nil,
+            icon: shortcut.icon ?? .systemSymbol(name: "bolt.fill", tint: nil),
+            menuBarStyle: .iconOnly,
+            menuSettings: .defaults,
+            shortcut: .disabled,
+            openBehavior: .browseFoldersAsSubmenus,
+            iconColorHex: shortcut.iconColorHex,
+            createdAt: shortcut.createdAt,
+            updatedAt: shortcut.updatedAt
+        )
+        return icon(for: pseudoSource, size: size)
+    }
+
+    func icon(for folder: LinkedShortcutsFolderConfig, size: CGFloat) -> NSImage? {
+        let pseudoSource = FolderConfig(
+            id: folder.id,
+            displayName: folder.folderName,
+            bookmarkData: Data(),
+            originalPathHint: "",
+            itemKind: .folder,
+            isVisible: true,
+            displayModeOverride: nil,
+            icon: folder.icon ?? .systemSymbol(name: "folder", tint: nil),
+            menuBarStyle: .iconOnly,
+            menuSettings: .defaults,
+            shortcut: .disabled,
+            openBehavior: .browseFoldersAsSubmenus,
+            iconColorHex: folder.iconColorHex,
+            createdAt: folder.createdAt,
+            updatedAt: folder.updatedAt
+        )
+        return icon(for: pseudoSource, size: size)
+    }
+
+    func icon(for linkedMenuView: LinkedMenuViewConfig, targetView: MenuViewConfig, size: CGFloat) -> NSImage? {
+        var view = targetView
+        if let iconOverride = linkedMenuView.iconOverride {
+            view.icon = iconOverride
+        }
+        if linkedMenuView.iconColorHexOverride != nil {
+            view.iconColorHex = linkedMenuView.iconColorHexOverride
+        }
+        return icon(for: view, size: size)
     }
 
     private func smallIcon(_ image: NSImage?, size: CGFloat) -> NSImage? {

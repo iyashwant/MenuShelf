@@ -12,14 +12,20 @@ final class PreferencesStore: ObservableObject {
     @Published var selectedMenuViewItemID: UUID?
     @Published var selectedFolderID: UUID?
     @Published var lastErrorMessage: String?
+    @Published var availableShortcuts: [ShortcutInfo] = []
+    @Published var availableShortcutFolders: [ShortcutsFolderInfo] = []
+    @Published var shortcutsByFolder: [String: [ShortcutInfo]] = [:]
+    @Published var isRefreshingShortcuts = false
 
     private let settingsURL: URL
     private let supportURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let launchAtLoginService = LaunchAtLoginService()
+    let shortcutsService: ShortcutsService
 
-    init() {
+    init(shortcutsService: ShortcutsService = ShortcutsService()) {
+        self.shortcutsService = shortcutsService
         supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first!
             .appendingPathComponent("MenuShelf", isDirectory: true)
@@ -49,6 +55,8 @@ final class PreferencesStore: ObservableObject {
         selectedMenuViewID = settings.resolvedMenuViews.first?.id
         selectedMenuViewItemID = settings.resolvedMenuViews.first?.items.first?.id
         selectedFolderID = settings.folders.first?.id
+
+        refreshShortcutsCatalog(showErrors: false)
     }
 
     func addFolderFromPanel(startingAt initialURL: URL? = nil) {
@@ -231,6 +239,13 @@ final class PreferencesStore: ObservableObject {
             copy.updatedAt = Date()
             return copy
         }
+        view.linkedMenuViews = view.resolvedLinkedMenuViews.map { linkedView in
+            var copy = linkedView
+            copy.id = UUID()
+            copy.createdAt = Date()
+            copy.updatedAt = Date()
+            return copy
+        }
         view.createdAt = Date()
         view.updatedAt = Date()
         var views = settings.resolvedMenuViews
@@ -243,6 +258,9 @@ final class PreferencesStore: ObservableObject {
     func removeMenuView(id: UUID) {
         var views = settings.resolvedMenuViews
         views.removeAll { $0.id == id }
+        for index in views.indices {
+            views[index].linkedMenuViews = views[index].resolvedLinkedMenuViews.filter { $0.menuViewID != id }
+        }
         if views.isEmpty, !settings.folders.isEmpty {
             views.append(MenuViewConfig.make(title: "MenuShelf", defaults: settings.defaultMenuSettings, sourceIDs: settings.folders.map(\.id)))
         }
@@ -263,6 +281,152 @@ final class PreferencesStore: ObservableObject {
         guard var view = menuView(id: viewID) else { return }
         view.items.move(fromOffsets: source, toOffset: destination)
         updateMenuView(view)
+    }
+
+    func addShortcut(_ shortcut: ShortcutInfo, toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "Shortcuts", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard let index = views.firstIndex(where: { $0.id == targetID }) else { return }
+        var shortcuts = views[index].resolvedShortcutItems
+        guard !shortcuts.contains(where: { ($0.shortcutIdentifier ?? $0.name) == (shortcut.identifier ?? shortcut.name) }) else {
+            settings.menuViews = views
+            return
+        }
+
+        shortcuts.append(.make(shortcut: shortcut))
+        views[index].shortcutItems = shortcuts
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+    }
+
+    func addLinkedShortcutsFolder(_ folder: ShortcutsFolderInfo, toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "Shortcuts", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard let index = views.firstIndex(where: { $0.id == targetID }) else { return }
+        var folders = views[index].resolvedLinkedShortcutsFolders
+        guard !folders.contains(where: { ($0.shortcutFolderIdentifier ?? $0.folderName) == (folder.identifier ?? folder.name) }) else {
+            settings.menuViews = views
+            return
+        }
+
+        folders.append(.make(folder: folder))
+        views[index].linkedShortcutsFolders = folders
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+        refreshLinkedShortcutsFolder(folder.name, showErrors: false)
+    }
+
+    func addLinkedMenuView(_ linkedMenuViewID: UUID, toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "MenuShelf", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard linkedMenuViewID != targetID,
+              let index = views.firstIndex(where: { $0.id == targetID }),
+              canLinkMenuView(linkedMenuViewID, toMenuViewID: targetID, in: views) else {
+            settings.menuViews = views
+            return
+        }
+
+        var linkedViews = views[index].resolvedLinkedMenuViews
+        guard !linkedViews.contains(where: { $0.menuViewID == linkedMenuViewID }) else {
+            settings.menuViews = views
+            return
+        }
+
+        linkedViews.append(.make(menuViewID: linkedMenuViewID))
+        views[index].linkedMenuViews = linkedViews
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+    }
+
+    func canLinkMenuView(_ linkedMenuViewID: UUID, toMenuViewID targetID: UUID) -> Bool {
+        canLinkMenuView(linkedMenuViewID, toMenuViewID: targetID, in: settings.resolvedMenuViews)
+    }
+
+    func refreshShortcutsCatalog(showErrors: Bool = true) {
+        isRefreshingShortcuts = true
+        let linkedFolderNames = Set(settings.resolvedMenuViews.flatMap { $0.resolvedLinkedShortcutsFolders.map(\.folderName) })
+        Task { [shortcutsService, linkedFolderNames] in
+            do {
+                async let shortcuts = shortcutsService.listShortcuts()
+                async let folders = shortcutsService.listFolders()
+                let (resolvedShortcuts, resolvedFolders) = try await (shortcuts, folders)
+
+                var folderContents: [String: [ShortcutInfo]] = [:]
+                for name in linkedFolderNames {
+                    folderContents[name] = try? await shortcutsService.listShortcuts(inFolder: name)
+                }
+                let resolvedFolderContents = folderContents
+
+                await MainActor.run {
+                    self.availableShortcuts = resolvedShortcuts
+                    self.availableShortcutFolders = resolvedFolders
+                    self.shortcutsByFolder.merge(resolvedFolderContents) { _, new in new }
+                    self.isRefreshingShortcuts = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.isRefreshingShortcuts = false
+                    if showErrors {
+                        self.showError("Could not load Shortcuts: \(error.localizedDescription)")
+                    } else {
+                        self.lastErrorMessage = error.localizedDescription
+                        DiagnosticsLogger.shared.log("Could not load Shortcuts: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    func refreshLinkedShortcutsFolder(_ folderName: String, showErrors: Bool = true) {
+        Task { [shortcutsService] in
+            do {
+                let shortcuts = try await shortcutsService.listShortcuts(inFolder: folderName)
+                await MainActor.run {
+                    self.shortcutsByFolder[folderName] = shortcuts
+                }
+            } catch {
+                await MainActor.run {
+                    if showErrors {
+                        self.showError("Could not load \(folderName): \(error.localizedDescription)")
+                    } else {
+                        DiagnosticsLogger.shared.log("Could not load linked Shortcuts folder \(folderName): \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
     }
 
     func attachSource(_ sourceID: UUID, toMenuViewID menuViewID: UUID?) {
@@ -329,6 +493,30 @@ final class PreferencesStore: ObservableObject {
             views[index].updatedAt = Date()
         }
         settings.menuViews = views
+    }
+
+    private func canLinkMenuView(_ linkedMenuViewID: UUID, toMenuViewID targetID: UUID, in views: [MenuViewConfig]) -> Bool {
+        guard linkedMenuViewID != targetID else { return false }
+        return !menuView(linkedMenuViewID, contains: targetID, in: views, visited: [])
+    }
+
+    private func menuView(_ currentID: UUID, contains searchID: UUID, in views: [MenuViewConfig], visited: Set<UUID>) -> Bool {
+        if currentID == searchID { return true }
+        guard !visited.contains(currentID),
+              let view = views.first(where: { $0.id == currentID }) else {
+            return false
+        }
+
+        var nextVisited = visited
+        nextVisited.insert(currentID)
+
+        for linkedView in view.resolvedLinkedMenuViews {
+            if menuView(linkedView.menuViewID, contains: searchID, in: views, visited: nextVisited) {
+                return true
+            }
+        }
+
+        return false
     }
 
     func setDisplayMode(_ mode: DisplayMode) {
@@ -517,6 +705,10 @@ final class PreferencesStore: ObservableObject {
             settings.schemaVersion = 6
         }
 
+        if settings.schemaVersion < 7 {
+            settings.schemaVersion = 7
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -545,6 +737,12 @@ final class PreferencesStore: ObservableObject {
             applyMenuSettingsDefaults(&views[index].menuSettings)
             views[index].shortcut = views[index].shortcut ?? .disabled
             views[index].layout = views[index].layout ?? .automatic
+            views[index].shortcutItems = views[index].shortcutItems ?? []
+            views[index].linkedShortcutsFolders = views[index].linkedShortcutsFolders ?? []
+            views[index].linkedMenuViews = views[index].resolvedLinkedMenuViews.filter { linkedView in
+                linkedView.menuViewID != views[index].id && views.contains { $0.id == linkedView.menuViewID }
+            }
+            views[index].appSpecificShortcutGroups = views[index].appSpecificShortcutGroups ?? []
             views[index].items = views[index].items.filter { item in
                 settings.folders.contains { $0.id == item.sourceID }
             }

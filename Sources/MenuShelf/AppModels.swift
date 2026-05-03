@@ -373,6 +373,116 @@ struct MenuViewItem: Codable, Identifiable, Equatable {
     }
 }
 
+struct ShortcutMenuItemConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var shortcutIdentifier: String?
+    var name: String
+    var titleOverride: String?
+    var sectionName: String?
+    var icon: FolderIconConfig?
+    var iconColorHex: String?
+    var quickKey: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    var displayTitle: String {
+        let title = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title?.isEmpty == false ? title! : name
+    }
+
+    static func make(shortcut: ShortcutInfo) -> ShortcutMenuItemConfig {
+        ShortcutMenuItemConfig(
+            id: UUID(),
+            shortcutIdentifier: shortcut.identifier,
+            name: shortcut.name,
+            titleOverride: nil,
+            sectionName: nil,
+            icon: .systemSymbol(name: "bolt.fill", tint: nil),
+            iconColorHex: nil,
+            quickKey: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+struct LinkedShortcutsFolderConfig: Codable, Identifiable, Equatable {
+    enum DisplayMode: String, Codable, CaseIterable, Identifiable {
+        case submenu
+        case inlineSection
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .submenu: "Submenu"
+            case .inlineSection: "Inline Section"
+            }
+        }
+    }
+
+    var id: UUID
+    var shortcutFolderIdentifier: String?
+    var folderName: String
+    var displayMode: DisplayMode
+    var icon: FolderIconConfig?
+    var iconColorHex: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    static func make(folder: ShortcutsFolderInfo) -> LinkedShortcutsFolderConfig {
+        LinkedShortcutsFolderConfig(
+            id: UUID(),
+            shortcutFolderIdentifier: folder.identifier,
+            folderName: folder.name,
+            displayMode: .submenu,
+            icon: .systemSymbol(name: "folder", tint: nil),
+            iconColorHex: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+struct LinkedMenuViewConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var menuViewID: UUID
+    var titleOverride: String?
+    var sectionName: String?
+    var iconOverride: FolderIconConfig?
+    var iconColorHexOverride: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    func displayTitle(fallbackTitle: String) -> String {
+        let title = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title?.isEmpty == false ? title! : fallbackTitle
+    }
+
+    static func make(menuViewID: UUID) -> LinkedMenuViewConfig {
+        LinkedMenuViewConfig(
+            id: UUID(),
+            menuViewID: menuViewID,
+            titleOverride: nil,
+            sectionName: nil,
+            iconOverride: nil,
+            iconColorHexOverride: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+struct AppSpecificShortcutGroup: Codable, Identifiable, Equatable {
+    var id: UUID
+    var appName: String
+    var bundleIdentifier: String
+    var shortcuts: [ShortcutMenuItemConfig]
+    var linkedFolders: [LinkedShortcutsFolderConfig]
+    var createdAt: Date
+    var updatedAt: Date
+}
+
 struct MenuViewConfig: Codable, Identifiable, Equatable {
     var id: UUID
     var title: String
@@ -385,11 +495,19 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var layout: MenuViewLayout?
     var menuSettings: MenuSettings
     var items: [MenuViewItem]
+    var shortcutItems: [ShortcutMenuItemConfig]?
+    var linkedShortcutsFolders: [LinkedShortcutsFolderConfig]?
+    var linkedMenuViews: [LinkedMenuViewConfig]?
+    var appSpecificShortcutGroups: [AppSpecificShortcutGroup]?
     var createdAt: Date
     var updatedAt: Date
 
     var resolvedOpenLocation: ShortcutOpenLocation? { openLocation }
     var resolvedLayout: MenuViewLayout { layout ?? .automatic }
+    var resolvedShortcutItems: [ShortcutMenuItemConfig] { shortcutItems ?? [] }
+    var resolvedLinkedShortcutsFolders: [LinkedShortcutsFolderConfig] { linkedShortcutsFolders ?? [] }
+    var resolvedLinkedMenuViews: [LinkedMenuViewConfig] { linkedMenuViews ?? [] }
+    var resolvedAppSpecificShortcutGroups: [AppSpecificShortcutGroup] { appSpecificShortcutGroups ?? [] }
 
     static func make(title: String = "MenuShelf", defaults: MenuSettings = .defaults, sourceIDs: [UUID] = []) -> MenuViewConfig {
         MenuViewConfig(
@@ -404,6 +522,10 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             layout: .automatic,
             menuSettings: defaults,
             items: sourceIDs.map { MenuViewItem.make(sourceID: $0) },
+            shortcutItems: [],
+            linkedShortcutsFolders: [],
+            linkedMenuViews: [],
+            appSpecificShortcutGroups: [],
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -429,7 +551,7 @@ struct AppSettings: Codable, Equatable {
     var moreMenuBehavior: GlobalMoreMenuBehavior?
 
     static let defaults = AppSettings(
-        schemaVersion: 6,
+        schemaVersion: 7,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,

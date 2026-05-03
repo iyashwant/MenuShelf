@@ -4,6 +4,7 @@ final class AppContainer {
     static let shared = AppContainer()
 
     let store: PreferencesStore
+    let shortcutsService: ShortcutsService
     let fileAccessService: FileAccessService
     let metadataService: MetadataService
     let actionHandler: MenuActionHandler
@@ -11,17 +12,20 @@ final class AppContainer {
     let presentationCoordinator: MenuPresentationCoordinator
     let hotkeyService: GlobalHotkeyService
     let intentBridge: AppIntentVisibilityBridge
+    let shortcutURLRouter: ShortcutURLRouter
     let statusItemManager: StatusItemManager
     let settingsWindowController: SettingsWindowController
 
     private init() {
-        store = PreferencesStore()
+        shortcutsService = ShortcutsService()
+        store = PreferencesStore(shortcutsService: shortcutsService)
         fileAccessService = FileAccessService()
         metadataService = MetadataService()
         actionHandler = MenuActionHandler(
             store: store,
             fileAccessService: fileAccessService,
-            metadataService: metadataService
+            metadataService: metadataService,
+            shortcutsService: shortcutsService
         )
         menuBuilder = MenuBuilder(
             store: store,
@@ -37,6 +41,10 @@ final class AppContainer {
         intentBridge = AppIntentVisibilityBridge(
             store: store,
             presentationCoordinator: presentationCoordinator
+        )
+        shortcutURLRouter = ShortcutURLRouter(
+            store: store,
+            shortcutsService: shortcutsService
         )
         statusItemManager = StatusItemManager(
             store: store,

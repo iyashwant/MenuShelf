@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 enum MenuActionKind {
     case addFolder
     case addApp
+    case addLinkedMenuView
     case openSettings
     case quit
     case open
@@ -36,6 +37,9 @@ enum MenuActionKind {
     case setSortDirection
     case setAllIconOnly
     case openShortcutsApp
+    case runShortcut
+    case openShortcutForEditing
+    case refreshShortcuts
 }
 
 final class MenuAction: NSObject {
@@ -48,6 +52,10 @@ final class MenuAction: NSObject {
     let boolValue: Bool?
     let sortKey: SortKey?
     let sortDirection: SortDirection?
+    let shortcutID: String?
+    let shortcutName: String?
+    let shortcutTextInput: String?
+    let linkedMenuViewID: UUID?
 
     init(
         kind: MenuActionKind,
@@ -58,7 +66,11 @@ final class MenuAction: NSObject {
         stringValue: String? = nil,
         boolValue: Bool? = nil,
         sortKey: SortKey? = nil,
-        sortDirection: SortDirection? = nil
+        sortDirection: SortDirection? = nil,
+        shortcutID: String? = nil,
+        shortcutName: String? = nil,
+        shortcutTextInput: String? = nil,
+        linkedMenuViewID: UUID? = nil
     ) {
         self.kind = kind
         self.url = url
@@ -69,6 +81,10 @@ final class MenuAction: NSObject {
         self.boolValue = boolValue
         self.sortKey = sortKey
         self.sortDirection = sortDirection
+        self.shortcutID = shortcutID
+        self.shortcutName = shortcutName
+        self.shortcutTextInput = shortcutTextInput
+        self.linkedMenuViewID = linkedMenuViewID
     }
 }
 
@@ -76,12 +92,14 @@ final class MenuAction: NSObject {
     private let store: PreferencesStore
     private let fileAccessService: FileAccessService
     private let metadataService: MetadataService
+    private let shortcutsService: ShortcutsService
     private var temporarySharingWindow: NSWindow?
 
-    init(store: PreferencesStore, fileAccessService: FileAccessService, metadataService: MetadataService) {
+    init(store: PreferencesStore, fileAccessService: FileAccessService, metadataService: MetadataService, shortcutsService: ShortcutsService) {
         self.store = store
         self.fileAccessService = fileAccessService
         self.metadataService = metadataService
+        self.shortcutsService = shortcutsService
     }
 
     dynamic func handleMenuAction(_ sender: Any?) {
@@ -132,6 +150,13 @@ final class MenuAction: NSObject {
                 store.selectedMenuViewID = menuViewID
             }
             store.addAppFromPanel()
+
+        case .addLinkedMenuView:
+            guard let menuViewID = action.menuViewID,
+                  let linkedMenuViewID = action.linkedMenuViewID else {
+                return
+            }
+            store.addLinkedMenuView(linkedMenuViewID, toMenuViewID: menuViewID)
 
         case .addMenuView:
             store.addMenuView()
@@ -291,6 +316,40 @@ final class MenuAction: NSObject {
 
         case .openShortcutsApp:
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+
+        case .refreshShortcuts:
+            store.refreshShortcutsCatalog()
+
+        case .runShortcut:
+            guard let shortcutName = action.shortcutName else { return }
+            let identifierOrName = action.shortcutID ?? shortcutName
+            let openForEditing = modifierFlags.contains(.option)
+            Task { [shortcutsService] in
+                do {
+                    if openForEditing {
+                        try await shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                    } else {
+                        try await shortcutsService.runShortcut(identifierOrName: identifierOrName, textInput: action.shortcutTextInput)
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.store.showError("Could not run \(shortcutName): \(error.localizedDescription)")
+                    }
+                }
+            }
+
+        case .openShortcutForEditing:
+            guard let shortcutName = action.shortcutName else { return }
+            let identifierOrName = action.shortcutID ?? shortcutName
+            Task { [shortcutsService] in
+                do {
+                    try await shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                } catch {
+                    await MainActor.run {
+                        self.store.showError("Could not open \(shortcutName): \(error.localizedDescription)")
+                    }
+                }
+            }
         }
     }
 
