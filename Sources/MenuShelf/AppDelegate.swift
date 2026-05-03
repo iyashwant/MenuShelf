@@ -4,10 +4,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var container = AppContainer.shared
     private var rescueStatusItem: NSStatusItem?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let policySuccess = NSApp.setActivationPolicy(.accessory)
+        DiagnosticsLogger.shared.log("Set activation policy to accessory: \(policySuccess)")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         DiagnosticsLogger.shared.log("Application did finish launching")
         DiagnosticsLogger.shared.log(
-            "Runtime bundlePath=\(Bundle.main.bundlePath) executable=\(Bundle.main.executablePath ?? "nil") LSUIElement=\(String(describing: Bundle.main.object(forInfoDictionaryKey: "LSUIElement"))) activationPolicy=\(NSApp.activationPolicy().rawValue) mainThread=\(Thread.isMainThread)"
+            "Runtime bundlePath=\(Bundle.main.bundlePath) executable=\(Bundle.main.executablePath ?? "nil") activationPolicy=\(NSApp.activationPolicy().rawValue) mainThread=\(Thread.isMainThread)"
         )
         installRescueStatusItem()
         container.start()

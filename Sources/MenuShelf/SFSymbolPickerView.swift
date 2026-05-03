@@ -94,12 +94,12 @@ private struct SymbolButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 22, weight: .medium))
                 .frame(width: 48, height: 48)
-                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .background(isSelected ? Color(NSColor.controlAccentColor).opacity(0.15) : Color.clear)
+                .foregroundStyle(isSelected ? Color(NSColor.controlAccentColor) : .primary)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                        .stroke(isSelected ? Color(NSColor.controlAccentColor) : Color.secondary.opacity(0.2), lineWidth: isSelected ? 2 : 1)
                 )
         }
         .buttonStyle(.plain)

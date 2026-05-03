@@ -199,9 +199,9 @@ private struct MenuViewsSettingsView: View {
                 if store.settings.resolvedMenuViews.isEmpty {
                     EmptyMenuViewsPanel()
                         .frame(minWidth: 430)
-                } else if let id = store.selectedMenuViewID, store.menuView(id: id) != nil {
+                } else if let id = store.selectedMenuViewID, let currentMenuView = store.menuView(id: id) {
                     MenuViewDetailView(view: Binding(
-                        get: { store.menuView(id: id)! },
+                        get: { store.menuView(id: id) ?? currentMenuView },
                         set: { store.updateMenuView($0) }
                     ))
                     .frame(minWidth: 480)
@@ -264,9 +264,9 @@ private struct SourcesSettingsView: View {
                 if store.settings.folders.isEmpty {
                     OnboardingPanel()
                         .frame(minWidth: 430)
-                } else if let id = store.selectedFolderID, store.folder(id: id) != nil {
+                } else if let id = store.selectedFolderID, let currentFolder = store.folder(id: id) {
                     FolderDetailView(config: Binding(
-                        get: { store.folder(id: id)! },
+                        get: { store.folder(id: id) ?? currentFolder },
                         set: { store.updateFolder($0) }
                     ))
                     .frame(minWidth: 480)

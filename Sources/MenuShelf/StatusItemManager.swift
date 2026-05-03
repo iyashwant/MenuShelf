@@ -65,6 +65,7 @@ final class StatusItemManager: NSObject {
         configure(button: item.button, view: view)
         item.menu = menuBuilder.makeMenuViewMenu(for: view)
         statusItems.append(StatusContext(item: item, menuViewID: view.id, isFallback: false))
+        configureClickHandling(item: item, menuViewID: view.id, isFallback: false)
         DiagnosticsLogger.shared.log("Created status item for view \(view.title) title=\(item.button?.title ?? "nil") length=\(item.length) hasImage=\(item.button?.image != nil)")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             DiagnosticsLogger.shared.log(
@@ -86,6 +87,7 @@ final class StatusItemManager: NSObject {
         }
 
         item.menu = menuBuilder.makeGroupedMenu()
+        configureClickHandling(item: item, menuViewID: nil, isFallback: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             DiagnosticsLogger.shared.log(
                 "Empty status item attached window=\(String(describing: item.button?.window)) windowFrame=\(String(describing: item.button?.window?.frame)) frame=\(String(describing: item.button?.frame)) visible=\(item.isVisible) hasImage=\(item.button?.image != nil)"
