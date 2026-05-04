@@ -41,6 +41,7 @@ enum MenuActionKind {
     case runShortcut
     case openShortcutForEditing
     case refreshShortcuts
+    case runScript
 }
 
 final class MenuAction: NSObject {
@@ -334,6 +335,12 @@ final class MenuAction: NSObject {
         case .refreshShortcuts:
             store.refreshShortcutsCatalog()
 
+        case .runScript:
+            guard let url = action.url else { return }
+            withFolderAccess(action.folderID) {
+                runScriptInTerminal(url)
+            }
+
         case .runShortcut:
             guard let shortcutName = action.shortcutName else { return }
             let identifierOrName = action.shortcutID ?? shortcutName
@@ -482,6 +489,31 @@ final class MenuAction: NSObject {
 
     private func isApplicationBundle(_ url: URL) -> Bool {
         url.pathExtension.lowercased() == "app"
+    }
+
+    private func runScriptInTerminal(_ url: URL) {
+        let ext = url.pathExtension.lowercased()
+        let scriptPath = url.path
+        let dir = url.deletingLastPathComponent().path
+
+        let cmd: String
+        if ext == "ps1" {
+            cmd = "pwsh \"\(scriptPath)\""
+        } else {
+            cmd = "bash \"\(scriptPath)\""
+        }
+
+        let appleScript = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"cd '\(dir)' && \(cmd)\""
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", appleScript]
+
+        do {
+            try process.run()
+        } catch {
+            store.showError("Could not launch Terminal: \(error.localizedDescription)")
+        }
     }
 
     private func showSharingPicker(for url: URL) {

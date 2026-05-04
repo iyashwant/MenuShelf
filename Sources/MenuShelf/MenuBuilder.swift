@@ -276,13 +276,7 @@ final class MenuBuilder {
         let submenu = NSMenu(title: "MenuShelf")
         submenu.autoenablesItems = false
 
-        submenu.addItem(actionItem("Add Menu View...", kind: .addMenuView))
-
-        let addFolder = actionItem("Add Folder...", kind: .addFolder, menuViewID: view?.id)
-        addFolder.keyEquivalent = "a"
-        addFolder.keyEquivalentModifierMask = [.command]
-        submenu.addItem(addFolder)
-        submenu.addItem(actionItem("Add App...", kind: .addApp, menuViewID: view?.id))
+        submenu.addItem(actionItem("Add Item...", kind: .openSettings))
         if let view {
             submenu.addItem(addExistingMenuViewMenuItem(for: view))
         }
@@ -293,7 +287,6 @@ final class MenuBuilder {
         submenu.addItem(.separator())
 
         if let view {
-            submenu.addItem(actionItem("View Settings...", kind: .menuViewSettings, menuViewID: view.id))
             submenu.addItem(actionItem("Duplicate View", kind: .duplicateMenuView, menuViewID: view.id))
             submenu.addItem(actionItem("Hide View", kind: .hideMenuView, menuViewID: view.id))
             submenu.addItem(actionItem("Remove View...", kind: .removeMenuView, menuViewID: view.id))
@@ -635,6 +628,9 @@ final class MenuBuilder {
 
         menu.addItem(actionItem("Open", kind: .open, url: actionURL, folderID: config.id))
         menu.addItem(openWithItem(for: actionURL, folderID: config.id))
+        if isScriptFile(item) {
+            menu.addItem(actionItem("Run Script", kind: .runScript, url: actionURL, folderID: config.id))
+        }
         if isTextOrCodeFile(item) {
             menu.addItem(actionItem("Copy Contents", kind: .copyContents, url: actionURL, folderID: config.id))
         }
@@ -691,6 +687,11 @@ final class MenuBuilder {
         return textExtensions.contains(ext)
     }
 
+    private func isScriptFile(_ item: FileMenuItem) -> Bool {
+        let ext = item.url.pathExtension.lowercased()
+        return ext == "sh" || ext == "ps1"
+    }
+
     private func openWithItem(for url: URL, folderID: UUID?) -> NSMenuItem {
         let item = NSMenuItem(title: "Open With", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "Open With")
@@ -742,9 +743,7 @@ final class MenuBuilder {
 
         if isRoot {
             menu.addItem(.separator())
-            menu.addItem(actionItem("Add Folder...", kind: .addFolder))
-            menu.addItem(actionItem("Add App...", kind: .addApp))
-            menu.addItem(actionItem("Folder Settings...", kind: .folderSettings, folderID: config.id))
+            menu.addItem(actionItem("Add Item...", kind: .openSettings))
             menu.addItem(actionItem("Settings...", kind: .openSettings))
             menu.addItem(actionItem("Hide From Menu Bar", kind: .hideFolder, folderID: config.id))
             menu.addItem(actionItem("Remove Folder...", kind: .removeFolder, folderID: config.id))
