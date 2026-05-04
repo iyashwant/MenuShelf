@@ -158,12 +158,20 @@ private struct MenuViewsSettingsView: View {
                     ForEach(store.settings.resolvedMenuViews) { view in
                         MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count)
                             .tag(Optional(view.id))
+                            .contextMenu {
+                                Button("Duplicate") {
+                                    store.duplicateMenuView(id: view.id)
+                                }
+                                Divider()
+                                Button("Delete", role: .destructive) {
+                                    store.removeMenuView(id: view.id)
+                                }
+                            }
                     }
                     .onMove { source, destination in
                         store.moveMenuViews(fromOffsets: source, toOffset: destination)
                     }
                 }
-                .frame(minWidth: 260, idealWidth: 310)
 
                 Divider()
 
@@ -183,17 +191,11 @@ private struct MenuViewsSettingsView: View {
                     }
                     .disabled(store.selectedMenuViewID == nil)
 
-                    Button("Duplicate") {
-                        if let id = store.selectedMenuViewID {
-                            store.duplicateMenuView(id: id)
-                        }
-                    }
-                    .disabled(store.selectedMenuViewID == nil)
-
                     Spacer()
                 }
                 .padding(10)
             }
+            .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
 
             Group {
                 if store.settings.resolvedMenuViews.isEmpty {
@@ -224,12 +226,16 @@ private struct SourcesSettingsView: View {
                     ForEach(store.settings.folders) { folder in
                         FolderRow(folder: folder)
                             .tag(Optional(folder.id))
+                            .contextMenu {
+                                Button("Delete", role: .destructive) {
+                                    store.removeFolder(id: folder.id)
+                                }
+                            }
                     }
                     .onMove { source, destination in
                         store.moveFolders(fromOffsets: source, toOffset: destination)
                     }
                 }
-                .frame(minWidth: 260, idealWidth: 310)
 
                 Divider()
 
@@ -259,6 +265,7 @@ private struct SourcesSettingsView: View {
                 }
                 .padding(10)
             }
+            .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
 
             Group {
                 if store.settings.folders.isEmpty {
@@ -307,10 +314,46 @@ private struct MenuViewRow: View {
     }
 }
 
+private enum UnifiedContentItem: Identifiable {
+    case menuViewItem(MenuViewItem)
+    case shortcut(ShortcutMenuItemConfig)
+    case linkedMenuView(LinkedMenuViewConfig)
+    case linkedShortcutsFolder(LinkedShortcutsFolderConfig)
+
+    var id: UUID {
+        switch self {
+        case .menuViewItem(let item): item.id
+        case .shortcut(let item): item.id
+        case .linkedMenuView(let item): item.id
+        case .linkedShortcutsFolder(let item): item.id
+        }
+    }
+
+    var kindIcon: String {
+        switch self {
+        case .menuViewItem: "folder"
+        case .shortcut: "bolt.fill"
+        case .linkedMenuView: "menubar.rectangle"
+        case .linkedShortcutsFolder: "folder.badge.gearshape"
+        }
+    }
+
+    var kindIconColor: Color {
+        switch self {
+        case .menuViewItem: .secondary
+        case .shortcut: .orange
+        case .linkedMenuView: .blue
+        case .linkedShortcutsFolder: .indigo
+        }
+    }
+}
+
 private struct MenuViewDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     @Binding var view: MenuViewConfig
     @State private var showingSymbolPicker = false
+    @State private var selectedContentItemID: UUID?
+    @State private var editingItem: UnifiedContentItem?
 
     var body: some View {
         ScrollView {
@@ -397,159 +440,116 @@ private struct MenuViewDetailView: View {
 
                 SettingsCard("View Contents") {
                     HStack {
-                        Button {
-                            store.selectedMenuViewID = view.id
-                            store.addFolderFromPanel()
-                        } label: {
-                            Label("Add Folder", systemImage: "folder.badge.plus")
-                        }
-
-                        Button {
-                            store.selectedMenuViewID = view.id
-                            store.addAppFromPanel()
-                        } label: {
-                            Label("Add App", systemImage: "app.badge.plus")
-                        }
-
                         Menu {
-                            ForEach(store.settings.folders) { source in
-                                Button(source.displayName) {
-                                    store.attachSource(source.id, toMenuViewID: view.id)
-                                }
-                            }
-                        } label: {
-                            Label("Add Existing Source", systemImage: "plus.square.on.square")
-                        }
-
-                        Menu {
-                            let candidates = store.settings.resolvedMenuViews.filter { candidate in
-                                candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
+                            Button {
+                                store.selectedMenuViewID = view.id
+                                store.addFolderFromPanel()
+                            } label: {
+                                Label("Add Folder", systemImage: "folder.badge.plus")
                             }
 
-                            if candidates.isEmpty {
-                                Text("No available views")
-                            } else {
-                                ForEach(candidates) { candidate in
-                                    Button(candidate.title) {
-                                        store.addLinkedMenuView(candidate.id, toMenuViewID: view.id)
-                                    }
-                                    .disabled(!store.canLinkMenuView(candidate.id, toMenuViewID: view.id))
-                                }
+                            Button {
+                                store.selectedMenuViewID = view.id
+                                store.addAppFromPanel()
+                            } label: {
+                                Label("Add App", systemImage: "app.badge.plus")
                             }
-                        } label: {
-                            Label("Add Existing View", systemImage: "menubar.rectangle")
-                        }
 
-                        Menu {
-                            if store.availableShortcuts.isEmpty {
-                                Button("Refresh Shortcuts") {
-                                    store.refreshShortcutsCatalog()
-                                }
-                            } else {
-                                ForEach(store.availableShortcuts) { shortcut in
-                                    Button(shortcut.name) {
-                                        store.addShortcut(shortcut, toMenuViewID: view.id)
+                            Divider()
+
+                            Menu {
+                                ForEach(store.settings.folders) { source in
+                                    Button(source.displayName) {
+                                        store.attachSource(source.id, toMenuViewID: view.id)
                                     }
                                 }
+                            } label: {
+                                Label("Add Existing Source", systemImage: "plus.square.on.square")
                             }
-                        } label: {
-                            Label("Add Shortcut", systemImage: "bolt.fill")
-                        }
 
-                        Menu {
-                            if store.availableShortcutFolders.isEmpty {
-                                Button("Refresh Shortcuts Folders") {
-                                    store.refreshShortcutsCatalog()
+                            Menu {
+                                let candidates = store.settings.resolvedMenuViews.filter { candidate in
+                                    candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
                                 }
-                            } else {
-                                ForEach(store.availableShortcutFolders) { folder in
-                                    Button(folder.name) {
-                                        store.addLinkedShortcutsFolder(folder, toMenuViewID: view.id)
+
+                                if candidates.isEmpty {
+                                    Text("No available views")
+                                } else {
+                                    ForEach(candidates) { candidate in
+                                        Button(candidate.title) {
+                                            store.addLinkedMenuView(candidate.id, toMenuViewID: view.id)
+                                        }
+                                        .disabled(!store.canLinkMenuView(candidate.id, toMenuViewID: view.id))
                                     }
                                 }
+                            } label: {
+                                Label("Add Existing View", systemImage: "menubar.rectangle")
+                            }
+
+                            Divider()
+
+                            Menu {
+                                if store.availableShortcuts.isEmpty {
+                                    Button("Refresh Shortcuts") {
+                                        store.refreshShortcutsCatalog()
+                                    }
+                                } else {
+                                    ForEach(store.availableShortcuts) { shortcut in
+                                        Button(shortcut.name) {
+                                            store.addShortcut(shortcut, toMenuViewID: view.id)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Add Shortcut", systemImage: "bolt.fill")
+                            }
+
+                            Menu {
+                                if store.availableShortcutFolders.isEmpty {
+                                    Button("Refresh Shortcuts Folders") {
+                                        store.refreshShortcutsCatalog()
+                                    }
+                                } else {
+                                    ForEach(store.availableShortcutFolders) { folder in
+                                        Button(folder.name) {
+                                            store.addLinkedShortcutsFolder(folder, toMenuViewID: view.id)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
                             }
                         } label: {
-                            Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
+                            Label("Add", systemImage: "plus")
                         }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
 
                         Button {
-                            if let id = store.selectedMenuViewItemID {
-                                store.removeMenuViewItem(viewID: view.id, itemID: id)
+                            if let id = selectedContentItemID,
+                               let item = unifiedItems.first(where: { $0.id == id }) {
+                                editingItem = item
+                            }
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .disabled(selectedContentItemID == nil)
+
+                        Button {
+                            if let id = selectedContentItemID {
+                                removeContentItem(id: id)
                             }
                         } label: {
                             Label("Remove", systemImage: "minus")
                         }
-                        .disabled(store.selectedMenuViewItemID == nil)
+                        .disabled(selectedContentItemID == nil)
 
                         Spacer()
-                    }
 
-                    List(selection: $store.selectedMenuViewItemID) {
-                        ForEach(view.items) { item in
-                            MenuViewItemRow(item: item, source: store.folder(id: item.sourceID))
-                                .tag(Optional(item.id))
-                        }
-                        .onMove { source, destination in
-                            view.items.move(fromOffsets: source, toOffset: destination)
-                        }
-                    }
-                    .frame(minHeight: 170)
-
-                    if let itemBinding = selectedItemBinding {
-                        MenuViewItemEditor(item: itemBinding, source: store.folder(id: itemBinding.wrappedValue.sourceID))
-                    }
-
-                    if !view.resolvedLinkedMenuViews.isEmpty {
-                        Divider()
-
-                        Text("Linked Menu Views")
-                            .font(.headline)
-
-                        ForEach(view.resolvedLinkedMenuViews) { linkedView in
-                            if let binding = linkedMenuViewBinding(for: linkedView.id) {
-                                LinkedMenuViewEditor(
-                                    linkedView: binding,
-                                    targetView: store.menuView(id: linkedView.menuViewID)
-                                ) {
-                                    removeLinkedMenuView(id: linkedView.id)
-                                }
-                            }
-                        }
-                    }
-
-                    if !view.resolvedShortcutItems.isEmpty {
-                        Divider()
-
-                        Text("Shortcuts")
-                            .font(.headline)
-
-                        ForEach(view.resolvedShortcutItems) { shortcut in
-                            if let binding = shortcutBinding(for: shortcut.id) {
-                                ShortcutMenuItemEditor(item: binding) {
-                                    removeShortcutItem(id: shortcut.id)
-                                }
-                            }
-                        }
-                    }
-
-                    if !view.resolvedLinkedShortcutsFolders.isEmpty {
-                        Divider()
-
-                        Text("Linked Shortcuts Folders")
-                            .font(.headline)
-
-                        ForEach(view.resolvedLinkedShortcutsFolders) { folder in
-                            if let binding = linkedFolderBinding(for: folder.id) {
-                                LinkedShortcutsFolderEditor(folder: binding) {
-                                    removeLinkedFolder(id: folder.id)
-                                }
-                            }
-                        }
-                    }
-
-                    HStack {
-                        Button("Refresh Shortcuts Catalog") {
+                        Button {
                             store.refreshShortcutsCatalog()
+                        } label: {
+                            Label("Refresh Shortcuts", systemImage: "arrow.clockwise")
                         }
                         .disabled(store.isRefreshingShortcuts)
 
@@ -558,6 +558,49 @@ private struct MenuViewDetailView: View {
                                 .controlSize(.small)
                         }
                     }
+
+                    List(selection: $selectedContentItemID) {
+                        ForEach(unifiedItems) { item in
+                            UnifiedContentItemRow(item: item, store: store)
+                                .tag(item.id)
+                                .contextMenu {
+                                    Button {
+                                        editingItem = item
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    Divider()
+
+                                    Button(role: .destructive) {
+                                        removeContentItem(id: item.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+
+                                    if case .shortcut(let shortcut) = item {
+                                        Button {
+                                            let identifierOrName = shortcut.shortcutIdentifier ?? shortcut.name
+                                            Task {
+                                                try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                                            }
+                                        } label: {
+                                            Label("Open in Shortcuts", systemImage: "app.connected.to.app.below.fill")
+                                        }
+                                    }
+                                }
+                        }
+                        .onMove { source, destination in
+                            handleContentMove(fromOffsets: source, toOffset: destination)
+                        }
+                    }
+                    .frame(height: listHeight)
+                    .scrollContentBackground(.hidden)
+                }
+                .popover(item: $editingItem, arrowEdge: .trailing) { item in
+                    makePopoverEditor(for: item)
+                        .frame(minWidth: 340, idealWidth: 380)
+                        .padding()
                 }
 
                 SettingsCard("Menu Behavior") {
@@ -573,11 +616,24 @@ private struct MenuViewDetailView: View {
         view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count
     }
 
-    private var selectedItemBinding: Binding<MenuViewItem>? {
-        guard let id = store.selectedMenuViewItemID,
-              let index = view.items.firstIndex(where: { $0.id == id }) else {
-            return nil
-        }
+    private var unifiedItems: [UnifiedContentItem] {
+        var items: [UnifiedContentItem] = []
+        items.append(contentsOf: view.items.map { .menuViewItem($0) })
+        items.append(contentsOf: view.resolvedLinkedMenuViews.map { .linkedMenuView($0) })
+        items.append(contentsOf: view.resolvedShortcutItems.map { .shortcut($0) })
+        items.append(contentsOf: view.resolvedLinkedShortcutsFolders.map { .linkedShortcutsFolder($0) })
+        return items
+    }
+
+    private let listRowHeight: CGFloat = 44
+
+    private var listHeight: CGFloat {
+        let count = unifiedItems.count
+        return count > 0 ? CGFloat(count) * listRowHeight + 32 : listRowHeight
+    }
+
+    private func menuViewItemBinding(for id: UUID) -> Binding<MenuViewItem>? {
+        guard let index = view.items.firstIndex(where: { $0.id == id }) else { return nil }
 
         return Binding(
             get: { view.items[index] },
@@ -587,6 +643,150 @@ private struct MenuViewDetailView: View {
                 view.items[index] = copy
             }
         )
+    }
+
+    private func removeContentItem(id: UUID) {
+        if view.items.contains(where: { $0.id == id }) {
+            view.items.removeAll { $0.id == id }
+        } else if view.resolvedShortcutItems.contains(where: { $0.id == id }) {
+            removeShortcutItem(id: id)
+        } else if view.resolvedLinkedMenuViews.contains(where: { $0.id == id }) {
+            removeLinkedMenuView(id: id)
+        } else if view.resolvedLinkedShortcutsFolders.contains(where: { $0.id == id }) {
+            removeLinkedFolder(id: id)
+        }
+        selectedContentItemID = nil
+    }
+
+    private func handleContentMove(fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard let sourceIndex = source.first else { return }
+        let items = unifiedItems
+        guard sourceIndex < items.count else { return }
+
+        let sourcesEnd = view.items.count
+        let linkedViewsEnd = sourcesEnd + view.resolvedLinkedMenuViews.count
+        let shortcutsEnd = linkedViewsEnd + view.resolvedShortcutItems.count
+
+        let sourceItem = items[sourceIndex]
+        var clampedDest = destination
+
+        switch sourceItem {
+        case .menuViewItem:
+            if destination <= 0 { clampedDest = 0 }
+            if destination > sourcesEnd { clampedDest = sourcesEnd }
+        case .linkedMenuView:
+            if destination < sourcesEnd { clampedDest = sourcesEnd }
+            if destination > linkedViewsEnd { clampedDest = linkedViewsEnd }
+        case .shortcut:
+            if destination < linkedViewsEnd { clampedDest = linkedViewsEnd }
+            if destination > shortcutsEnd { clampedDest = shortcutsEnd }
+        case .linkedShortcutsFolder:
+            if destination < shortcutsEnd { clampedDest = shortcutsEnd }
+            if destination > items.count { clampedDest = items.count }
+        }
+
+        if sourceIndex < clampedDest { clampedDest -= 1 }
+
+        let groupOffset: Int
+        let sourceGroupOffset: Int
+        switch sourceItem {
+        case .menuViewItem:
+            sourceGroupOffset = sourceIndex
+            groupOffset = clampedDest
+            view.items.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
+        case .linkedMenuView:
+            sourceGroupOffset = sourceIndex - sourcesEnd
+            groupOffset = clampedDest - sourcesEnd
+            var arr = view.resolvedLinkedMenuViews
+            arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
+            view.linkedMenuViews = arr
+        case .shortcut:
+            sourceGroupOffset = sourceIndex - linkedViewsEnd
+            groupOffset = clampedDest - linkedViewsEnd
+            var arr = view.resolvedShortcutItems
+            arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
+            view.shortcutItems = arr
+        case .linkedShortcutsFolder:
+            sourceGroupOffset = sourceIndex - shortcutsEnd
+            groupOffset = clampedDest - shortcutsEnd
+            var arr = view.resolvedLinkedShortcutsFolders
+            arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
+            view.linkedShortcutsFolders = arr
+        }
+    }
+
+    @ViewBuilder
+    private func makePopoverEditor(for item: UnifiedContentItem) -> some View {
+        switch item {
+        case .menuViewItem:
+            if let binding = menuViewItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit Source")
+                        .font(.headline)
+
+                    Text(store.folder(id: binding.wrappedValue.sourceID)?.displayName ?? "Missing Source")
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    Toggle("Use custom menu settings for this source", isOn: Binding(
+                        get: { binding.wrappedValue.menuSettingsOverride != nil },
+                        set: { enabled in
+                            let source = store.folder(id: binding.wrappedValue.sourceID)
+                            binding.wrappedValue.menuSettingsOverride = enabled ? (binding.wrappedValue.menuSettingsOverride ?? source?.menuSettings ?? .defaults) : nil
+                        }
+                    ))
+
+                    if binding.wrappedValue.menuSettingsOverride != nil {
+                        MenuSettingsEditor(settings: Binding(
+                            get: { binding.wrappedValue.menuSettingsOverride ?? store.folder(id: binding.wrappedValue.sourceID)?.menuSettings ?? .defaults },
+                            set: { binding.wrappedValue.menuSettingsOverride = $0 }
+                        ))
+                    }
+                }
+            }
+        case .shortcut:
+            if let binding = shortcutBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Edit Shortcut")
+                        .font(.headline)
+                    ShortcutMenuItemEditor(item: binding) {
+                        removeContentItem(id: item.id)
+                        editingItem = nil
+                    }
+                }
+            }
+        case .linkedMenuView:
+            if let binding = linkedMenuViewBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Edit Linked View")
+                        .font(.headline)
+                    LinkedMenuViewEditor(linkedView: binding, targetView: store.menuView(id: binding.wrappedValue.menuViewID)) {
+                        removeContentItem(id: item.id)
+                        editingItem = nil
+                    }
+                }
+            }
+        case .linkedShortcutsFolder:
+            if let binding = linkedFolderBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Edit Linked Folder")
+                        .font(.headline)
+                    LinkedShortcutsFolderEditor(folder: binding) {
+                        removeContentItem(id: item.id)
+                        editingItem = nil
+                    }
+                }
+            }
+        }
     }
 
     private func linkedMenuViewBinding(for id: UUID) -> Binding<LinkedMenuViewConfig>? {
@@ -650,6 +850,69 @@ private struct MenuViewDetailView: View {
         var folders = view.resolvedLinkedShortcutsFolders
         folders.removeAll { $0.id == id }
         view.linkedShortcutsFolders = folders
+    }
+}
+
+private struct UnifiedContentItemRow: View {
+    let item: UnifiedContentItem
+    let store: PreferencesStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: item.kindIcon)
+                .foregroundStyle(item.kindIconColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayTitle)
+                    .lineLimit(1)
+                Text(displaySubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var displayTitle: String {
+        switch item {
+        case .menuViewItem(let menuItem):
+            if let override = menuItem.titleOverride, !override.isEmpty {
+                return override
+            }
+            return store.folder(id: menuItem.sourceID)?.displayName ?? "Missing Source"
+        case .shortcut(let shortcut):
+            return shortcut.displayTitle
+        case .linkedMenuView(let linkedView):
+            return linkedView.displayTitle(fallbackTitle: store.menuView(id: linkedView.menuViewID)?.title ?? "Missing View")
+        case .linkedShortcutsFolder(let folder):
+            return folder.folderName
+        }
+    }
+
+    private var displaySubtitle: String {
+        switch item {
+        case .menuViewItem(let menuItem):
+            if let section = menuItem.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return store.folder(id: menuItem.sourceID)?.originalPathHint ?? "Source no longer exists"
+        case .shortcut(let shortcut):
+            if let section = shortcut.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return shortcut.shortcutIdentifier ?? shortcut.name
+        case .linkedMenuView(let linkedView):
+            if let section = linkedView.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "Linked View"
+        case .linkedShortcutsFolder(let folder):
+            return folder.shortcutFolderIdentifier ?? "Shortcuts Folder"
+        }
     }
 }
 
