@@ -11,9 +11,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DiagnosticsLogger.shared.log(
             "Runtime bundlePath=\(Bundle.main.bundlePath) executable=\(Bundle.main.executablePath ?? "nil") activationPolicy=\(NSApp.activationPolicy().rawValue) mainThread=\(Thread.isMainThread)"
         )
-        installRescueStatusItem()
+        // The rescue status item flashes a placeholder in the menu bar while the
+        // real items are being built. It's only useful when chasing startup
+        // ordering bugs, so gate it behind verbose diagnostics rather than
+        // showing it on every normal launch.
+        let useRescue = container.store.settings.resolvedEnableVerboseDiagnostics
+        if useRescue { installRescueStatusItem() }
         container.start()
-        removeRescueStatusItem()
+        if useRescue { removeRescueStatusItem() }
 
         if container.store.settings.resolvedMenuViews.isEmpty {
             container.settingsWindowController.show()
@@ -22,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DiagnosticsLogger.shared.log("Application will terminate")
+        // Flush any debounced settings save so user changes don't get lost on quit.
+        container.store.flushPendingSave()
         DiagnosticsLogger.shared.endSession()
     }
 
@@ -58,11 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.menu = menu
         rescueStatusItem = item
         DiagnosticsLogger.shared.log("Installed rescue status item title=\(item.button?.title ?? "nil") length=\(item.length)")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            DiagnosticsLogger.shared.log(
-                "Rescue status item attached title=\(item.button?.title ?? "nil") window=\(String(describing: item.button?.window)) windowFrame=\(String(describing: item.button?.window?.frame)) frame=\(String(describing: item.button?.frame)) visible=\(item.isVisible)"
-            )
-        }
     }
 
     @objc private func openSettingsFromRescueItem(_ sender: Any?) {

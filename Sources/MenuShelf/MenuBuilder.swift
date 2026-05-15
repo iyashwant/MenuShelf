@@ -1,12 +1,20 @@
 import AppKit
 import Foundation
 
+/// Keeps `NSMenuDelegate` instances alive only as long as their menus are alive.
+/// `NSMenu.delegate` is a weak reference, so the delegate would otherwise be
+/// deallocated immediately. We bind delegate lifetime to the menu's lifetime
+/// using `NSMapTable.weakToStrongObjects`, so every menu rebuild naturally
+/// releases the previous delegate when ARC frees the old menu.
 final class MenuDelegateRetainer {
     static let shared = MenuDelegateRetainer()
-    private var delegates: [NSObject] = []
+    private let table = NSMapTable<NSMenu, NSObject>.weakToStrongObjects()
+    private let lock = NSLock()
 
-    func retain(_ delegate: NSObject) {
-        delegates.append(delegate)
+    func retain(_ delegate: NSObject, for menu: NSMenu) {
+        lock.lock()
+        table.setObject(delegate, forKey: menu)
+        lock.unlock()
     }
 }
 
@@ -474,6 +482,16 @@ final class MenuBuilder {
             menuItem.image = smallIcon(item.icon, size: config.menuSettings.resolvedFileIconSize.pointSize)
         }
 
+        if item.hasSymlinkLoop {
+            menuItem.title = "Symlink Loop: \(item.displayName)"
+            let submenu = NSMenu(title: item.displayName)
+            submenu.autoenablesItems = false
+            addDisabled("This link points back into a folder already shown above.", to: submenu)
+            submenu.addItem(actionItem("Reveal in Finder", kind: .reveal, url: item.url, folderID: config.id))
+            menuItem.submenu = submenu
+            return menuItem
+        }
+
         if item.aliasIsBroken {
             menuItem.title = "Alias Target Missing: \(item.displayName)"
             let submenu = NSMenu(title: item.displayName)
@@ -861,7 +879,7 @@ final class MenuBuilder {
     private func attachFolderDelegate(to menu: NSMenu, configID: UUID, configOverride: FolderConfig?, menuView: MenuViewConfig?, folderURL: URL?, isRoot: Bool, visited: Set<String>) {
         let delegate = FolderMenuDelegate(builder: self, configID: configID, configOverride: configOverride, menuView: menuView, folderURL: folderURL, isRoot: isRoot, visited: visited)
         menu.delegate = delegate
-        MenuDelegateRetainer.shared.retain(delegate)
+        MenuDelegateRetainer.shared.retain(delegate, for: menu)
     }
 
     func actionItem(

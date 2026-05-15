@@ -15,10 +15,13 @@ final class GlobalHotkeyService {
     }
 
     deinit {
-        unregisterAll()
+        // Tear down in the right order: stop receiving Carbon callbacks first
+        // (so a hotkey press can't reach the now-freed object via the
+        // unretained pointer captured below), then unregister hotkeys.
         if let eventHandler {
             RemoveEventHandler(eventHandler)
         }
+        unregisterAll()
     }
 
     func registerShortcuts(for menuViews: [MenuViewConfig], onHotKey: @escaping (UUID) -> Void) {
@@ -35,7 +38,7 @@ final class GlobalHotkeyService {
             let hotKeyIDValue = nextHotKeyID
             nextHotKeyID += 1
 
-            var carbonHotKeyID = EventHotKeyID(signature: signature, id: hotKeyIDValue)
+            let carbonHotKeyID = EventHotKeyID(signature: signature, id: hotKeyIDValue)
             var hotKeyRef: EventHotKeyRef?
             let status = RegisterEventHotKey(
                 UInt32(keyCode),

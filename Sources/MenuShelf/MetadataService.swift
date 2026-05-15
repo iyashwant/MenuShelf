@@ -18,24 +18,90 @@ final class MetadataService {
         return formatter
     }()
 
+    // NSWorkspace.icon(forFile:) returns a shared instance whose size we previously
+    // mutated in place, which polluted other callers. Cache copies keyed by (path, size)
+    // so a 1000-item folder costs ~1000 lookups on first open and ~0 thereafter.
+    private let iconCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 512
+        return cache
+    }()
+
     func icon(for url: URL, size: CGFloat = 18) -> NSImage {
-        let image = NSWorkspace.shared.icon(forFile: url.path)
+        let key = "\(url.path)|\(Int(size))" as NSString
+        if let cached = iconCache.object(forKey: key) {
+            return cached
+        }
+
+        let workspaceIcon = NSWorkspace.shared.icon(forFile: url.path)
+        let image = (workspaceIcon.copy() as? NSImage) ?? workspaceIcon
         image.size = NSSize(width: size, height: size)
+        iconCache.setObject(image, forKey: key)
         return image
+    }
+
+    /// Drop a path from the icon cache (e.g. when a file is renamed or trashed).
+    func invalidateIcon(for url: URL) {
+        for size in [16, 18, 22, 24, 32, 48, 64] {
+            iconCache.removeObject(forKey: "\(url.path)|\(size)" as NSString)
+        }
     }
 
     func enrichedMetadata(for item: FileMenuItem) -> FileMetadata {
         var metadata = item.metadata
 
-        if metadata.dimensions == nil {
-            metadata.dimensions = dimensions(for: item.actionURL, type: item.kind)
+        if metadata.dimensions == nil, item.kind?.conforms(to: .image) == true {
+            metadata.dimensions = imageDimensions(for: item.actionURL)
         }
 
-        if metadata.duration == nil, item.kind?.conforms(to: .movie) == true {
-            metadata.duration = videoDuration(for: item.actionURL)
+        // Video dimensions and duration require async AVFoundation APIs on
+        // macOS 13+. They're fetched lazily by callers that can `await`,
+        // never on the main thread during menu construction.
+
+        return metadata
+    }
+
+    /// Async metadata enrichment for video assets. Safe to call from any
+    /// context. Returns the unchanged metadata if the URL is not a movie.
+    func enrichedMetadataAsync(for item: FileMenuItem) async -> FileMetadata {
+        var metadata = enrichedMetadata(for: item)
+
+        guard item.kind?.conforms(to: .movie) == true || item.kind?.conforms(to: .audiovisualContent) == true else {
+            return metadata
+        }
+
+        let asset = AVURLAsset(url: item.actionURL)
+
+        if metadata.dimensions == nil {
+            metadata.dimensions = await loadVideoDimensions(asset: asset)
+        }
+        if metadata.duration == nil {
+            metadata.duration = await loadVideoDuration(asset: asset)
         }
 
         return metadata
+    }
+
+    private func loadVideoDimensions(asset: AVURLAsset) async -> CGSize? {
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            guard let track = tracks.first else { return nil }
+            let (size, transform) = try await track.load(.naturalSize, .preferredTransform)
+            let transformed = size.applying(transform)
+            return CGSize(width: abs(transformed.width), height: abs(transformed.height))
+        } catch {
+            return nil
+        }
+    }
+
+    private func loadVideoDuration(asset: AVURLAsset) async -> TimeInterval? {
+        do {
+            let duration = try await asset.load(.duration)
+            let seconds = CMTimeGetSeconds(duration)
+            return seconds.isFinite ? seconds : nil
+        } catch {
+            return nil
+        }
     }
 
     func formattedSize(_ size: Int64?) -> String? {
@@ -75,18 +141,6 @@ final class MetadataService {
         return text?.components(separatedBy: .newlines).prefix(12).joined(separator: "\n")
     }
 
-    private func dimensions(for url: URL, type: UTType?) -> CGSize? {
-        if type?.conforms(to: .image) == true {
-            return imageDimensions(for: url)
-        }
-
-        if type?.conforms(to: .movie) == true || type?.conforms(to: .audiovisualContent) == true {
-            return videoDimensions(for: url)
-        }
-
-        return nil
-    }
-
     private func imageDimensions(for url: URL) -> CGSize? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -96,18 +150,5 @@ final class MetadataService {
         }
 
         return CGSize(width: width, height: height)
-    }
-
-    private func videoDimensions(for url: URL) -> CGSize? {
-        let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .video).first else { return nil }
-        let transformed = track.naturalSize.applying(track.preferredTransform)
-        return CGSize(width: abs(transformed.width), height: abs(transformed.height))
-    }
-
-    private func videoDuration(for url: URL) -> TimeInterval? {
-        let asset = AVURLAsset(url: url)
-        let seconds = CMTimeGetSeconds(asset.duration)
-        return seconds.isFinite ? seconds : nil
     }
 }

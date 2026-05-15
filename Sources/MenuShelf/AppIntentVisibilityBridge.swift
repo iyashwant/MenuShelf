@@ -35,12 +35,13 @@ final class AppIntentVisibilityBridge {
             }
 
         case .showOnlySelected:
-            var views = store.settings.resolvedMenuViews
-            for index in views.indices {
-                views[index].isVisible = folderIDs.contains(views[index].id)
-                views[index].updatedAt = Date()
+            let selected = Set(folderIDs)
+            // Use the documented update channel rather than mutating
+            // store.settings.menuViews directly. This preserves invariants in
+            // updateMenuView (timestamping, persistence, rebuild).
+            for view in store.settings.resolvedMenuViews {
+                store.setMenuViewVisibility(id: view.id, isVisible: selected.contains(view.id))
             }
-            store.settings.menuViews = views
 
         case .showAll:
             store.showAllMenuViews()

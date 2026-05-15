@@ -35,7 +35,30 @@ final class SecurityScopedURL {
 final class FileAccessService {
     private let fileManager = FileManager.default
 
+    // Cache of resolved security-scoped URLs keyed by FolderConfig.id.
+    // Bookmark resolution is non-trivial; without this, every menu render
+    // re-resolves the same bookmarks. The bookmarkData hash invalidates the
+    // entry if the user re-grants access via reselectFolder.
+    private struct ResolvedBookmark {
+        let bookmarkHash: Int
+        let url: URL
+    }
+    private var resolvedCache: [UUID: ResolvedBookmark] = [:]
+    private let resolvedCacheLock = NSLock()
+
     func accessItem(_ config: FolderConfig) throws -> SecurityScopedURL {
+        let bookmarkHash = config.bookmarkData.hashValue
+
+        resolvedCacheLock.lock()
+        let cached = resolvedCache[config.id]
+        resolvedCacheLock.unlock()
+
+        if let cached, cached.bookmarkHash == bookmarkHash,
+           fileManager.fileExists(atPath: cached.url.path) {
+            let didStart = cached.url.startAccessingSecurityScopedResource()
+            return SecurityScopedURL(url: cached.url, didStartAccessing: didStart)
+        }
+
         var isStale = false
         let url = try URL(
             resolvingBookmarkData: config.bookmarkData,
@@ -45,15 +68,31 @@ final class FileAccessService {
         )
 
         if isStale {
+            resolvedCacheLock.lock()
+            resolvedCache.removeValue(forKey: config.id)
+            resolvedCacheLock.unlock()
             throw FileAccessError.staleBookmark(config.originalPathHint)
         }
 
         guard fileManager.fileExists(atPath: url.path) else {
+            resolvedCacheLock.lock()
+            resolvedCache.removeValue(forKey: config.id)
+            resolvedCacheLock.unlock()
             throw FileAccessError.missingFolder(config.originalPathHint)
         }
 
+        resolvedCacheLock.lock()
+        resolvedCache[config.id] = ResolvedBookmark(bookmarkHash: bookmarkHash, url: url)
+        resolvedCacheLock.unlock()
+
         let didStart = url.startAccessingSecurityScopedResource()
         return SecurityScopedURL(url: url, didStartAccessing: didStart)
+    }
+
+    func invalidateCache(for configID: UUID) {
+        resolvedCacheLock.lock()
+        resolvedCache.removeValue(forKey: configID)
+        resolvedCacheLock.unlock()
     }
 
     func accessFolder(_ config: FolderConfig) throws -> SecurityScopedURL {
@@ -70,54 +109,82 @@ final class FileAccessService {
 
     func directoryListing(in folderURL: URL, config: FolderConfig, visited: Set<String>) throws -> DirectoryListing {
         let settings = config.menuSettings
-        let resourceKeys: Set<URLResourceKey> = [
-            .isDirectoryKey,
-            .isPackageKey,
-            .isAliasFileKey,
-            .isSymbolicLinkKey,
-            .isHiddenKey,
-            .localizedTypeDescriptionKey,
-            .contentTypeKey,
-            .fileSizeKey,
-            .creationDateKey,
-            .contentModificationDateKey,
-            .contentAccessDateKey,
-            .addedToDirectoryDateKey
-        ]
 
         var options: FileManager.DirectoryEnumerationOptions = []
         if !settings.showHiddenFiles {
             options.insert(.skipsHiddenFiles)
         }
 
-        let urls = try fileManager.contentsOfDirectory(
+        // Cheap first pass: only ask for the name. We may be enumerating tens of
+        // thousands of entries (e.g. ~/Downloads); fetching resource values for all
+        // of them just to throw most away is the dominant cost when maxItems is small.
+        let nameKeys: [URLResourceKey] = [.nameKey]
+        let lightweightURLs = try fileManager.contentsOfDirectory(
             at: folderURL,
-            includingPropertiesForKeys: Array(resourceKeys),
+            includingPropertiesForKeys: nameKeys,
             options: options
         )
 
-        let items = urls.compactMap { url -> FileMenuItem? in
-            guard !settings.ignoredNames.contains(url.lastPathComponent) else { return nil }
-            if !settings.showHiddenFiles, url.lastPathComponent.hasPrefix(".") { return nil }
+        // Pre-filter by name-only rules so the totalCount we report (and the prefix we
+        // resource-load) reflects what the user will actually see.
+        let nameFiltered = lightweightURLs.filter { url in
+            let lastComponent = url.lastPathComponent
+            if settings.ignoredNames.contains(lastComponent) { return false }
+            if !settings.showHiddenFiles, lastComponent.hasPrefix(".") { return false }
+            return true
+        }
 
+        // For sort-by-name we can sort cheaply now and only resource-load the prefix
+        // we plan to display. For other sort keys we have no choice but to load
+        // everything; we still avoid fetching resource values for ignored entries.
+        let needsFullResourceLoad: Bool
+        switch settings.sortKey {
+        case .name:
+            needsFullResourceLoad = false
+        case .dateCreated, .dateModified, .dateLastOpened, .dateAdded, .kind, .size:
+            needsFullResourceLoad = true
+        }
+
+        let cap = settings.maxItems.flatMap { $0 > 0 ? $0 : nil } ?? Int.max
+        let candidateURLs: [URL]
+        if needsFullResourceLoad {
+            candidateURLs = nameFiltered
+        } else {
+            // Stable name sort with a cheap enough comparator; final sort below applies
+            // category ranks and direction, but the prefix we load is correct.
+            let sortedByName = nameFiltered.sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }
+            // Apply direction by reversing if needed so the top of the prefix matches
+            // the eventual visible window.
+            candidateURLs = settings.sortDirection == .ascending ? sortedByName : Array(sortedByName.reversed())
+        }
+
+        // Reserve some headroom over maxItems because filterMode may drop entries
+        // and we still want to fill the menu.
+        let prefixCap = needsFullResourceLoad ? candidateURLs.count : min(candidateURLs.count, cap * 2 + 32)
+        let toLoad = Array(candidateURLs.prefix(prefixCap))
+
+        let items = toLoad.compactMap { url -> FileMenuItem? in
             guard let item = makeItem(url: url, config: config, visited: visited) else { return nil }
             guard include(item: item, settings: settings) else { return nil }
             return item
         }
 
         let sorted = sort(items: items, settings: settings)
+        let totalCount = nameFiltered.count
         let limited: [FileMenuItem]
         let omittedCount: Int
 
-        if let maxItems = settings.maxItems, maxItems > 0, sorted.count > maxItems {
-            limited = Array(sorted.prefix(maxItems))
-            omittedCount = sorted.count - maxItems
+        if cap < Int.max, sorted.count > cap {
+            limited = Array(sorted.prefix(cap))
+            omittedCount = max(0, totalCount - cap)
         } else {
             limited = sorted
-            omittedCount = 0
+            omittedCount = max(0, totalCount - sorted.count)
         }
 
-        return DirectoryListing(items: limited, omittedCount: omittedCount, totalCount: sorted.count)
+        return DirectoryListing(items: limited, omittedCount: omittedCount, totalCount: totalCount)
     }
 
     private func makeItem(url: URL, config: FolderConfig, visited: Set<String>) -> FileMenuItem? {
@@ -184,8 +251,13 @@ final class FileAccessService {
             isPackage = true
         }
 
+        var hasSymlinkLoop = false
         if isDirectory, visited.contains(targetURL.standardizedFileURL.path) {
+            // Don't recurse into a target we've already visited; mark the entry
+            // so MenuBuilder can present a clear "loop" indicator instead of a
+            // silently-clickable leaf.
             isDirectory = false
+            hasSymlinkLoop = true
         }
 
         let kind = targetValues?.contentType ?? UTType(filenameExtension: targetURL.pathExtension)
@@ -216,6 +288,7 @@ final class FileAccessService {
             isAlias: isAlias,
             isSymlink: isSymlink,
             aliasIsBroken: aliasIsBroken,
+            hasSymlinkLoop: hasSymlinkLoop,
             icon: NSWorkspace.shared.icon(forFile: targetURL.path),
             metadata: metadata
         )

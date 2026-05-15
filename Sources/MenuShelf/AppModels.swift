@@ -294,7 +294,7 @@ struct MenuSettings: Codable, Equatable {
 
     var resolvedFileIconSize: FileIconSize { fileIconSize ?? .medium }
     var resolvedShowFolderTitle: Bool { showFolderTitle ?? true }
-    var resolvedShowOpenWithForSubfolders: Bool { showOpenWithForSubfolders ?? false }
+    var resolvedShowOpenWithForSubfolders: Bool { showOpenWithForSubfolders ?? true }
     var resolvedShowTips: Bool { showTips ?? true }
     var resolvedEnableModifierActions: Bool { enableModifierActions ?? true }
 }
@@ -386,8 +386,11 @@ struct ShortcutMenuItemConfig: Codable, Identifiable, Equatable {
     var updatedAt: Date
 
     var displayTitle: String {
-        let title = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title?.isEmpty == false ? title! : name
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        return name
     }
 
     static func make(shortcut: ShortcutInfo) -> ShortcutMenuItemConfig {
@@ -455,8 +458,11 @@ struct LinkedMenuViewConfig: Codable, Identifiable, Equatable {
     var updatedAt: Date
 
     func displayTitle(fallbackTitle: String) -> String {
-        let title = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title?.isEmpty == false ? title! : fallbackTitle
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        return fallbackTitle
     }
 
     static func make(menuViewID: UUID) -> LinkedMenuViewConfig {
@@ -605,6 +611,7 @@ struct FileMenuItem: Equatable {
     var isAlias: Bool
     var isSymlink: Bool
     var aliasIsBroken: Bool
+    var hasSymlinkLoop: Bool
     var icon: NSImage
     var metadata: FileMetadata
 

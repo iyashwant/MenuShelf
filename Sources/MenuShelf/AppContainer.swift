@@ -18,8 +18,8 @@ final class AppContainer {
 
     private init() {
         shortcutsService = ShortcutsService()
-        store = PreferencesStore(shortcutsService: shortcutsService)
         fileAccessService = FileAccessService()
+        store = PreferencesStore(shortcutsService: shortcutsService, fileAccessService: fileAccessService)
         metadataService = MetadataService()
         actionHandler = MenuActionHandler(
             store: store,

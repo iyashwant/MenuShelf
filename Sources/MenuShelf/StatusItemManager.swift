@@ -19,6 +19,62 @@ final class StatusItemManager: NSObject {
     private var statusItemsByButton: [ObjectIdentifier: StatusContext] = [:]
     private var cancellable: AnyCancellable?
 
+    /// The subset of settings that affect the menu bar's outward shape: which
+    /// status items exist, their titles, icons, styles, and registered hotkeys.
+    /// We rebuild only when this changes; menu *contents* refresh lazily through
+    /// each menu's delegate, so a TextField edit in settings no longer flickers
+    /// every status item.
+    private struct MenuBarShape: Equatable {
+        struct ViewSignature: Equatable {
+            let id: UUID
+            let isVisible: Bool
+            let title: String
+            let menuBarStyle: MenuBarStyle
+            let icon: FolderIconConfig
+            let iconColorHex: String?
+            let shortcut: KeyboardShortcutConfig?
+        }
+
+        let showMenuBarItemWhenEmpty: Bool
+        let views: [ViewSignature]
+
+        init(_ settings: AppSettings) {
+            self.showMenuBarItemWhenEmpty = settings.showMenuBarItemWhenEmpty
+            self.views = settings.resolvedMenuViews.map { view in
+                ViewSignature(
+                    id: view.id,
+                    isVisible: view.isVisible,
+                    title: view.title,
+                    menuBarStyle: view.menuBarStyle,
+                    icon: view.icon,
+                    iconColorHex: view.iconColorHex,
+                    shortcut: view.shortcut
+                )
+            }
+        }
+    }
+    private var lastShape: MenuBarShape?
+
+    /// Signature of the registered global hotkeys. We split this from MenuBarShape
+    /// so a title or icon edit doesn't unregister/re-register Carbon hotkeys, which
+    /// is both wasteful and racy (a press during the unregister/register window
+    /// can be lost).
+    private struct HotkeysSignature: Equatable {
+        struct Entry: Equatable {
+            let menuViewID: UUID
+            let shortcut: KeyboardShortcutConfig?
+            let isVisible: Bool
+        }
+        let entries: [Entry]
+
+        init(_ settings: AppSettings) {
+            self.entries = settings.resolvedMenuViews.map {
+                Entry(menuViewID: $0.id, shortcut: $0.shortcut, isVisible: $0.isVisible)
+            }
+        }
+    }
+    private var lastHotkeys: HotkeysSignature?
+
     init(
         store: PreferencesStore,
         menuBuilder: MenuBuilder,
@@ -35,14 +91,25 @@ final class StatusItemManager: NSObject {
         self.hotkeyService = hotkeyService
         super.init()
 
-        cancellable = store.$settings.sink { [weak self] _ in
-            DispatchQueue.main.async {
+        cancellable = store.$settings
+            // Only rebuild when something the menu bar actually depends on
+            // (visible views, titles, icons, hotkeys) changes. Menu *contents*
+            // refresh lazily through each menu's NSMenuDelegate, so a TextField
+            // edit deeper in settings no longer flickers every status item or
+            // re-registers Carbon hotkeys.
+            .map(MenuBarShape.init)
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
                 self?.rebuildStatusItems()
             }
-        }
     }
 
     func rebuildStatusItems() {
+        // Track the latest applied shape so direct callers (e.g. AppDelegate.start())
+        // stay in sync with the diff-driven sink.
+        lastShape = MenuBarShape(store.settings)
+
         removeAllStatusItems()
 
         let visibleViews = store.settings.resolvedMenuViews.filter(\.isVisible)
@@ -57,7 +124,14 @@ final class StatusItemManager: NSObject {
         }
 
         publishStatusItems()
-        registerHotkeys()
+
+        // Only re-register Carbon hotkeys when the hotkey set actually changed.
+        // A title or icon edit no longer unregisters/re-registers all hotkeys.
+        let hotkeys = HotkeysSignature(store.settings)
+        if hotkeys != lastHotkeys {
+            lastHotkeys = hotkeys
+            registerHotkeys()
+        }
     }
 
     private func makeMenuViewStatusItem(_ view: MenuViewConfig) {

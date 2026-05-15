@@ -66,15 +66,38 @@ actor ShortcutsService {
             process.executableURL = URL(fileURLWithPath: shortcutsPath)
             process.arguments = arguments
 
+            // Drain pipes incrementally on background readability handlers to avoid
+            // the child blocking on a full ~64KB pipe buffer when the parent only
+            // reads after termination.
+            let outputBuffer = PipeBuffer()
+            let errorBuffer = PipeBuffer()
+
             let outputPipe: Pipe?
-            let errorPipe = Pipe()
             if captureOutput {
                 let pipe = Pipe()
                 process.standardOutput = pipe
+                pipe.fileHandleForReading.readabilityHandler = { handle in
+                    let data = handle.availableData
+                    if data.isEmpty {
+                        handle.readabilityHandler = nil
+                    } else {
+                        outputBuffer.append(data)
+                    }
+                }
                 outputPipe = pipe
             } else {
                 process.standardOutput = FileHandle.nullDevice
                 outputPipe = nil
+            }
+
+            let errorPipe = Pipe()
+            errorPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                } else {
+                    errorBuffer.append(data)
+                }
             }
             process.standardError = errorPipe
 
@@ -89,8 +112,18 @@ actor ShortcutsService {
             }
 
             process.terminationHandler = { process in
-                let output = outputPipe.map { String(data: $0.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "" } ?? ""
-                let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                // Drain any leftovers and detach handlers.
+                if let outputPipe {
+                    outputPipe.fileHandleForReading.readabilityHandler = nil
+                    let remaining = (try? outputPipe.fileHandleForReading.readToEnd()) ?? nil
+                    if let remaining, !remaining.isEmpty { outputBuffer.append(remaining) }
+                }
+                errorPipe.fileHandleForReading.readabilityHandler = nil
+                let remainingError = (try? errorPipe.fileHandleForReading.readToEnd()) ?? nil
+                if let remainingError, !remainingError.isEmpty { errorBuffer.append(remainingError) }
+
+                let output = outputBuffer.string()
+                let error = errorBuffer.string()
 
                 if process.terminationStatus == 0 {
                     continuation.resume(returning: output)
@@ -109,9 +142,30 @@ actor ShortcutsService {
                     try? inputPipe.fileHandleForWriting.close()
                 }
             } catch {
+                if let outputPipe { outputPipe.fileHandleForReading.readabilityHandler = nil }
+                errorPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(throwing: error)
             }
         }
+    }
+}
+
+/// Thread-safe accumulator for incremental pipe reads.
+private final class PipeBuffer {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        data.append(chunk)
+        lock.unlock()
+    }
+
+    func string() -> String {
+        lock.lock()
+        let copy = data
+        lock.unlock()
+        return String(data: copy, encoding: .utf8) ?? ""
     }
 }
 
@@ -123,18 +177,19 @@ func parseFoldersWithIdentifiers(_ output: String) -> [ShortcutsFolderInfo] {
     parseNamedIdentifierLines(output).map { ShortcutsFolderInfo(identifier: $0.identifier, name: $0.name) }
 }
 
-private func parseNamedIdentifierLines(_ output: String) -> [(name: String, identifier: String?)] {
-    let pattern = #"^(.*)\s+\(([A-Fa-f0-9-]{36})\)$"#
-    let regex = try? NSRegularExpression(pattern: pattern)
+private let namedIdentifierRegex: NSRegularExpression = {
+    // Pattern is compile-time constant; force-try is justified.
+    try! NSRegularExpression(pattern: #"^(.*)\s+\(([A-Fa-f0-9-]{36})\)$"#)
+}()
 
+private func parseNamedIdentifierLines(_ output: String) -> [(name: String, identifier: String?)] {
     return output
         .split(separator: "\n")
         .compactMap { line -> (name: String, identifier: String?)? in
             let text = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return nil }
 
-            if let regex,
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+            if let match = namedIdentifierRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                let nameRange = Range(match.range(at: 1), in: text),
                let idRange = Range(match.range(at: 2), in: text) {
                 return (String(text[nameRange]), String(text[idRange]))

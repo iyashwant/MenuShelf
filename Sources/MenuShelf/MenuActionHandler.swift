@@ -95,6 +95,7 @@ final class MenuAction: NSObject {
     private let metadataService: MetadataService
     private let shortcutsService: ShortcutsService
     private var temporarySharingWindow: NSWindow?
+    private let sharingPickerDelegate = SharingPickerCloseDelegate()
 
     init(store: PreferencesStore, fileAccessService: FileAccessService, metadataService: MetadataService, shortcutsService: ShortcutsService) {
         self.store = store
@@ -220,15 +221,7 @@ final class MenuAction: NSObject {
         case .copyContents:
             guard let url = action.url else { return }
             withFolderAccess(action.folderID) {
-                do {
-                    let content = try String(contentsOf: url, encoding: .utf8)
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(content, forType: .string)
-                    DiagnosticsLogger.shared.log("Copied contents of: \(url.path)")
-                } catch {
-                    DiagnosticsLogger.shared.log("Copy contents failed: \(error.localizedDescription)")
-                    store.showError("Could not read file contents: \(error.localizedDescription)")
-                }
+                copyFileContents(at: url)
             }
 
         case .copyDimensions:
@@ -411,18 +404,19 @@ final class MenuAction: NSObject {
         configuration.activates = true
         configuration.promptsUserIfNeeded = true
 
-        NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration) { _, error in
-            defer { _ = access }
-
-            if let error {
-                DiagnosticsLogger.shared.log("Open With failed for \(url.path) using \(appURL.path): \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.store.showError(error.localizedDescription)
+        NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration) { [access] _, error in
+            // Hold the security scope until NSWorkspace finishes the XPC handoff.
+            withExtendedLifetime(access) {
+                if let error {
+                    DiagnosticsLogger.shared.log("Open With failed for \(url.path) using \(appURL.path): \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self.store.showError(error.localizedDescription)
+                    }
+                    return
                 }
-                return
-            }
 
-            DiagnosticsLogger.shared.log("Opened \(url.path) with \(appURL.path)")
+                DiagnosticsLogger.shared.log("Opened \(url.path) with \(appURL.path)")
+            }
         }
     }
 
@@ -440,6 +434,7 @@ final class MenuAction: NSObject {
         panel.allowedContentTypes = [.applicationBundle]
         panel.allowsOtherFileTypes = false
 
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let appURL = panel.url else { return }
         open(url, withApplicationAt: appURL, folderID: folderID)
     }
@@ -491,23 +486,63 @@ final class MenuAction: NSObject {
         url.pathExtension.lowercased() == "app"
     }
 
+    /// Cap copy-to-clipboard at a reasonable file size so we don't block the
+    /// main thread reading a multi-gigabyte log into memory.
+    private static let maxCopyContentsBytes: Int = 8 * 1024 * 1024 // 8 MB
+
+    private func copyFileContents(at url: URL) {
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            if let size = attrs[.size] as? NSNumber, size.intValue > Self.maxCopyContentsBytes {
+                let alert = NSAlert()
+                alert.messageText = "File is too large to copy"
+                alert.informativeText = "\(url.lastPathComponent) is \(ByteCountFormatter.string(fromByteCount: size.int64Value, countStyle: .file)). Copy is limited to 8 MB to keep the menu responsive."
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+                return
+            }
+        } catch {
+            // If attributes fail we still try to read; String(contentsOf:) will surface the real error.
+        }
+
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(content, forType: .string)
+            DiagnosticsLogger.shared.log("Copied contents of: \(url.path)")
+        } catch {
+            DiagnosticsLogger.shared.log("Copy contents failed: \(error.localizedDescription)")
+            store.showError("Could not read file contents: \(error.localizedDescription)")
+        }
+    }
+
     private func runScriptInTerminal(_ url: URL) {
         let ext = url.pathExtension.lowercased()
         let scriptPath = url.path
         let dir = url.deletingLastPathComponent().path
 
-        let cmd: String
-        if ext == "ps1" {
-            cmd = "pwsh \"\(scriptPath)\""
-        } else {
-            cmd = "bash \"\(scriptPath)\""
-        }
+        // Build a single shell command. Use POSIX-shell single-quote escaping —
+        // wrap each path in '...' and replace any embedded ' with '\'' .
+        let runner = (ext == "ps1") ? "pwsh" : "bash"
+        let shellCommand = "cd \(shellQuote(dir)) && \(runner) \(shellQuote(scriptPath))"
 
-        let appleScript = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"cd '\(dir)' && \(cmd)\""
+        // Pass the shell command into AppleScript via an environment variable so
+        // the path/contents never have to be escaped through both AppleScript and
+        // shell quoting layers.
+        let appleScript = """
+        tell application "Terminal"
+            activate
+            do script (system attribute "MENUSHELF_CMD")
+        end tell
+        """
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", appleScript]
+        var environment = ProcessInfo.processInfo.environment
+        environment["MENUSHELF_CMD"] = shellCommand
+        process.environment = environment
 
         do {
             try process.run()
@@ -517,9 +552,21 @@ final class MenuAction: NSObject {
         }
     }
 
+    /// POSIX-shell single-quote escape: every ' becomes '\'' and the whole
+    /// thing is wrapped in single quotes. Works for any byte sequence except NUL.
+    private func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     private func showSharingPicker(for url: URL) {
         let view = NSApp.keyWindow?.contentView ?? temporaryAnchorView()
         let picker = NSSharingServicePicker(items: [url])
+        picker.delegate = sharingPickerDelegate
+        sharingPickerDelegate.onClose = { [weak self] in
+            // Tear down the temporary anchor window once the picker is gone,
+            // not on a fixed timer that could expire mid-interaction.
+            self?.tearDownTemporaryAnchor()
+        }
         picker.show(relativeTo: NSRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1), of: view, preferredEdge: .minY)
     }
 
@@ -541,13 +588,12 @@ final class MenuAction: NSObject {
         window.ignoresMouseEvents = true
         window.orderFrontRegardless()
         temporarySharingWindow = window
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-            self?.temporarySharingWindow?.close()
-            self?.temporarySharingWindow = nil
-        }
-
         return window.contentView ?? NSView(frame: .zero)
+    }
+
+    private func tearDownTemporaryAnchor() {
+        temporarySharingWindow?.close()
+        temporarySharingWindow = nil
     }
 
     private func moveToTrash(_ url: URL) {
@@ -593,5 +639,20 @@ final class MenuAction: NSObject {
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         store.removeMenuView(id: id)
+    }
+}
+
+
+/// Calls a closure once the sharing picker is dismissed, so callers can
+/// tear down a transient anchor window precisely when it is no longer needed.
+private final class SharingPickerCloseDelegate: NSObject, NSSharingServicePickerDelegate {
+    var onClose: (() -> Void)?
+
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
+        // `didChoose` fires whether or not the user picked a service.
+        // Defer slightly so the system can fully dismiss the picker first.
+        DispatchQueue.main.async { [weak self] in
+            self?.onClose?()
+        }
     }
 }

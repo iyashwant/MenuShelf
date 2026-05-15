@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-final class SettingsWindowController: NSObject {
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let store: PreferencesStore
     private var window: NSWindow?
 
@@ -34,6 +34,7 @@ final class SettingsWindowController: NSObject {
             settingsWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             settingsWindow.titlebarAppearsTransparent = true
             settingsWindow.isReleasedWhenClosed = false
+            settingsWindow.delegate = self
             settingsWindow.center()
             window = settingsWindow
         }
@@ -42,5 +43,12 @@ final class SettingsWindowController: NSObject {
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
         DiagnosticsLogger.shared.log("Settings window ordered front")
+    }
+
+    // Closing the settings window is the user's signal that they're done editing
+    // for now; flush any debounced save immediately so the file on disk matches
+    // what they see in the UI.
+    func windowWillClose(_ notification: Notification) {
+        store.flushPendingSave()
     }
 }

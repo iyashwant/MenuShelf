@@ -48,12 +48,13 @@ final class MenuPresentationCoordinator {
 
     private func popUp(_ menu: NSMenu, anchoredTo statusItem: NSStatusItem?, atCursor: Bool, currentMenuViewID: UUID?) {
         menu.autoenablesItems = false
-        let monitor = installSwitchMonitor(for: menu, currentMenuViewID: currentMenuViewID)
-        defer {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-        }
+
+        // Note: a previous implementation tried to add an NSEvent local monitor
+        // to capture Ctrl+Tab while the menu was open and cycle to the next
+        // visible menu view. AppKit consumes keyboard events during NSMenu
+        // tracking, so local monitors don't fire. The cycle-views feature is
+        // disabled until we can implement it via a CGEventTap or via the
+        // accessibility APIs.
 
         if atCursor || statusItem == nil {
             menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
@@ -61,24 +62,5 @@ final class MenuPresentationCoordinator {
         }
 
         statusItem?.popUpMenu(menu)
-    }
-
-    private func installSwitchMonitor(for menu: NSMenu, currentMenuViewID: UUID?) -> Any? {
-        guard currentMenuViewID != nil else { return nil }
-
-        return NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak menu] event in
-            guard let self, let menu else { return event }
-
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard event.keyCode == 48, flags.contains(.control) else {
-                return event
-            }
-
-            menu.cancelTracking()
-            DispatchQueue.main.async {
-                self.presentNextVisibleMenu(after: currentMenuViewID, reverse: flags.contains(.shift))
-            }
-            return nil
-        }
     }
 }

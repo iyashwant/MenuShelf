@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 final class PreferencesStore: ObservableObject {
     @Published var settings: AppSettings {
-        didSet { save() }
+        didSet { scheduleSave() }
     }
 
     @Published var selectedMenuViewID: UUID?
@@ -23,12 +23,22 @@ final class PreferencesStore: ObservableObject {
     private let decoder: JSONDecoder
     private let launchAtLoginService = LaunchAtLoginService()
     let shortcutsService: ShortcutsService
+    private let fileAccessService: FileAccessService
 
-    init(shortcutsService: ShortcutsService = ShortcutsService()) {
+    // Persistence is debounced to coalesce rapid mutations (e.g. typing in
+    // a TextField) into a single off-main write. Flush on app terminate or
+    // settings-window close so changes always land on disk before exit.
+    private let saveQueue = DispatchQueue(label: "com.menushelf.settings-save", qos: .utility)
+    private var pendingSave: DispatchWorkItem?
+    private let saveDebounce: TimeInterval = 0.4
+
+    init(shortcutsService: ShortcutsService = ShortcutsService(),
+         fileAccessService: FileAccessService = FileAccessService()) {
         self.shortcutsService = shortcutsService
-        supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!
-            .appendingPathComponent("MenuShelf", isDirectory: true)
+        self.fileAccessService = fileAccessService
+        let resolvedSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        supportURL = resolvedSupport.appendingPathComponent("MenuShelf", isDirectory: true)
 
         try? FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
 
@@ -70,9 +80,12 @@ final class PreferencesStore: ObservableObject {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        panel.canCreateDirectories = false
+        panel.canCreateDirectories = true
         panel.directoryURL = initialURL
 
+        // Activate so the modal panel doesn't appear behind whatever's frontmost
+        // when triggered from a menu bar click.
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK else { return }
 
         for url in panel.urls {
@@ -98,6 +111,7 @@ final class PreferencesStore: ObservableObject {
         panel.allowsOtherFileTypes = false
         panel.allowedContentTypes = appContentTypes()
 
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK else { return }
 
         for url in panel.urls {
@@ -172,7 +186,10 @@ final class PreferencesStore: ObservableObject {
     func duplicateFolder(id: UUID) {
         guard var config = folder(id: id) else { return }
         config.id = UUID()
-        config.displayName += " Copy"
+        config.displayName = nextCopyName(
+            base: config.displayName,
+            existing: settings.folders.map(\.displayName)
+        )
         config.createdAt = Date()
         config.updatedAt = Date()
         settings.folders.append(config)
@@ -182,6 +199,33 @@ final class PreferencesStore: ObservableObject {
 
     func setFolderVisibility(id: UUID, isVisible: Bool) {
         setMenuViewVisibility(id: id, isVisible: isVisible)
+    }
+
+    /// Produce a Finder-style copy name. Strips any trailing " copy"/" copy N" /
+    /// " Copy"/" Copy N" suffix from `base` and appends " copy", " copy 2",
+    /// " copy 3", … until the name is unique among `existing`.
+    private func nextCopyName(base: String, existing: [String]) -> String {
+        // Match either " copy" or " Copy", optionally followed by " <N>" at end.
+        let pattern = #"\s+[Cc]opy(?:\s+\d+)?$"#
+        let stripped: String
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(base.startIndex..<base.endIndex, in: base)
+            stripped = regex.stringByReplacingMatches(in: base, range: range, withTemplate: "")
+        } else {
+            stripped = base
+        }
+
+        let used = Set(existing)
+        let firstCandidate = "\(stripped) copy"
+        if !used.contains(firstCandidate) { return firstCandidate }
+
+        var n = 2
+        while true {
+            let candidate = "\(stripped) copy \(n)"
+            if !used.contains(candidate) { return candidate }
+            n += 1
+            if n > 9999 { return "\(stripped) copy \(UUID().uuidString.prefix(4))" }
+        }
     }
 
     func showOnlyFolder(id: UUID) {
@@ -233,7 +277,10 @@ final class PreferencesStore: ObservableObject {
     func duplicateMenuView(id: UUID) {
         guard var view = menuView(id: id) else { return }
         view.id = UUID()
-        view.title += " Copy"
+        view.title = nextCopyName(
+            base: view.title,
+            existing: settings.resolvedMenuViews.map(\.title)
+        )
         view.shortcut = .disabled
         view.items = view.items.map { item in
             var copy = item
@@ -389,7 +436,15 @@ final class PreferencesStore: ObservableObject {
 
                 var folderContents: [String: [ShortcutInfo]] = [:]
                 for name in linkedFolderNames {
-                    folderContents[name] = try? await shortcutsService.listShortcuts(inFolder: name)
+                    do {
+                        folderContents[name] = try await shortcutsService.listShortcuts(inFolder: name)
+                    } catch {
+                        // Treat a transient failure as "empty" rather than "still loading"
+                        // so the menu doesn't stick on a permanent loading state until the
+                        // user manually refreshes.
+                        DiagnosticsLogger.shared.log("Could not load Shortcuts folder \(name): \(error.localizedDescription)")
+                        folderContents[name] = []
+                    }
                 }
                 let resolvedFolderContents = folderContents
 
@@ -422,6 +477,11 @@ final class PreferencesStore: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
+                    // Mark as loaded-but-empty so the menu doesn't display a
+                    // permanent "Loading…" state on transient failures.
+                    if self.shortcutsByFolder[folderName] == nil {
+                        self.shortcutsByFolder[folderName] = []
+                    }
                     if showErrors {
                         self.showError("Could not load \(folderName): \(error.localizedDescription)")
                     } else {
@@ -538,8 +598,12 @@ final class PreferencesStore: ObservableObject {
         guard let config = folder(id: id) else { return }
 
         do {
-            let access = try FileAccessService().accessFolder(config)
-            NSWorkspace.shared.activateFileViewerSelecting([access.url])
+            let access = try fileAccessService.accessFolder(config)
+            // activateFileViewerSelecting hands the URL to Finder over XPC and returns
+            // immediately; keep the security scope alive long enough for Finder to read it.
+            withExtendedLifetime(access) {
+                NSWorkspace.shared.activateFileViewerSelecting([access.url])
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -561,6 +625,7 @@ final class PreferencesStore: ObservableObject {
             panel.allowsOtherFileTypes = false
         }
 
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
@@ -599,6 +664,7 @@ final class PreferencesStore: ObservableObject {
         panel.canCreateDirectories = false
         panel.allowedContentTypes = [.image]
 
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
@@ -635,6 +701,7 @@ final class PreferencesStore: ObservableObject {
         panel.canCreateDirectories = false
         panel.allowedContentTypes = [.image]
 
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
@@ -671,11 +738,57 @@ final class PreferencesStore: ObservableObject {
     }
 
     private func save() {
+        // Eager helper kept for migration-time writes (during init when we re-encode
+        // freshly migrated settings). For all post-init mutations, prefer scheduleSave().
         do {
             let data = try encoder.encode(settings)
             try data.write(to: settingsURL, options: [.atomic])
         } catch {
             lastErrorMessage = "Could not save settings: \(error.localizedDescription)"
+        }
+    }
+
+    /// Coalesce rapid mutations (slider drags, TextField edits) into a single
+    /// off-main write. Cancels any pending write on each call so we never queue
+    /// a backlog of disk writes.
+    private func scheduleSave() {
+        pendingSave?.cancel()
+
+        let snapshot = settings
+        let item = DispatchWorkItem { [weak self] in
+            self?.write(snapshot)
+        }
+        pendingSave = item
+        saveQueue.asyncAfter(deadline: .now() + saveDebounce, execute: item)
+    }
+
+    /// Force any pending debounced save to run synchronously. Call this on app
+    /// terminate or settings-window close so changes always land on disk.
+    func flushPendingSave() {
+        guard let pending = pendingSave else { return }
+        pendingSave = nil
+        pending.cancel()
+        // Run inline on the calling thread so we know the write completed before
+        // returning. We snapshot settings rather than re-reading inside the work
+        // item to keep behavior consistent with scheduleSave().
+        write(settings)
+    }
+
+    private func write(_ snapshot: AppSettings) {
+        // JSONEncoder isn't documented as thread-safe across concurrent encode calls,
+        // and our encoder is shared with the main-thread migration path. Build a
+        // local encoder for the background write to keep the contract simple.
+        let localEncoder = JSONEncoder()
+        localEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        localEncoder.dateEncodingStrategy = .iso8601
+
+        do {
+            let data = try localEncoder.encode(snapshot)
+            try data.write(to: settingsURL, options: [.atomic])
+        } catch {
+            DispatchQueue.main.async { [weak self] in
+                self?.lastErrorMessage = "Could not save settings: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -767,7 +880,7 @@ final class PreferencesStore: ObservableObject {
     private static func applyMenuSettingsDefaults(_ menuSettings: inout MenuSettings) {
         menuSettings.fileIconSize = menuSettings.fileIconSize ?? .medium
         menuSettings.showFolderTitle = menuSettings.showFolderTitle ?? true
-        menuSettings.showOpenWithForSubfolders = menuSettings.showOpenWithForSubfolders ?? false
+        menuSettings.showOpenWithForSubfolders = menuSettings.showOpenWithForSubfolders ?? true
         menuSettings.showTips = menuSettings.showTips ?? true
         menuSettings.enableModifierActions = menuSettings.enableModifierActions ?? true
     }
