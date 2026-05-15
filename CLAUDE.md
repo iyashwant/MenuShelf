@@ -233,7 +233,7 @@ MenuShelf is fully sandboxed with these entitlements:
 **Location:** `~/Library/Application Support/MenuShelf/settings.json`
 
 **Schema Versioning:**
-- Current version: 7
+- Current version: 8
 - Automatic migration on load
 - Preserves backward compatibility
 - Adds default values for new fields
@@ -375,28 +375,10 @@ Explicit schema versioning with migration logic ensures backward compatibility a
 
 ## Common Patterns
 
-### Adding a New Menu Action
-
-1. Add case to `MenuActionKind` enum
-2. Add parameters to `MenuAction` initializer if needed
-3. Implement action in `MenuActionHandler.execute(_:modifierFlags:)`
-4. Create menu item in `MenuBuilder` with action
-5. Test with security-scoped access if file operation
-
-### Adding a New Setting
-
-1. Add property to appropriate model (AppSettings, MenuSettings, etc.)
-2. Add default value in `.defaults` static property
-3. Add migration logic in `PreferencesStore.migratedSettings(_:)`
-4. Add UI control in appropriate settings view
-5. Bind to store property with `Binding` wrapper
-
-### Adding a New Icon Type
-
-1. Add case to `FolderIconConfig` enum
-2. Implement icon loading in `MenuBuilder.icon(for:size:)`
-3. Add UI picker in settings view
-4. Handle color tinting if applicable
+Recipes for the common change types (new menu action, new setting, new icon
+type, new sort key, new filter, new layout, Shortcuts feature, global hotkey)
+live in [`AGENTS.md`](./AGENTS.md). Keep this file focused on architecture so
+the two don't drift.
 
 ## Testing & Debugging
 

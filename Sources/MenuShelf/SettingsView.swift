@@ -1582,6 +1582,16 @@ private struct AdvancedSettingsView: View {
 
     var body: some View {
         FormContainer(title: "Advanced", subtitle: "Local-only diagnostics and privacy controls.") {
+            Toggle("Enable verbose diagnostics", isOn: Binding(
+                get: { store.settings.resolvedEnableVerboseDiagnostics },
+                set: { value in store.updateGlobalSettings { $0.enableVerboseDiagnostics = value } }
+            ))
+
+            Text("When enabled, MenuShelf writes detailed logs and registers crash handlers. Use this to diagnose unexpected quits. Logs are stored locally and never uploaded.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             Button("Clear Last Error") {
                 store.lastErrorMessage = nil
             }

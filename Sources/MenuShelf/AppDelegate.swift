@@ -20,11 +20,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        DiagnosticsLogger.shared.log("Application will terminate")
+        DiagnosticsLogger.shared.endSession()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        DiagnosticsLogger.shared.log("Open URLs: \(urls.map(\.absoluteString).joined(separator: ", "))")
         container.shortcutURLRouter.handle(urls)
     }
 

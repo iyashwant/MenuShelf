@@ -30,7 +30,16 @@ final class FolderMenuDelegate: NSObject, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        DiagnosticsLogger.shared.log("FolderMenuDelegate.menuNeedsUpdate configID=\(configID) isRoot=\(isRoot)")
         builder?.populateFolderMenu(menu, configID: configID, configOverride: configOverride, menuView: menuView, folderURL: folderURL, isRoot: isRoot, visited: visited)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        DiagnosticsLogger.shared.log("FolderMenuDelegate.menuWillOpen configID=\(configID)")
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        DiagnosticsLogger.shared.log("FolderMenuDelegate.menuDidClose configID=\(configID)")
     }
 }
 
@@ -283,7 +292,6 @@ final class MenuBuilder {
         submenu.addItem(.separator())
 
         submenu.addItem(toggleMenuViewsMenuItem())
-        submenu.addItem(actionItem("Show All Menu Views", kind: .showAllMenuViews))
         submenu.addItem(.separator())
 
         if let view {
@@ -398,6 +406,7 @@ final class MenuBuilder {
 
         guard let config = configOverride ?? store.folder(id: configID) else {
             addDisabled("Folder Removed", to: menu)
+            DiagnosticsLogger.shared.log("populateFolderMenu: config not found for \(configID)")
             return
         }
 
@@ -409,6 +418,7 @@ final class MenuBuilder {
             if visited.contains(currentPath) {
                 addDisabled("Symlink Loop Detected", to: menu)
                 menu.addItem(actionItem("Show in Finder", kind: .reveal, url: currentURL, folderID: config.id))
+                DiagnosticsLogger.shared.log("populateFolderMenu: symlink loop at \(currentPath)")
                 return
             }
 
@@ -443,10 +453,13 @@ final class MenuBuilder {
                 addFolderFooter(to: menu, config: config, url: currentURL, isRoot: isRoot)
             }
         } catch FileAccessError.staleBookmark {
+            DiagnosticsLogger.shared.log("populateFolderMenu: stale bookmark for \(config.displayName)")
             addPermissionMenu(to: menu, config: config)
         } catch FileAccessError.missingFolder {
+            DiagnosticsLogger.shared.log("populateFolderMenu: missing folder \(config.displayName)")
             addMissingFolderMenu(to: menu, config: config)
         } catch {
+            DiagnosticsLogger.shared.log("populateFolderMenu: error for \(config.displayName): \(error.localizedDescription)")
             addDisabled("Folder unavailable", to: menu)
             addDisabled(error.localizedDescription, to: menu)
             menu.addItem(.separator())

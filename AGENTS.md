@@ -1,314 +1,310 @@
 # MenuShelf - AI Agent Development Guide
 
+This file is the operational guide for AI agents working on MenuShelf. It explains
+**how to make changes**: where to start, which patterns to follow, and how to
+verify your work.
 
-## Quick Reference
+For architecture and component responsibilities, see [`CLAUDE.md`](./CLAUDE.md).
+This file is the source of truth for recipes; CLAUDE.md is the source of truth
+for design.
 
-### Project Type
-- **Language**: Swift 5
+## Orientation
+
+### Project at a glance
+- **Language**: Swift, Swift 5 language mode, Swift 6.2 toolchain (see `Package.swift`)
 - **Platform**: macOS 26+
-- **Build System**: Swift Package Manager
-- **UI Frameworks**: AppKit (menus), SwiftUI (settings)
-- **Architecture**: Dependency Injection via AppContainer
+- **Build system**: Swift Package Manager
+- **UI**: AppKit for menu bar, SwiftUI for settings
+- **Architecture**: Dependency injection via `AppContainer`
+- **Tests**: No test target today. Verification is `swift build` plus a manual smoke check.
 
-### Key Files to Know
-- `AppContainer.swift` - Dependency injection container, start here
-- `AppModels.swift` - All data models and enums (500+ lines)
-- `PreferencesStore.swift` - State management and persistence
-- `MenuBuilder.swift` - Menu construction logic
-- `StatusItemManager.swift` - Menu bar item management
-- `MenuActionHandler.swift` - User action execution
+### Where to start by task type
 
-### Build & Run
+| If the task is… | Start in… |
+|---|---|
+| New menu item or action | `MenuBuilder.swift`, `MenuActionHandler.swift` |
+| New setting | `AppModels.swift`, `PreferencesStore.swift`, `SettingsView.swift` |
+| New file operation | `MenuActionHandler.swift`, `FileAccessService.swift` |
+| New sort key or filter mode | `AppModels.swift`, `FileAccessService.swift`, `SettingsView.swift` |
+| Shortcuts feature | `ShortcutsService.swift`, `PreferencesStore.swift`, `SettingsView.swift` |
+| Menu bar appearance | `StatusItemManager.swift` |
+| Global hotkey | `GlobalHotkeyService.swift`, `MenuPresentationCoordinator.swift` |
+| Settings persistence or migration | `PreferencesStore.swift` (`migratedSettings`) |
+
+### Build, run, verify
 ```bash
-# Build executable
+# Compile the executable target. Run this before reporting a task complete.
 swift build
 
-# Build app bundle
+# Build a runnable .app bundle (debug).
 Scripts/build_app.sh debug
 open .build/MenuShelf.app
 ```
 
+If a change touches settings persistence, also delete or back up
+`~/Library/Application Support/MenuShelf/settings.json` before launching, so you
+can verify migration from defaults.
+
 ## Common Tasks
 
-### 1. Adding a New Menu Action
+Each recipe below is a checklist. Complete every step or note explicitly why a
+step does not apply.
 
-**Steps:**
-1. Add enum case to `MenuActionKind` in `MenuActionHandler.swift`
-2. Add any required parameters to `MenuAction` class
-3. Implement the action in `MenuActionHandler.execute(_:modifierFlags:)`
-4. Create menu item in `MenuBuilder` using `actionItem(_:kind:...)`
-5. Test with appropriate security-scoped access
+### 1. Adding a new menu action
 
-**Example:**
+1. Add a case to `MenuActionKind` in `MenuActionHandler.swift`.
+2. If the action needs new data, add it to `MenuAction` **with a default value**
+   so existing call sites in `MenuBuilder` keep compiling.
+3. Implement the case in `MenuActionHandler.execute(_:modifierFlags:)`.
+   - For any file or folder operation, wrap the work in
+     `withFolderAccess(_:perform:)` (this helper is private to `MenuActionHandler`).
+4. Create the menu item in `MenuBuilder` via `actionItem(_:kind:url:folderID:...)`.
+5. Manually verify with a folder you control, both with and without the option modifier.
+
+Sketch:
 ```swift
-// 1. Add to MenuActionKind enum
+// 1. MenuActionKind
 enum MenuActionKind {
-    // ... existing cases
+    // ...existing cases
     case exportAsJSON
 }
 
-// 2. Add parameter to MenuAction if needed
+// 2. MenuAction
 init(
     kind: MenuActionKind,
-    // ... existing parameters
-    exportPath: URL? = nil
-) {
-    // ... initialization
-    self.exportPath = exportPath
-}
+    // ...existing parameters
+    exportPath: URL? = nil // new, defaulted
+) { /* ... */ }
 
-// 3. Implement in execute()
+// 3. MenuActionHandler.execute
 case .exportAsJSON:
     guard let url = action.url, let exportPath = action.exportPath else { return }
     withFolderAccess(action.folderID) {
         exportToJSON(url, to: exportPath)
     }
 
-// 4. Create menu item in MenuBuilder
-menu.addItem(actionItem("Export as JSON", kind: .exportAsJSON, url: fileURL, exportPath: destinationURL))
+// 4. MenuBuilder
+menu.addItem(actionItem(
+    "Export as JSON",
+    kind: .exportAsJSON,
+    url: fileURL,
+    folderID: config.id
+))
 ```
 
-**Important:** Always use `withFolderAccess(_:perform:)` for file operations to ensure security-scoped access.
+### 2. Adding a new setting
 
-### 2. Adding a New Setting
+1. Add the property to the appropriate model in `AppModels.swift`
+   (`AppSettings`, `MenuSettings`, `FolderConfig`, etc.).
+2. Use `Optional` for new fields so older JSON decodes cleanly. Provide a
+   `resolved*` computed property for the non-optional default.
+3. Add the default in the model's `.defaults` static value.
+4. Add migration in `PreferencesStore.migratedSettings(_:)`. Bump
+   `schemaVersion` to `currentVersion + 1` and update the default in
+   `AppSettings.defaults`. Check the existing `if settings.schemaVersion < N`
+   ladder for the next number to use.
+5. Add a SwiftUI control in `SettingsView.swift` (or the relevant detail view).
+6. Bind it through the store, never by direct mutation. See
+   *SwiftUI Binding Patterns* below.
 
-**Steps:**
-1. Add property to appropriate model (`AppSettings`, `MenuSettings`, `FolderConfig`, etc.)
-2. Add default value in the model's `.defaults` static property
-3. Add migration logic in `PreferencesStore.migratedSettings(_:)`
-4. Increment `schemaVersion` if changing structure
-5. Add UI control in appropriate SwiftUI settings view
-6. Create `Binding` to connect UI to store
-
-**Example:**
+Sketch:
 ```swift
-// 1. Add to AppSettings
+// 1-3. AppSettings
 struct AppSettings: Codable, Equatable {
-    // ... existing properties
+    // ...
     var showItemCount: Bool?
-    
-    // 2. Add default
+
+    var resolvedShowItemCount: Bool { showItemCount ?? true }
+
     static let defaults = AppSettings(
-        // ... existing defaults
+        // ...
         showItemCount: true
     )
-    
-    // Add computed property for non-optional access
-    var resolvedShowItemCount: Bool { showItemCount ?? true }
 }
 
-// 3. Add migration in PreferencesStore.migratedSettings(_:)
-if settings.schemaVersion < 8 {
-    settings.schemaVersion = 8
+// 4. PreferencesStore.migratedSettings
+if settings.schemaVersion < <next> {
+    settings.schemaVersion = <next>
     settings.showItemCount = settings.showItemCount ?? true
 }
 
-// 4. Add UI in SettingsView
+// 5-6. SettingsView
 Toggle("Show item count", isOn: Binding(
     get: { store.settings.resolvedShowItemCount },
     set: { value in store.updateGlobalSettings { $0.showItemCount = value } }
 ))
 ```
 
-**Important:** Always provide a computed `resolved*` property for optional settings to avoid force-unwrapping.
+### 3. Adding a new icon type
 
-### 3. Adding a New Icon Type
+1. Add a case to `FolderIconConfig` in `AppModels.swift`.
+2. Update any `Equatable`/`Codable` machinery that needs the new case.
+3. Implement rendering in `MenuBuilder.icon(for:size:)` and any other icon
+   resolvers (search the codebase for `FolderIconConfig` usages).
+4. Add a picker UI in the relevant settings view.
+5. Decide template behavior in `StatusItemManager.shouldTemplateIcon(_:)` so the
+   icon respects light/dark mode if appropriate.
 
-**Steps:**
-1. Add case to `FolderIconConfig` enum
-2. Update `Equatable` conformance if needed
-3. Implement icon loading in `MenuBuilder.icon(for:size:)`
-4. Add UI picker in settings view
-5. Handle color tinting in `StatusItemManager.shouldTemplateIcon(_:)`
+### 4. Adding a new menu view layout mode
 
-**Example:**
-```swift
-// 1. Add to FolderIconConfig
-enum FolderIconConfig: Codable, Equatable {
-    // ... existing cases
-    case gradient(colors: [String])
-}
+1. Add a case to `MenuViewLayout` in `AppModels.swift` and update its `label`.
+2. Implement the layout in
+   `MenuBuilder.makeMenuViewMenu(for:includeManagement:visitedMenuViewIDs:)`.
+3. Surface the option in the menu view detail settings.
+4. Verify with folders, shortcuts, and linked menu views as content.
 
-// 3. Implement in MenuBuilder
-func icon(for config: FolderConfig, size: CGFloat) -> NSImage? {
-    switch config.icon {
-    // ... existing cases
-    case .gradient(let hexColors):
-        return createGradientIcon(colors: hexColors, size: size)
-    }
-}
+### 5. Adding a new sort key
 
-// 4. Add UI in settings
-Button("Use Gradient") {
-    config.icon = .gradient(colors: ["#FF0000", "#0000FF"])
-}
-```
+1. Add a case to `SortKey` in `AppModels.swift`.
+2. Implement comparison in `FileAccessService` directory listing.
+3. Add the picker entry in the menu settings editor in `SettingsView.swift`.
+4. If the new key needs metadata not already loaded, extend `MetadataService`.
 
-### 4. Adding a New Menu View Layout Mode
+### 6. Adding a new filter mode
 
-**Steps:**
-1. Add case to `MenuViewLayout` enum
-2. Add label in enum's `label` computed property
-3. Implement layout logic in `MenuBuilder.makeMenuViewMenu(for:includeManagement:visitedMenuViewIDs:)`
-4. Test with various content types (folders, shortcuts, linked views)
+1. Add a case to `FilterMode` in `AppModels.swift`.
+2. Add filter logic in `FileAccessService` so the listing respects it.
+3. Add the picker entry in the menu settings editor.
+4. Verify against folders containing mixed content (apps, files, hidden, symlinks).
 
-**Example:**
-```swift
-// 1. Add to MenuViewLayout
-enum MenuViewLayout: String, Codable, CaseIterable, Identifiable {
-    // ... existing cases
-    case grid
-    
-    var label: String {
-        switch self {
-        // ... existing cases
-        case .grid: "Grid Layout"
-        }
-    }
-}
+### 7. Adding Shortcuts integration features
 
-// 3. Implement in MenuBuilder
-private func makeMenuViewMenu(for view: MenuViewConfig, includeManagement: Bool, visitedMenuViewIDs: Set<UUID>) -> NSMenu {
-    if view.resolvedLayout == .grid {
-        return makeGridLayoutMenu(for: view)
-    }
-    // ... existing logic
-}
-```
+1. Read `/usr/bin/shortcuts --help` if you need a new subcommand.
+2. Add an `async throws` method on `ShortcutsService`.
+3. Call it from `PreferencesStore` (or the relevant view model) inside a `Task`.
+   Hop to `MainActor` before touching UI state. Capture `[shortcutsService]`,
+   not `self`, to avoid retaining the store from a long-lived task.
+4. Surface results in `ShortcutsSettingsView` or the menu builder.
+5. Handle the case where the shortcut was deleted between list and run.
 
-### 5. Adding Shortcuts Integration Features
+### 8. Adding a global hotkey-driven feature
 
-**Steps:**
-1. Understand `/usr/bin/shortcuts` command-line interface
-2. Add method to `ShortcutsService` using async/await
-3. Update `PreferencesStore` to call service
-4. Add UI in `ShortcutsSettingsView` or menu builder
-5. Handle errors gracefully (shortcuts may be deleted)
-
-**Example:**
-```swift
-// 2. Add to ShortcutsService
-func getShortcutDetails(identifierOrName: String) async throws -> ShortcutDetails {
-    let output = try await run(["view", identifierOrName, "--output-format", "json"])
-    return try JSONDecoder().decode(ShortcutDetails.self, from: output.data(using: .utf8)!)
-}
-
-// 3. Add to PreferencesStore
-func loadShortcutDetails(for shortcut: ShortcutInfo) {
-    Task { [shortcutsService] in
-        do {
-            let details = try await shortcutsService.getShortcutDetails(identifierOrName: shortcut.identifier ?? shortcut.name)
-            await MainActor.run {
-                // Update UI with details
-            }
-        } catch {
-            await MainActor.run {
-                self.showError("Could not load shortcut details: \(error.localizedDescription)")
-            }
-        }
-    }
-}
-```
+1. Extend `KeyboardShortcutConfig` in `AppModels.swift` if new fields are needed.
+2. Register and unregister via `GlobalHotkeyService`. Always pair these.
+3. Dispatch the hotkey callback to `MainActor` before mutating state or
+   showing menus.
+4. Use `MenuPresentationCoordinator` to display a menu. Do not present
+   `NSMenu` directly from the hotkey callback.
 
 ## Critical Patterns & Gotchas
 
-### 1. Security-Scoped Bookmarks
+### 1. Security-scoped bookmarks
 
-**Always use this pattern for file access:**
+Inside `MenuActionHandler`, prefer the local helper:
+```swift
+withFolderAccess(action.folderID) {
+    NSWorkspace.shared.open(url)
+}
+```
+
+Outside `MenuActionHandler` (for example in `MenuBuilder` or settings code),
+use `FileAccessService` directly with RAII:
 ```swift
 do {
     let access = try fileAccessService.accessItem(config)
     withExtendedLifetime(access) {
-        // Perform file operations here
-        NSWorkspace.shared.open(access.url)
+        // file operations on access.url
     }
 } catch {
     store.showError(error.localizedDescription)
 }
 ```
 
-**Why:** The `SecurityScopedURL` class manages `startAccessingSecurityScopedResource()` and `stopAccessingSecurityScopedResource()`. The RAII pattern ensures cleanup even if exceptions occur.
+`SecurityScopedURL` calls `startAccessingSecurityScopedResource` on init and
+the matching stop on deinit. `withExtendedLifetime` guarantees the resource
+stays live for the full closure even under optimization.
 
-**Don't:** Never access files directly without resolving bookmarks first.
+**Don't:** access files by raw path or by stored URL string. Always resolve
+through `FileAccessService`.
 
-### 2. Lazy Menu Loading
+### 2. Lazy menu loading
 
-**Use NSMenuDelegate for dynamic content:**
+Use `NSMenuDelegate` so menus populate when opened:
 ```swift
 let menu = NSMenu(title: "Folder")
 menu.autoenablesItems = false
-let delegate = FolderMenuDelegate(builder: self, configID: config.id, ...)
+let delegate = FolderMenuDelegate(builder: self, configID: config.id, /* ... */)
 menu.delegate = delegate
 MenuDelegateRetainer.shared.retain(delegate)
 ```
 
-**Why:** 
-- Menus populate only when opened (performance)
-- Content stays fresh (files added/removed)
-- Prevents loading thousands of items upfront
+`MenuDelegateRetainer` keeps the delegate alive because `NSMenu.delegate` is a
+weak reference. Forgetting it produces empty menus.
 
-**Don't:** Never populate menus synchronously in the main thread for large folders.
+**Don't:** populate large folders synchronously up front.
 
-### 3. Settings Updates
+### 3. Settings updates
 
-**Always use this pattern:**
+Settings mutate only through the store, which timestamps `updatedAt`, persists
+to disk, and rebuilds menus.
 ```swift
-// For AppSettings
+// Global
 store.updateGlobalSettings { settings in
     settings.someProperty = newValue
 }
 
-// For FolderConfig
+// Folder
 guard var config = store.folder(id: id) else { return }
 config.someProperty = newValue
 store.updateFolder(config)
 
-// For MenuViewConfig
+// Menu view
 guard var view = store.menuView(id: id) else { return }
 view.someProperty = newValue
 store.updateMenuView(view)
 ```
 
-**Why:** These methods handle `updatedAt` timestamps and trigger save/rebuild automatically.
+**Don't:** mutate `store.settings` from a SwiftUI view or call `store.save()`
+yourself.
 
-**Don't:** Never mutate `store.settings` directly in SwiftUI views.
+### 4. Menu action dispatch
 
-### 4. Menu Action Dispatch
-
-**Always defer action execution:**
+Defer execution so AppKit finishes menu tracking before the action runs.
 ```swift
 @objc func handleMenuAction(_ sender: Any?) {
-    guard let action = sender.representedObject as? MenuAction else { return }
-    
-    // Defer until after menu tracking completes
+    guard let item = sender as? NSMenuItem,
+          let action = item.representedObject as? MenuAction else { return }
+
+    let modifiers = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+
+    // ~50ms is enough for menu tracking to release the main thread.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-        self?.execute(action, modifierFlags: modifierFlags)
+        self?.execute(action, modifierFlags: modifiers)
     }
 }
 ```
 
-**Why:** AppKit menu tracking blocks the main thread. Immediate execution can cause UI issues or swallowed events.
+Note that `sender` is `Any?` per the AppKit selector contract, so it must be
+cast to `NSMenuItem` before reading `representedObject`.
 
-**Don't:** Never execute actions synchronously in the action handler.
+**Don't:** execute actions synchronously inside the selector. AppKit can drop
+events or freeze the menu.
 
-### 5. Circular Reference Prevention
+### 5. Circular reference prevention for linked menu views
 
-**For linked menu views:**
+Menu views can link to other menu views. Always check for cycles before
+accepting a link:
 ```swift
-func canLinkMenuView(_ linkedMenuViewID: UUID, toMenuViewID targetID: UUID) -> Bool {
-    guard linkedMenuViewID != targetID else { return false }
-    return !menuView(linkedMenuViewID, contains: targetID, in: views, visited: [])
+func canLinkMenuView(_ linkedID: UUID, toMenuViewID targetID: UUID) -> Bool {
+    guard linkedID != targetID else { return false }
+    return !menuView(linkedID, contains: targetID, in: views, visited: [])
 }
 
-private func menuView(_ currentID: UUID, contains searchID: UUID, in views: [MenuViewConfig], visited: Set<UUID>) -> Bool {
+private func menuView(
+    _ currentID: UUID,
+    contains searchID: UUID,
+    in views: [MenuViewConfig],
+    visited: Set<UUID>
+) -> Bool {
     if currentID == searchID { return true }
-    guard !visited.contains(currentID) else { return false }
-    
+    guard !visited.contains(currentID),
+          let view = views.first(where: { $0.id == currentID }) else { return false }
+
     var nextVisited = visited
     nextVisited.insert(currentID)
-    
-    for linkedView in view.resolvedLinkedMenuViews {
-        if menuView(linkedView.menuViewID, contains: searchID, in: views, visited: nextVisited) {
+
+    for linked in view.resolvedLinkedMenuViews {
+        if menuView(linked.menuViewID, contains: searchID, in: views, visited: nextVisited) {
             return true
         }
     }
@@ -316,79 +312,64 @@ private func menuView(_ currentID: UUID, contains searchID: UUID, in views: [Men
 }
 ```
 
-**Why:** Menu views can contain other menu views. Without cycle detection, infinite loops crash the app.
+### 6. Symlink loop prevention
 
-**Don't:** Never allow linking without checking for cycles.
-
-### 6. Symlink Loop Prevention
-
-**For folder traversal:**
+Track visited paths during folder traversal:
 ```swift
-func populateFolderMenu(_ menu: NSMenu, configID: UUID, folderURL: URL?, visited: Set<String>) {
-    let currentPath = currentURL.standardizedFileURL.path
-    
+func populateFolderMenu(
+    _ menu: NSMenu,
+    configID: UUID,
+    folderURL: URL,
+    visited: Set<String>
+) {
+    let currentPath = folderURL.standardizedFileURL.path
     if visited.contains(currentPath) {
         addDisabled("Symlink Loop Detected", to: menu)
         return
     }
-    
+
     var nextVisited = visited
     nextVisited.insert(currentPath)
-    
-    // Continue with nextVisited
+
+    // ...recurse with nextVisited
 }
 ```
 
-**Why:** Symlinks can create infinite loops. Track visited paths to detect cycles.
+### 7. Schema migration
 
-**Don't:** Never traverse symlinks without loop detection.
-
-### 7. Schema Migration
-
-**Always increment version and migrate:**
+Read the current head of the migration ladder in
+`PreferencesStore.migratedSettings(_:)` and append at the end. Bump
+`AppSettings.defaults.schemaVersion` in the same change.
 ```swift
-private static func migratedSettings(_ decoded: AppSettings) -> AppSettings {
-    var settings = decoded
-    
-    if settings.schemaVersion < 8 {
-        settings.schemaVersion = 8
-        // Add migration logic here
-        settings.newProperty = settings.newProperty ?? defaultValue
-    }
-    
-    return settings
+if settings.schemaVersion < <next> {
+    settings.schemaVersion = <next>
+    // Add or backfill new fields here.
 }
 ```
 
-**Why:** Users upgrade from old versions. Missing migrations cause data loss or crashes.
+**Don't:** rename or remove existing fields without keeping a decoder-compatible
+shim. Older settings JSON in the wild must still load.
 
-**Don't:** Never change model structure without adding migration logic.
+### 8. Async work from PreferencesStore
 
-### 8. Async/Await with ShortcutsService
-
-**Always use Task and MainActor:**
+`PreferencesStore` runs on the main actor. Long-running calls into actor-bound
+services like `ShortcutsService` should be wrapped in `Task` and only touch UI
+state inside `MainActor.run`:
 ```swift
 Task { [shortcutsService] in
     do {
         let shortcuts = try await shortcutsService.listShortcuts()
-        await MainActor.run {
-            self.availableShortcuts = shortcuts
-        }
+        await MainActor.run { self.availableShortcuts = shortcuts }
     } catch {
-        await MainActor.run {
-            self.showError(error.localizedDescription)
-        }
+        await MainActor.run { self.showError(error.localizedDescription) }
     }
 }
 ```
 
-**Why:** ShortcutsService is an actor. UI updates must happen on MainActor.
-
-**Don't:** Never update UI properties directly from async context.
+Capturing `[shortcutsService]` rather than `self` avoids retaining the store
+from a task that may outlive a settings sheet.
 
 ## SwiftUI Binding Patterns
-
-### Binding to Store Properties
 
 ```swift
 // Simple property
@@ -397,17 +378,17 @@ Toggle("Enabled", isOn: Binding(
     set: { value in store.updateGlobalSettings { $0.someProperty = value } }
 ))
 
-// Nested property with fallback
+// Optional with fallback
 Picker("Size", selection: Binding(
     get: { config.menuSettings.fileIconSize ?? .medium },
-    set: { value in 
+    set: { value in
         var updated = config
         updated.menuSettings.fileIconSize = value
         store.updateFolder(updated)
     }
 ))
 
-// Optional property
+// Optional string treated as nil-when-empty
 TextField("Override", text: Binding(
     get: { item.titleOverride ?? "" },
     set: { value in
@@ -418,206 +399,103 @@ TextField("Override", text: Binding(
 ))
 ```
 
-### Binding to Array Elements
+For bindings into array elements, look up by stable `id: UUID`, not by index,
+to survive reordering.
 
-```swift
-private func itemBinding(for id: UUID) -> Binding<MenuViewItem>? {
-    guard let index = view.items.firstIndex(where: { $0.id == id }) else { return nil }
-    
-    return Binding(
-        get: { view.items[index] },
-        set: { updated in
-            var copy = updated
-            copy.updatedAt = Date()
-            view.items[index] = copy
-        }
-    )
-}
-```
+## Code Style
+
+- `final` classes by default; `private` access by default.
+- Use `guard` for early returns; avoid pyramids of `if let`.
+- Use exhaustive `switch` over enums (no `default`). Single-expression cases
+  may use Swift's switch-expression form (`case .x: "label"`).
+- Never force-unwrap (`!`) without an inline justification. Prefer
+  `Data(string.utf8)` over `string.data(using: .utf8)!`.
+- Computed `resolved*` properties expose non-optional values for optional
+  settings. Use them in UI code rather than unwrapping inline.
+- Errors that affect the user go through `store.showError(_:)`. Technical
+  detail goes through `DiagnosticsLogger.shared.log(_:)`.
+
+## Don'ts (from real bugs)
+
+- Don't compare `FolderConfig` by URL; identity is `id: UUID`.
+- Don't construct fresh `NSImage` per menu item. Reuse
+  `metadataService.icon(for:size:)`, which caches.
+- Don't call `store.save()` directly. The `update*` methods handle persistence
+  and rebuild.
+- Don't read or write `store.settings` off the main actor.
+- Don't traverse symlinks or linked menu views without cycle detection.
+- Don't keep `NSMenu.delegate` alive only via the delegate's owner;
+  `delegate` is weak. Use `MenuDelegateRetainer`.
 
 ## Testing Checklist
 
-When making changes, test these scenarios:
+There is no automated test suite. After changes, exercise the relevant
+scenarios:
 
-### File Access
-- [ ] Add folder from different locations (Desktop, Documents, external drive)
-- [ ] Add app from /Applications
-- [ ] Reselect folder after moving it
-- [ ] Handle missing folders gracefully
-- [ ] Handle stale bookmarks gracefully
+**File access**
+- Add folder from Desktop, Documents, an external drive
+- Add app from `/Applications`
+- Reselect folder after moving it
+- Stale or missing bookmarks degrade gracefully
 
-### Menu Display
-- [ ] Large folders (1000+ items)
-- [ ] Empty folders
-- [ ] Nested folders (5+ levels deep)
-- [ ] Symlinks and aliases
-- [ ] Hidden files (with toggle on/off)
-- [ ] File extensions (with toggle on/off)
+**Menu display**
+- Folders with 1000+ items
+- Empty folders, deeply nested folders, symlink chains
+- Hidden files toggle, file extensions toggle
 
-### Shortcuts
-- [ ] List shortcuts successfully
-- [ ] Run shortcut from menu
-- [ ] Run shortcut via URL scheme
-- [ ] Handle deleted shortcuts
-- [ ] Option-click to edit
-- [ ] Shortcuts with input parameters
+**Shortcuts**
+- List, run, run with input, run via `menushelf://` URL
+- Option-click to edit
+- Deleted shortcut between list and run
 
-### Menu Views
-- [ ] Create multiple menu views
-- [ ] Link menu views (no cycles)
-- [ ] Hide/show menu views
-- [ ] Duplicate menu views
-- [ ] Delete menu views
-- [ ] Keyboard shortcuts for menu views
+**Menu views**
+- Create, link without cycles, hide/show, duplicate, delete
+- Global hotkey opens at the configured location
 
-### Settings
-- [ ] Settings persist across restarts
-- [ ] Migration from old schema versions
-- [ ] Custom icons (SF Symbols, emoji, images)
-- [ ] Sorting and filtering
-- [ ] Menu bar styles (icon, title, both)
+**Settings**
+- Persist across restart
+- Migration from a settings.json with a lower `schemaVersion`
+- Custom icons (SF Symbol, emoji, custom image, monogram)
 
-## Performance Considerations
+## Debugging
 
-### Do's
-- ✅ Use lazy menu loading with delegates
-- ✅ Limit directory listings with `maxItems`
-- ✅ Cache security-scoped bookmark resolutions
-- ✅ Use `@Published` sparingly (only for UI-bound state)
-- ✅ Debounce rapid settings changes
-
-### Don'ts
-- ❌ Load all folder contents upfront
-- ❌ Resolve bookmarks repeatedly for same folder
-- ❌ Update settings on every keystroke
-- ❌ Create new NSImage instances for every menu item
-- ❌ Perform file I/O on main thread
-
-## Debugging Tips
-
-### Enable Diagnostics Logging
 ```swift
-DiagnosticsLogger.shared.log("Your debug message here")
+DiagnosticsLogger.shared.log("message")
 ```
-Logs appear in Console.app filtered by "MenuShelf".
+Filter Console.app for `MenuShelf`. Verbose diagnostics is gated by
+`enableVerboseDiagnostics` in settings.
 
-### Common Issues
+Common symptoms:
 
-**"Stale bookmark" errors:**
-- User moved/renamed folder
-- Solution: Call `store.reselectFolder(id:)`
+- **Stale bookmark errors** — folder moved or renamed; call
+  `store.reselectFolder(id:)`.
+- **Menu items missing** — check `isVisible`, `FilterMode`, `maxItems`,
+  and `ignoredNames`.
+- **Shortcut won't run** — confirm `/usr/bin/shortcuts` exists, the shortcut
+  still exists, and the identifier matches.
+- **Global hotkey silent** — verify `keyCode` (not just `keyEquivalent`),
+  modifier mapping, and that nothing else owns the combination.
+- **Settings don't persist** — encoding error, file permission, or a migration
+  that wipes the field. Check the diagnostics log on launch.
 
-**Menu items not appearing:**
-- Check `isVisible` property
-- Check filter mode (appsOnly, foldersOnly, etc.)
-- Check `maxItems` limit
-- Check `ignoredNames` list
+## Ideas (only when explicitly asked)
 
-**Shortcuts not running:**
-- Check `/usr/bin/shortcuts` exists
-- Check shortcut still exists in Shortcuts.app
-- Check shortcut identifier vs name
-- Check for interactive prompts (alerts, inputs)
+The following are pre-approved directions but should not be pursued
+spontaneously. Wait for the user to ask.
 
-**Global hotkeys not working:**
-- Check hotkey not already registered by system
-- Check `keyCode` is set (not just `keyEquivalent`)
-- Check modifier flags are correct
-- Check Carbon Events API status codes
+- New file actions (duplicate, compress)
+- New sort keys (file type, color label) and filter modes (videos, recent)
+- Additional icon types (gradient, custom text)
+- Per-item keyboard shortcuts
+- Settings export/import, undo/redo
+- iCloud sync
+- Drag and drop into menu views
 
-**Settings not persisting:**
-- Check JSON encoding doesn't fail
-- Check file permissions on settings file
-- Check schema migration doesn't reset values
-- Check `save()` is called after changes
+## References
 
-## Code Style Guidelines
-
-### Naming
-- Use descriptive names: `resolvedFileIconSize` not `size`
-- Prefix computed properties with `resolved` for optional fallbacks
-- Use `make` for factory methods: `MenuViewConfig.make(...)`
-- Use `handle` for event handlers: `handleMenuAction(_:)`
-
-### Structure
-- Keep files focused (one main class/struct per file)
-- Group related functionality in extensions
-- Use `// MARK: -` for section headers
-- Order: properties, init, public methods, private methods
-
-### Swift Features
-- Use `final` for classes that shouldn't be subclassed
-- Use `private` by default, expose only what's needed
-- Use `guard` for early returns
-- Use `if let` for optional unwrapping
-- Use `switch` exhaustively (no `default` for enums)
-
-### Error Handling
-- Use `do-catch` for recoverable errors
-- Show user-friendly error messages via `store.showError(_:)`
-- Log technical details via `DiagnosticsLogger`
-- Never force-unwrap (`!`) without clear justification
-
-## Architecture Decisions
-
-### Why AppKit for Menus?
-SwiftUI doesn't support NSStatusItem or complex menu hierarchies. AppKit provides full control over menu bar integration.
-
-### Why SwiftUI for Settings?
-SwiftUI is ideal for forms and settings UIs. Declarative syntax reduces boilerplate for complex layouts.
-
-### Why Combine?
-`@Published` properties provide reactive updates without manual observation. SwiftUI bindings work seamlessly with Combine.
-
-### Why Security-Scoped Bookmarks?
-App Sandbox requires explicit user permission for file access. Bookmarks persist permissions across app launches.
-
-### Why Lazy Menu Loading?
-Large folders (1000+ files) would freeze the UI if loaded synchronously. Lazy loading keeps the app responsive.
-
-### Why Schema Versioning?
-Settings format evolves over time. Versioning enables backward-compatible migrations without data loss.
-
-## Resources for Agents
-
-### Apple Documentation
-- [NSStatusItem](https://developer.apple.com/documentation/appkit/nsstatusitem)
-- [NSMenu](https://developer.apple.com/documentation/appkit/nsmenu)
-- [Security-Scoped Bookmarks](https://developer.apple.com/documentation/foundation/nsurl/1417051-bookmarkdata)
-- [App Sandbox](https://developer.apple.com/documentation/security/app_sandbox)
-
-### Swift Language
-- [Swift Language Guide](https://docs.swift.org/swift-book/LanguageGuide/TheBasics.html)
-- [Swift Concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html)
-- [Combine Framework](https://developer.apple.com/documentation/combine)
-
-### Project-Specific
-- Read `CLAUDE.md` for architecture overview
-- Read `AppModels.swift` for all data structures
-- Read `AppContainer.swift` to understand dependencies
-- Read `MenuBuilder.swift` for menu construction logic
-
-## Quick Wins for Agents
-
-Easy improvements that add value:
-
-1. **Add new file actions** (e.g., "Duplicate File", "Compress")
-2. **Add new sort keys** (e.g., "File Type", "Color Label")
-3. **Add new filter modes** (e.g., "Videos Only", "Recent Files")
-4. **Add new icon types** (e.g., "Color Gradient", "Custom Text")
-5. **Add keyboard shortcuts** for common actions
-6. **Improve error messages** with actionable suggestions
-7. **Add tooltips** to settings UI
-8. **Add validation** for user inputs
-9. **Add undo/redo** for settings changes
-10. **Add export/import** for settings
-
-## Final Notes
-
-- **Read before writing**: Understand existing patterns before adding new code
-- **Test thoroughly**: MenuShelf deals with file system and sandboxing—bugs can cause data loss
-- **Follow conventions**: Match existing code style and architecture
-- **Ask questions**: If unsure about a pattern, check similar existing code
-- **Document decisions**: Add comments for non-obvious logic
-
-This codebase is well-structured and maintainable. Follow the established patterns and you'll be productive quickly. Good luck! 🚀
+- Apple: [`NSStatusItem`](https://developer.apple.com/documentation/appkit/nsstatusitem),
+  [`NSMenu`](https://developer.apple.com/documentation/appkit/nsmenu),
+  [security-scoped bookmarks](https://developer.apple.com/documentation/foundation/nsurl/1417051-bookmarkdata),
+  [App Sandbox](https://developer.apple.com/documentation/security/app_sandbox)
+- Project: [`CLAUDE.md`](./CLAUDE.md) for architecture, `AppModels.swift` for
+  the full data model, `AppContainer.swift` for service wiring.

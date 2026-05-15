@@ -122,6 +122,7 @@ final class StatusItemManager: NSObject {
     }
 
     private func removeAllStatusItems() {
+        DiagnosticsLogger.shared.log("Removing \(statusItems.count) status items")
         for context in statusItems {
             NSStatusBar.system.removeStatusItem(context.item)
         }

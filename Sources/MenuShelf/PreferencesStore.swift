@@ -56,6 +56,9 @@ final class PreferencesStore: ObservableObject {
         selectedMenuViewItemID = settings.resolvedMenuViews.first?.items.first?.id
         selectedFolderID = settings.folders.first?.id
 
+        DiagnosticsLogger.shared.setEnabled(settings.resolvedEnableVerboseDiagnostics)
+        DiagnosticsLogger.shared.beginSession(settings: settings)
+
         refreshShortcutsCatalog(showErrors: false)
     }
 
@@ -524,7 +527,11 @@ final class PreferencesStore: ObservableObject {
     }
 
     func updateGlobalSettings(_ update: (inout AppSettings) -> Void) {
+        let before = settings.enableVerboseDiagnostics
         update(&settings)
+        if settings.enableVerboseDiagnostics != before {
+            DiagnosticsLogger.shared.setEnabled(settings.resolvedEnableVerboseDiagnostics)
+        }
     }
 
     func revealInFinder(id: UUID) {
@@ -707,6 +714,11 @@ final class PreferencesStore: ObservableObject {
 
         if settings.schemaVersion < 7 {
             settings.schemaVersion = 7
+        }
+
+        if settings.schemaVersion < 8 {
+            settings.schemaVersion = 8
+            settings.enableVerboseDiagnostics = settings.enableVerboseDiagnostics ?? false
         }
 
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true

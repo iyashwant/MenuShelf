@@ -33,7 +33,6 @@ enum MenuActionKind {
     case menuViewSettings
     case setMenuViewVisibility
     case showOnlyMenuView
-    case showAllMenuViews
     case setSortKey
     case setSortDirection
     case setAllIconOnly
@@ -133,6 +132,7 @@ final class MenuAction: NSObject {
                 }
             }
         } catch {
+            DiagnosticsLogger.shared.log("openRootItem error for \(folderID): \(error.localizedDescription)")
             store.showError(error.localizedDescription)
         }
     }
@@ -226,6 +226,7 @@ final class MenuAction: NSObject {
                     NSPasteboard.general.setString(content, forType: .string)
                     DiagnosticsLogger.shared.log("Copied contents of: \(url.path)")
                 } catch {
+                    DiagnosticsLogger.shared.log("Copy contents failed: \(error.localizedDescription)")
                     store.showError("Could not read file contents: \(error.localizedDescription)")
                 }
             }
@@ -313,9 +314,6 @@ final class MenuAction: NSObject {
             guard let menuViewID = action.menuViewID else { return }
             store.showOnlyMenuView(id: menuViewID)
 
-        case .showAllMenuViews:
-            store.showAllMenuViews()
-
         case .setSortKey:
             guard let folderID = action.folderID, let sortKey = action.sortKey, var folder = store.folder(id: folderID) else { return }
             folder.menuSettings.sortKey = sortKey
@@ -354,6 +352,7 @@ final class MenuAction: NSObject {
                     }
                 } catch {
                     await MainActor.run {
+                        DiagnosticsLogger.shared.log("Run shortcut failed \(shortcutName): \(error.localizedDescription)")
                         self.store.showError("Could not run \(shortcutName): \(error.localizedDescription)")
                     }
                 }
@@ -367,6 +366,7 @@ final class MenuAction: NSObject {
                     try await shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
                 } catch {
                     await MainActor.run {
+                        DiagnosticsLogger.shared.log("Open shortcut failed \(shortcutName): \(error.localizedDescription)")
                         self.store.showError("Could not open \(shortcutName): \(error.localizedDescription)")
                     }
                 }
@@ -512,6 +512,7 @@ final class MenuAction: NSObject {
         do {
             try process.run()
         } catch {
+            DiagnosticsLogger.shared.log("Launch Terminal failed: \(error.localizedDescription)")
             store.showError("Could not launch Terminal: \(error.localizedDescription)")
         }
     }
@@ -563,6 +564,7 @@ final class MenuAction: NSObject {
             var resultingURL: NSURL?
             try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
         } catch {
+            DiagnosticsLogger.shared.log("Move to trash failed for \(url.path): \(error.localizedDescription)")
             store.showError(error.localizedDescription)
         }
     }

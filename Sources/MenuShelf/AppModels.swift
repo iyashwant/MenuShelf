@@ -549,9 +549,10 @@ struct AppSettings: Codable, Equatable {
     var showTopLevelFolderIcons: Bool?
     var topLevelFolderIconSize: FileIconSize?
     var moreMenuBehavior: GlobalMoreMenuBehavior?
+    var enableVerboseDiagnostics: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 7,
+        schemaVersion: 8,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -565,7 +566,8 @@ struct AppSettings: Codable, Equatable {
         shortcutOpenLocation: .menuBarItem,
         showTopLevelFolderIcons: true,
         topLevelFolderIconSize: .small,
-        moreMenuBehavior: .visibleAtBottom
+        moreMenuBehavior: .visibleAtBottom,
+        enableVerboseDiagnostics: false
     )
 
     var resolvedShowFileAndFolderIcons: Bool { showFileAndFolderIcons ?? true }
@@ -576,6 +578,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedTopLevelFolderIconSize: FileIconSize { topLevelFolderIconSize ?? .small }
     var resolvedMoreMenuBehavior: GlobalMoreMenuBehavior { moreMenuBehavior ?? .visibleAtBottom }
     var resolvedMenuViews: [MenuViewConfig] { menuViews ?? [] }
+    var resolvedEnableVerboseDiagnostics: Bool { enableVerboseDiagnostics ?? false }
 }
 
 struct FileMetadata: Equatable {
