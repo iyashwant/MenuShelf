@@ -336,6 +336,10 @@ final class MenuAction: NSObject {
             guard let shortcutName = action.shortcutName else { return }
             let identifierOrName = action.shortcutID ?? shortcutName
             let openForEditing = modifierFlags.contains(.option)
+            // MenuActionHandler is owned by AppContainer.shared for the app's
+            // lifetime, so a strong self capture in the Task isn't a leak. We
+            // avoid [weak self] which triggers Swift 6's mutable-capture warning
+            // in concurrent closures.
             Task { [shortcutsService] in
                 do {
                     if openForEditing {
@@ -354,6 +358,7 @@ final class MenuAction: NSObject {
         case .openShortcutForEditing:
             guard let shortcutName = action.shortcutName else { return }
             let identifierOrName = action.shortcutID ?? shortcutName
+            // See .runShortcut above for the strong-capture rationale.
             Task { [shortcutsService] in
                 do {
                     try await shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
@@ -404,8 +409,10 @@ final class MenuAction: NSObject {
         configuration.activates = true
         configuration.promptsUserIfNeeded = true
 
+        // MenuActionHandler is owned by AppContainer.shared; capturing self strongly
+        // here isn't a leak. The closure also keeps the SecurityScopedURL alive for
+        // the full XPC handoff so the destination app can read the file.
         NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration) { [access] _, error in
-            // Hold the security scope until NSWorkspace finishes the XPC handoff.
             withExtendedLifetime(access) {
                 if let error {
                     DiagnosticsLogger.shared.log("Open With failed for \(url.path) using \(appURL.path): \(error.localizedDescription)")

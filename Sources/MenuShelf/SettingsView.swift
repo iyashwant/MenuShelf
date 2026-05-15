@@ -72,78 +72,122 @@ private struct GeneralSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     var body: some View {
-        FormContainer(title: "General", subtitle: "Control how MenuShelf appears in the menu bar.") {
-            Toggle("Show MenuShelf item when no items are visible", isOn: Binding(
-                get: { store.settings.showMenuBarItemWhenEmpty },
-                set: { value in store.updateGlobalSettings { $0.showMenuBarItemWhenEmpty = value } }
-            ))
+        SettingsPane("General", subtitle: "How MenuShelf shows up across the system.") {
+            SettingsCard("Menu Bar") {
+                SettingsToggle(
+                    "Show MenuShelf when no items are visible",
+                    helper: "Keep at least one menu bar icon visible even if every view is hidden.",
+                    isOn: Binding(
+                        get: { store.settings.showMenuBarItemWhenEmpty },
+                        set: { value in store.updateGlobalSettings { $0.showMenuBarItemWhenEmpty = value } }
+                    )
+                )
 
-            Toggle("Show icons for files and folders", isOn: Binding(
-                get: { store.settings.resolvedShowFileAndFolderIcons },
-                set: { value in store.updateGlobalSettings { $0.showFileAndFolderIcons = value } }
-            ))
+                SettingsToggle(
+                    "Show top-level folder icons",
+                    isOn: Binding(
+                        get: { store.settings.resolvedShowTopLevelFolderIcons },
+                        set: { value in store.updateGlobalSettings { $0.showTopLevelFolderIcons = value } }
+                    )
+                )
 
-            Toggle("Show submenu for files", isOn: Binding(
-                get: { store.settings.resolvedShowFileSubmenus },
-                set: { value in store.updateGlobalSettings { $0.showFileSubmenus = value } }
-            ))
+                SettingsRow("Top-level icon size") {
+                    Picker("", selection: Binding(
+                        get: { store.settings.resolvedTopLevelFolderIconSize },
+                        set: { value in store.updateGlobalSettings { $0.topLevelFolderIconSize = value } }
+                    )) {
+                        ForEach(FileIconSize.allCases) { size in
+                            Text(size.label).tag(size)
+                        }
+                    }
+                    .labelsHidden()
+                }
 
-            Toggle("Show submenu for folders", isOn: Binding(
-                get: { store.settings.resolvedShowFolderSubmenus },
-                set: { value in store.updateGlobalSettings { $0.showFolderSubmenus = value } }
-            ))
-
-            Picker("Open menu via keyboard shortcut", selection: Binding(
-                get: { store.settings.resolvedShortcutOpenLocation },
-                set: { value in store.updateGlobalSettings { $0.shortcutOpenLocation = value } }
-            )) {
-                ForEach(ShortcutOpenLocation.allCases) { location in
-                    Text(location.label).tag(location)
+                SettingsBlockRow {
+                    Button("Make All Menu Views Icon Only") {
+                        store.setAllMenuBarStyles(.iconOnly)
+                    }
+                    Text("Each visible view creates one menu bar icon. Use Menu Views to organize folders and apps under each.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            Picker("Global \"...\" menu item", selection: Binding(
-                get: { store.settings.resolvedMoreMenuBehavior },
-                set: { value in store.updateGlobalSettings { $0.moreMenuBehavior = value } }
-            )) {
-                ForEach(GlobalMoreMenuBehavior.allCases) { behavior in
-                    Text(behavior.label).tag(behavior)
+            SettingsCard("Submenus & Icons") {
+                SettingsToggle(
+                    "Show icons for files and folders",
+                    isOn: Binding(
+                        get: { store.settings.resolvedShowFileAndFolderIcons },
+                        set: { value in store.updateGlobalSettings { $0.showFileAndFolderIcons = value } }
+                    )
+                )
+
+                SettingsToggle(
+                    "Show submenu for files",
+                    helper: "Reveal preview, metadata, and copy actions in a submenu.",
+                    isOn: Binding(
+                        get: { store.settings.resolvedShowFileSubmenus },
+                        set: { value in store.updateGlobalSettings { $0.showFileSubmenus = value } }
+                    )
+                )
+
+                SettingsToggle(
+                    "Show submenu for folders",
+                    isOn: Binding(
+                        get: { store.settings.resolvedShowFolderSubmenus },
+                        set: { value in store.updateGlobalSettings { $0.showFolderSubmenus = value } }
+                    )
+                )
+            }
+
+            SettingsCard("Behavior") {
+                SettingsRow(
+                    "Open menu via keyboard shortcut",
+                    helper: "Choose where the menu appears when triggered by a hotkey."
+                ) {
+                    Picker("", selection: Binding(
+                        get: { store.settings.resolvedShortcutOpenLocation },
+                        set: { value in store.updateGlobalSettings { $0.shortcutOpenLocation = value } }
+                    )) {
+                        ForEach(ShortcutOpenLocation.allCases) { location in
+                            Text(location.label).tag(location)
+                        }
+                    }
+                    .labelsHidden()
                 }
-            }
 
-            Divider()
-
-            Toggle("Show top-level folder icons", isOn: Binding(
-                get: { store.settings.resolvedShowTopLevelFolderIcons },
-                set: { value in store.updateGlobalSettings { $0.showTopLevelFolderIcons = value } }
-            ))
-
-            Picker("Top-level icon size", selection: Binding(
-                get: { store.settings.resolvedTopLevelFolderIconSize },
-                set: { value in store.updateGlobalSettings { $0.topLevelFolderIconSize = value } }
-            )) {
-                ForEach(FileIconSize.allCases) { size in
-                    Text(size.label).tag(size)
+                SettingsRow(
+                    "Global \"…\" menu item",
+                    helper: "Where the More menu appears, or hide it until Option is held."
+                ) {
+                    Picker("", selection: Binding(
+                        get: { store.settings.resolvedMoreMenuBehavior },
+                        set: { value in store.updateGlobalSettings { $0.moreMenuBehavior = value } }
+                    )) {
+                        ForEach(GlobalMoreMenuBehavior.allCases) { behavior in
+                            Text(behavior.label).tag(behavior)
+                        }
+                    }
+                    .labelsHidden()
                 }
+
+                SettingsToggle(
+                    "Reduce animations",
+                    isOn: Binding(
+                        get: { store.settings.reduceAnimations },
+                        set: { value in store.updateGlobalSettings { $0.reduceAnimations = value } }
+                    )
+                )
+
+                SettingsToggle(
+                    "Launch at login",
+                    isOn: Binding(
+                        get: { store.settings.launchAtLogin },
+                        set: { value in store.setLaunchAtLogin(value) }
+                    )
+                )
             }
-
-            Button("Make All Menu Views Icon Only") {
-                store.setAllMenuBarStyles(.iconOnly)
-            }
-
-            Text("Each visible Menu View creates one menu bar icon. Add folders and apps to a view to organize them under that icon.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Toggle("Reduce animations", isOn: Binding(
-                get: { store.settings.reduceAnimations },
-                set: { value in store.updateGlobalSettings { $0.reduceAnimations = value } }
-            ))
-
-            Toggle("Launch at login", isOn: Binding(
-                get: { store.settings.launchAtLogin },
-                set: { value in store.setLaunchAtLogin(value) }
-            ))
         }
     }
 }
@@ -351,96 +395,93 @@ private enum UnifiedContentItem: Identifiable {
 private struct MenuViewDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     @Binding var view: MenuViewConfig
-    @State private var showingSymbolPicker = false
     @State private var selectedContentItemID: UUID?
     @State private var editingItem: UnifiedContentItem?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Header(title: view.title, subtitle: "Menu bar icon with \(contentCount) item\(contentCount == 1 ? "" : "s")", symbolName: "menubar.rectangle")
+            VStack(alignment: .leading, spacing: 18) {
+                SettingsHeader(
+                    title: view.title,
+                    subtitle: "Menu bar icon with \(contentCount) item\(contentCount == 1 ? "" : "s")",
+                    symbolName: "menubar.rectangle"
+                )
+
+                MenuPreviewCard(
+                    title: view.title,
+                    icon: view.icon,
+                    colorHex: view.iconColorHex,
+                    menuBarStyle: view.menuBarStyle,
+                    settings: view.menuSettings
+                )
 
                 SettingsCard("Menu View") {
-                    TextField("Title", text: $view.title)
-                    Toggle("Visible in menu bar", isOn: $view.isVisible)
-
-                    Picker("Menu bar style", selection: $view.menuBarStyle) {
-                        ForEach(MenuBarStyle.allCases) { style in
-                            Text(style.label).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Picker("Layout", selection: Binding(
-                        get: { view.resolvedLayout },
-                        set: { view.layout = $0 }
-                    )) {
-                        ForEach(MenuViewLayout.allCases) { layout in
-                            Text(layout.label).tag(layout)
-                        }
+                    SettingsRow("Title") {
+                        TextField("", text: $view.title)
+                            .textFieldStyle(.roundedBorder)
                     }
 
-                    Picker("Shortcut opens", selection: Binding(
-                        get: { view.openLocation ?? store.settings.resolvedShortcutOpenLocation },
-                        set: { view.openLocation = $0 }
-                    )) {
-                        ForEach(ShortcutOpenLocation.allCases) { location in
-                            Text(location.label).tag(location)
+                    SettingsToggle("Visible in menu bar", isOn: $view.isVisible)
+
+                    SettingsRow("Menu bar style") {
+                        Picker("", selection: $view.menuBarStyle) {
+                            ForEach(MenuBarStyle.allCases) { style in
+                                Text(style.label).tag(style)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 220)
                     }
 
-                    ShortcutRecorderView(shortcut: $view.shortcut)
-                        .frame(width: 220, height: 34)
+                    SettingsRow("Layout") {
+                        Picker("", selection: Binding(
+                            get: { view.resolvedLayout },
+                            set: { view.layout = $0 }
+                        )) {
+                            ForEach(MenuViewLayout.allCases) { layout in
+                                Text(layout.label).tag(layout)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    SettingsRow(
+                        "Shortcut opens",
+                        helper: "Where the menu appears when triggered by the hotkey below."
+                    ) {
+                        Picker("", selection: Binding(
+                            get: { view.openLocation ?? store.settings.resolvedShortcutOpenLocation },
+                            set: { view.openLocation = $0 }
+                        )) {
+                            ForEach(ShortcutOpenLocation.allCases) { location in
+                                Text(location.label).tag(location)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    SettingsRow("Hotkey") {
+                        ShortcutRecorderView(shortcut: $view.shortcut)
+                            .frame(width: 220, height: 30)
+                    }
                 }
 
                 SettingsCard("Icon") {
-                    HStack {
-                        Button("Use Folder Icon") { view.icon = .folderIcon }
-                        Button("Use Monogram") { view.icon = .monogram(String(view.title.prefix(1))) }
-                        Button("Choose Custom Image") { store.selectCustomIconForMenuView(id: view.id) }
-                        Button("Browse Symbols") { showingSymbolPicker = true }
+                    SettingsBlockRow {
+                        IconPicker(
+                            icon: $view.icon,
+                            colorHex: $view.iconColorHex,
+                            displayName: view.title,
+                            onPickCustomImage: { store.selectCustomIconForMenuView(id: view.id) }
+                        )
                     }
-
-                    TextField("SF Symbol", text: Binding(
-                        get: {
-                            if case .systemSymbol(let name, _) = view.icon { return name }
-                            return "folder"
-                        },
-                        set: { view.icon = .systemSymbol(name: $0, tint: nil) }
-                    ))
-
-                    TextField("Emoji", text: Binding(
-                        get: {
-                            if case .emoji(let emoji) = view.icon { return emoji }
-                            return ""
-                        },
-                        set: { value in
-                            if !value.isEmpty { view.icon = .emoji(value) }
-                        }
-                    ))
-
-                    ColorPicker("Color", selection: Binding(
-                        get: { Color(hexString: view.iconColorHex) },
-                        set: { value in view.iconColorHex = value.hexString }
-                    ))
-
-                    Button("Clear Color") {
-                        view.iconColorHex = nil
-                    }
-                }
-                .sheet(isPresented: $showingSymbolPicker) {
-                    SFSymbolPickerView(selectedSymbol: Binding(
-                        get: {
-                            if case .systemSymbol(let name, _) = view.icon { return name }
-                            return "folder"
-                        },
-                        set: { view.icon = .systemSymbol(name: $0, tint: nil) }
-                    ))
                 }
 
                 SettingsCard("View Contents") {
-                    HStack {
-                        Menu {
+                    SettingsBlockRow {
+                        HStack {
+                            Menu {
                             Button {
                                 store.selectedMenuViewID = view.id
                                 store.addFolderFromPanel()
@@ -558,7 +599,9 @@ private struct MenuViewDetailView: View {
                                 .controlSize(.small)
                         }
                     }
+                    }
 
+                    SettingsBlockRow {
                     List(selection: $selectedContentItemID) {
                         ForEach(unifiedItems) { item in
                             UnifiedContentItemRow(item: item, store: store)
@@ -596,6 +639,7 @@ private struct MenuViewDetailView: View {
                     }
                     .frame(height: listHeight)
                     .scrollContentBackground(.hidden)
+                    }
                 }
                 .popover(item: $editingItem, arrowEdge: .trailing) { item in
                     makePopoverEditor(for: item)
@@ -603,9 +647,7 @@ private struct MenuViewDetailView: View {
                         .padding()
                 }
 
-                SettingsCard("Menu Behavior") {
-                    MenuSettingsEditor(settings: $view.menuSettings)
-                }
+                MenuSettingsEditor(settings: $view.menuSettings)
             }
             .padding(28)
             .frame(maxWidth: 760, alignment: .leading)
@@ -1170,80 +1212,66 @@ private struct FolderRow: View {
 private struct FolderDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     @Binding var config: FolderConfig
-    @State private var showingSymbolPicker = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Header(title: config.displayName, subtitle: "\(config.resolvedItemKind.label) - \(config.originalPathHint)", symbolName: config.resolvedItemKind.symbolName)
+            VStack(alignment: .leading, spacing: 18) {
+                SettingsHeader(
+                    title: config.displayName,
+                    subtitle: "\(config.resolvedItemKind.label) · \(config.originalPathHint)",
+                    symbolName: config.resolvedItemKind.symbolName
+                )
+
+                MenuPreviewCard(
+                    title: config.displayName,
+                    icon: config.icon,
+                    colorHex: config.iconColorHex,
+                    menuBarStyle: config.menuBarStyle,
+                    settings: config.menuSettings
+                )
 
                 SettingsCard("Source") {
-                    TextField("Display name", text: $config.displayName)
+                    SettingsRow("Display name") {
+                        TextField("", text: $config.displayName)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
                     if config.resolvedItemKind == .folder {
-                        Picker("Folder click behavior", selection: $config.openBehavior) {
-                            ForEach(OpenBehavior.allCases) { behavior in
-                                Text(behavior.label).tag(behavior)
+                        SettingsRow(
+                            "Click behavior",
+                            helper: "What happens when this folder is selected from a Menu View."
+                        ) {
+                            Picker("", selection: $config.openBehavior) {
+                                ForEach(OpenBehavior.allCases) { behavior in
+                                    Text(behavior.label).tag(behavior)
+                                }
                             }
+                            .labelsHidden()
                         }
                     } else {
-                        Text("Apps launch directly when selected from a Menu View.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        SettingsBlockRow {
+                            Text("Apps launch directly when selected from a Menu View.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
                 SettingsCard("Icon") {
-                    HStack {
-                        Button("Use Folder Icon") { config.icon = .folderIcon }
-                        Button("Use Monogram") { config.icon = .monogram(String(config.displayName.prefix(1))) }
-                        Button("Choose Custom Image") { store.selectCustomIcon(for: config.id) }
-                        Button("Browse Symbols") { showingSymbolPicker = true }
+                    SettingsBlockRow {
+                        IconPicker(
+                            icon: $config.icon,
+                            colorHex: $config.iconColorHex,
+                            displayName: config.displayName,
+                            onPickCustomImage: { store.selectCustomIcon(for: config.id) }
+                        )
                     }
-
-                    TextField("SF Symbol", text: Binding(
-                        get: {
-                            if case .systemSymbol(let name, _) = config.icon { return name }
-                            return "folder"
-                        },
-                        set: { config.icon = .systemSymbol(name: $0, tint: nil) }
-                    ))
-
-                    ColorPicker("Color", selection: Binding(
-                        get: { Color(hexString: config.iconColorHex) },
-                        set: { value in config.iconColorHex = value.hexString }
-                    ))
-
-                    Button("Clear Color") {
-                        config.iconColorHex = nil
-                    }
-
-                    TextField("Emoji", text: Binding(
-                        get: {
-                            if case .emoji(let emoji) = config.icon { return emoji }
-                            return ""
-                        },
-                        set: { value in
-                            if !value.isEmpty { config.icon = .emoji(value) }
-                        }
-                    ))
-                }
-                .sheet(isPresented: $showingSymbolPicker) {
-                    SFSymbolPickerView(selectedSymbol: Binding(
-                        get: {
-                            if case .systemSymbol(let name, _) = config.icon { return name }
-                            return "folder"
-                        },
-                        set: { config.icon = .systemSymbol(name: $0, tint: nil) }
-                    ))
                 }
 
-                SettingsCard("Menu") {
-                    MenuSettingsEditor(settings: $config.menuSettings)
-                }
+                MenuSettingsEditor(settings: $config.menuSettings)
             }
             .padding(28)
-            .frame(maxWidth: 680, alignment: .leading)
+            .frame(maxWidth: 720, alignment: .leading)
         }
     }
 }
@@ -1252,7 +1280,10 @@ private struct MenuDefaultsSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     var body: some View {
-        FormContainer(title: "Menu Defaults", subtitle: "Defaults are applied to newly added folders. Existing items keep their own settings.") {
+        SettingsPane(
+            "Menu Defaults",
+            subtitle: "Defaults for newly added folders. Existing items keep their own settings."
+        ) {
             MenuSettingsEditor(settings: Binding(
                 get: { store.settings.defaultMenuSettings },
                 set: { value in store.updateGlobalSettings { $0.defaultMenuSettings = value } }
@@ -1265,74 +1296,134 @@ private struct MenuSettingsEditor: View {
     @Binding var settings: MenuSettings
 
     var body: some View {
-        Picker("Sort by", selection: $settings.sortKey) {
-            ForEach(SortKey.allCases) { sort in
-                Text(sort.label).tag(sort)
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsCard("Sorting") {
+                SettingsRow("Sort by") {
+                    Picker("", selection: $settings.sortKey) {
+                        ForEach(SortKey.allCases) { sort in
+                            Text(sort.label).tag(sort)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                SettingsRow("Direction") {
+                    Picker("", selection: $settings.sortDirection) {
+                        ForEach(SortDirection.allCases) { direction in
+                            Text(direction.label).tag(direction)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
+
+                SettingsToggle("Keep folders on top", isOn: $settings.keepFoldersOnTop)
+                SettingsToggle("Keep apps on top", isOn: $settings.keepAppsOnTop)
             }
-        }
 
-        Picker("Direction", selection: $settings.sortDirection) {
-            ForEach(SortDirection.allCases) { direction in
-                Text(direction.label).tag(direction)
+            SettingsCard("Filtering & Limits") {
+                SettingsRow("Filter") {
+                    Picker("", selection: $settings.filterMode) {
+                        ForEach(FilterMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                SettingsToggle("Show hidden files", isOn: $settings.showHiddenFiles)
+
+                SettingsToggle(
+                    "Limit visible items",
+                    helper: "Truncate long folders so the menu stays responsive.",
+                    isOn: Binding(
+                        get: { settings.maxItems != nil },
+                        set: { enabled in settings.maxItems = enabled ? (settings.maxItems ?? 200) : nil }
+                    )
+                )
+
+                if settings.maxItems != nil {
+                    SettingsRow("Max visible items") {
+                        Stepper(
+                            "\(settings.maxItems ?? 200)",
+                            value: Binding(
+                                get: { settings.maxItems ?? 200 },
+                                set: { settings.maxItems = $0 }
+                            ),
+                            in: 20...2000,
+                            step: 10
+                        )
+                    }
+                }
+
+                SettingsRow("More item position") {
+                    Picker("", selection: $settings.showMoreItemPosition) {
+                        ForEach(MoreItemPosition.allCases) { position in
+                            Text(position.label).tag(position)
+                        }
+                    }
+                    .labelsHidden()
+                }
             }
-        }
-        .pickerStyle(.segmented)
 
-        Picker("Filter", selection: $settings.filterMode) {
-            ForEach(FilterMode.allCases) { mode in
-                Text(mode.label).tag(mode)
+            SettingsCard("Display") {
+                SettingsRow("File icon size") {
+                    Picker("", selection: Binding(
+                        get: { settings.resolvedFileIconSize },
+                        set: { settings.fileIconSize = $0 }
+                    )) {
+                        ForEach(FileIconSize.allCases) { size in
+                            Text(size.label).tag(size)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 220)
+                }
+
+                SettingsToggle("Show file extensions", isOn: $settings.showFileExtensions)
+
+                SettingsToggle(
+                    "Show folder title",
+                    isOn: Binding(
+                        get: { settings.resolvedShowFolderTitle },
+                        set: { settings.showFolderTitle = $0 }
+                    )
+                )
+
+                SettingsToggle("Show file previews", isOn: $settings.showPreview)
+                SettingsToggle("Show metadata", isOn: $settings.showMetadata)
+
+                SettingsToggle(
+                    "Show tips in file submenus",
+                    isOn: Binding(
+                        get: { settings.resolvedShowTips },
+                        set: { settings.showTips = $0 }
+                    )
+                )
             }
-        }
 
-        Picker("File icon size", selection: Binding(
-            get: { settings.resolvedFileIconSize },
-            set: { settings.fileIconSize = $0 }
-        )) {
-            ForEach(FileIconSize.allCases) { size in
-                Text(size.label).tag(size)
-            }
-        }
+            SettingsCard("Behavior") {
+                SettingsToggle(
+                    "Show \"Open With\" for subfolders",
+                    isOn: Binding(
+                        get: { settings.resolvedShowOpenWithForSubfolders },
+                        set: { settings.showOpenWithForSubfolders = $0 }
+                    )
+                )
 
-        Toggle("Keep folders on top", isOn: $settings.keepFoldersOnTop)
-        Toggle("Keep apps on top", isOn: $settings.keepAppsOnTop)
-        Toggle("Show hidden files", isOn: $settings.showHiddenFiles)
-        Toggle("Show folder title", isOn: Binding(
-            get: { settings.resolvedShowFolderTitle },
-            set: { settings.showFolderTitle = $0 }
-        ))
-        Toggle("Show \"Open With\" menu for subfolders", isOn: Binding(
-            get: { settings.resolvedShowOpenWithForSubfolders },
-            set: { settings.showOpenWithForSubfolders = $0 }
-        ))
-        Toggle("Show file extensions", isOn: $settings.showFileExtensions)
-        Toggle("Show file previews", isOn: $settings.showPreview)
-        Toggle("Show metadata", isOn: $settings.showMetadata)
-        Toggle("Show tips in file submenus", isOn: Binding(
-            get: { settings.resolvedShowTips },
-            set: { settings.showTips = $0 }
-        ))
-        Toggle("Reveal extra copy actions with Option", isOn: Binding(
-            get: { settings.resolvedEnableModifierActions },
-            set: { settings.enableModifierActions = $0 }
-        ))
-        Toggle("Resolve Finder aliases", isOn: $settings.followAliases)
-        Toggle("Resolve symlinks", isOn: $settings.followSymlinks)
+                SettingsToggle(
+                    "Reveal extra copy actions with Option",
+                    helper: "Hold ⌥ over a file to surface alternate copy targets.",
+                    isOn: Binding(
+                        get: { settings.resolvedEnableModifierActions },
+                        set: { settings.enableModifierActions = $0 }
+                    )
+                )
 
-        Toggle("Limit visible items", isOn: Binding(
-            get: { settings.maxItems != nil },
-            set: { enabled in settings.maxItems = enabled ? (settings.maxItems ?? 200) : nil }
-        ))
-
-        if settings.maxItems != nil {
-            Stepper("Max visible items: \(settings.maxItems ?? 200)", value: Binding(
-                get: { settings.maxItems ?? 200 },
-                set: { settings.maxItems = $0 }
-            ), in: 20...2000, step: 10)
-        }
-
-        Picker("More item", selection: $settings.showMoreItemPosition) {
-            ForEach(MoreItemPosition.allCases) { position in
-                Text(position.label).tag(position)
+                SettingsToggle("Resolve Finder aliases", isOn: $settings.followAliases)
+                SettingsToggle("Resolve symlinks", isOn: $settings.followSymlinks)
             }
         }
     }
@@ -1343,7 +1434,7 @@ private struct OnboardingPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Header(title: "Put folders and apps in your menu bar.", subtitle: "Add folders to browse and apps to launch from a native menu.", symbolName: "menubar.rectangle")
+            SettingsHeader(title: "Put folders and apps in your menu bar.", subtitle: "Add folders to browse and apps to launch from a native menu.", symbolName: "menubar.rectangle")
 
             HStack {
                 Button {
@@ -1394,7 +1485,7 @@ private struct EmptyMenuViewsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Header(title: "Create menu views.", subtitle: "Each visible view becomes one menu bar icon. Add folders and apps inside a view to keep different workspaces organized.", symbolName: "menubar.rectangle")
+            SettingsHeader(title: "Create menu views.", subtitle: "Each visible view becomes one menu bar icon. Add folders and apps inside a view to keep different workspaces organized.", symbolName: "menubar.rectangle")
 
             HStack {
                 Button {
@@ -1474,105 +1565,142 @@ private struct ShortcutsSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     var body: some View {
-        FormContainer(title: "Shortcuts", subtitle: "Run shortcuts from Apple's Shortcuts app directly from MenuShelf.") {
-            HStack {
-                Button("Refresh Shortcuts Catalog") {
-                    store.refreshShortcutsCatalog()
+        SettingsPane(
+            "Shortcuts",
+            subtitle: "Run Shortcuts.app workflows directly from MenuShelf."
+        ) {
+            SettingsCard("Catalog") {
+                SettingsBlockRow {
+                    HStack(spacing: 10) {
+                        Button("Refresh Catalog") {
+                            store.refreshShortcutsCatalog()
+                        }
+                        .disabled(store.isRefreshingShortcuts)
+
+                        if store.isRefreshingShortcuts {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+
+                        Spacer()
+
+                        Button("Open Shortcuts.app") {
+                            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+                        }
+                    }
+
+                    Text("Loaded \(store.availableShortcuts.count) shortcut\(store.availableShortcuts.count == 1 ? "" : "s") and \(store.availableShortcutFolders.count) folder\(store.availableShortcutFolders.count == 1 ? "" : "s").")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .disabled(store.isRefreshingShortcuts)
 
-                if store.isRefreshingShortcuts {
-                    ProgressView()
-                        .controlSize(.small)
-                }
+                SettingsBlockRow {
+                    HStack(spacing: 10) {
+                        Menu {
+                            ForEach(store.availableShortcuts) { shortcut in
+                                Button(shortcut.name) {
+                                    store.addShortcut(shortcut, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
+                                }
+                            }
+                            if store.availableShortcuts.isEmpty {
+                                Button("Refresh Shortcuts") {
+                                    store.refreshShortcutsCatalog()
+                                }
+                            }
+                        } label: {
+                            Label("Add Shortcut to Selected View", systemImage: "bolt.fill")
+                        }
 
-                Spacer()
+                        Menu {
+                            ForEach(store.availableShortcutFolders) { folder in
+                                Button(folder.name) {
+                                    store.addLinkedShortcutsFolder(folder, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
+                                }
+                            }
+                            if store.availableShortcutFolders.isEmpty {
+                                Button("Refresh Folders") {
+                                    store.refreshShortcutsCatalog()
+                                }
+                            }
+                        } label: {
+                            Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
+                        }
 
-                Button("Open Shortcuts") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+                        Spacer()
+                    }
                 }
             }
 
-            Text("Loaded \(store.availableShortcuts.count) shortcut\(store.availableShortcuts.count == 1 ? "" : "s") and \(store.availableShortcutFolders.count) folder\(store.availableShortcutFolders.count == 1 ? "" : "s").")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Menu {
-                    ForEach(store.availableShortcuts) { shortcut in
-                        Button(shortcut.name) {
-                            store.addShortcut(shortcut, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
-                        }
-                    }
-
-                    if store.availableShortcuts.isEmpty {
-                        Button("Refresh Shortcuts") {
-                            store.refreshShortcutsCatalog()
-                        }
-                    }
-                } label: {
-                    Label("Add Shortcut to Selected View", systemImage: "bolt.fill")
-                }
-
-                Menu {
-                    ForEach(store.availableShortcutFolders) { folder in
-                        Button(folder.name) {
-                            store.addLinkedShortcutsFolder(folder, toMenuViewID: store.selectedMenuViewID ?? store.settings.resolvedMenuViews.first?.id)
-                        }
-                    }
-
-                    if store.availableShortcutFolders.isEmpty {
-                        Button("Refresh Folders") {
-                            store.refreshShortcutsCatalog()
-                        }
-                    }
-                } label: {
-                    Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
-                }
-            }
-
-            Divider()
-
-            Text("Menu View Hotkeys")
-                .font(.headline)
-
-            ForEach(store.settings.resolvedMenuViews) { view in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(view.title)
-                        Text("\(view.items.count) source\(view.items.count == 1 ? "" : "s"), \(view.resolvedShortcutItems.count) shortcut\(view.resolvedShortcutItems.count == 1 ? "" : "s")")
-                            .font(.caption)
+            SettingsCard(
+                "Menu View Hotkeys",
+                footer: "Option-click a shortcut menu item to open it for editing in Shortcuts.app."
+            ) {
+                if store.settings.resolvedMenuViews.isEmpty {
+                    SettingsBlockRow {
+                        Text("Create a Menu View to assign hotkeys.")
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
                     }
-
-                    Spacer()
-
-                    ShortcutRecorderView(shortcut: Binding(
-                        get: { store.menuView(id: view.id)?.shortcut ?? .disabled },
-                        set: { shortcut in
-                            guard var updated = store.menuView(id: view.id) else { return }
-                            updated.shortcut = shortcut
-                            store.updateMenuView(updated)
+                } else {
+                    ForEach(store.settings.resolvedMenuViews) { view in
+                        SettingsRow(view.title, helper: hotkeyHelper(for: view)) {
+                            ShortcutRecorderView(shortcut: Binding(
+                                get: { store.menuView(id: view.id)?.shortcut ?? .disabled },
+                                set: { shortcut in
+                                    guard var updated = store.menuView(id: view.id) else { return }
+                                    updated.shortcut = shortcut
+                                    store.updateMenuView(updated)
+                                }
+                            ))
+                            .frame(width: 200, height: 30)
                         }
-                    ))
-                    .frame(width: 200, height: 32)
+                    }
                 }
-                Divider()
             }
 
-            Text("menushelf://run-shortcut?name=My%20Shortcut")
+            SettingsCard("URL Scheme") {
+                SettingsBlockRow {
+                    Text("Trigger a shortcut from anywhere by name or identifier.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    URLExampleRow(text: "menushelf://run-shortcut?name=My%20Shortcut")
+                    URLExampleRow(text: "menushelf://run-shortcut?id=A1B2C3D4-0000-1111-2222-ABCDEFABCDEF")
+                }
+            }
+        }
+    }
+
+    private func hotkeyHelper(for view: MenuViewConfig) -> String {
+        let sources = view.items.count
+        let shortcuts = view.resolvedShortcutItems.count
+        return "\(sources) source\(sources == 1 ? "" : "s") · \(shortcuts) shortcut\(shortcuts == 1 ? "" : "s")"
+    }
+}
+
+private struct URLExampleRow: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(text)
                 .font(.system(.footnote, design: .monospaced))
                 .textSelection(.enabled)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
-            Text("menushelf://run-shortcut?id=A1B2C3D4-0000-1111-2222-ABCDEFABCDEF")
-                .font(.system(.footnote, design: .monospaced))
-                .textSelection(.enabled)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .help("Copy")
 
-            Text("Option-click a shortcut menu item to open it for editing in Shortcuts. Shortcuts that show alerts or request input may block while running from the command line.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Spacer()
         }
     }
 }
@@ -1581,115 +1709,60 @@ private struct AdvancedSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     var body: some View {
-        FormContainer(title: "Advanced", subtitle: "Local-only diagnostics and privacy controls.") {
-            Toggle("Enable verbose diagnostics", isOn: Binding(
-                get: { store.settings.resolvedEnableVerboseDiagnostics },
-                set: { value in store.updateGlobalSettings { $0.enableVerboseDiagnostics = value } }
-            ))
+        SettingsPane("Advanced", subtitle: "Local-only diagnostics and privacy controls.") {
+            SettingsCard(
+                "Diagnostics",
+                footer: "Logs are stored locally and never uploaded."
+            ) {
+                SettingsToggle(
+                    "Enable verbose diagnostics",
+                    helper: "Write detailed logs and register crash handlers. Use to diagnose unexpected quits.",
+                    isOn: Binding(
+                        get: { store.settings.resolvedEnableVerboseDiagnostics },
+                        set: { value in store.updateGlobalSettings { $0.enableVerboseDiagnostics = value } }
+                    )
+                )
 
-            Text("When enabled, MenuShelf writes detailed logs and registers crash handlers. Use this to diagnose unexpected quits. Logs are stored locally and never uploaded.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Diagnostics log") {
+                    HStack(spacing: 8) {
+                        Button("Reveal") {
+                            NSWorkspace.shared.activateFileViewerSelecting([DiagnosticsLogger.shared.logURL])
+                        }
+                        Button("Clear") {
+                            DiagnosticsLogger.shared.clear()
+                        }
+                    }
+                }
 
-            Button("Clear Last Error") {
-                store.lastErrorMessage = nil
-            }
-
-            Button("Clear Diagnostics Log") {
-                DiagnosticsLogger.shared.clear()
-            }
-
-            Text("Diagnostics log: \(DiagnosticsLogger.shared.logURL.path)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-
-            if let error = store.lastErrorMessage {
-                Text(error)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            Text("MenuShelf does not need network access for core functionality. File previews and metadata are generated locally from folders and apps you explicitly choose.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-private struct FormContainer<Content: View>: View {
-    let title: String
-    let subtitle: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Header(title: title, subtitle: subtitle, symbolName: nil)
-                SettingsCard(nil) {
-                    content
+                SettingsBlockRow {
+                    Text(DiagnosticsLogger.shared.logURL.path)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
                 }
             }
-            .padding(32)
-            .frame(maxWidth: 720, alignment: .leading)
-        }
-    }
-}
 
-private struct Header: View {
-    let title: String
-    let subtitle: String
-    let symbolName: String?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            if let symbolName {
-                Image(systemName: symbolName)
-                    .font(.system(size: 34, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: 44, height: 44)
+            SettingsCard("Errors") {
+                SettingsRow(
+                    "Last error",
+                    helper: store.lastErrorMessage ?? "No recent errors."
+                ) {
+                    Button("Clear") {
+                        store.lastErrorMessage = nil
+                    }
+                    .disabled(store.lastErrorMessage == nil)
+                }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.largeTitle.bold())
-                    .lineLimit(2)
-                Text(subtitle)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            SettingsCard("Privacy") {
+                SettingsBlockRow {
+                    Text("MenuShelf does not need network access for core functionality. File previews and metadata are generated locally from folders and apps you explicitly choose.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-        }
-    }
-}
-
-private struct SettingsCard<Content: View>: View {
-    let title: String?
-    @ViewBuilder let content: Content
-
-    init(_ title: String?, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let title {
-                Text(title)
-                    .font(.headline)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                content
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35))
         }
     }
 }

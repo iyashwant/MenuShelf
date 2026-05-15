@@ -178,6 +178,10 @@ final class PreferencesStore: ObservableObject {
     func removeFolder(id: UUID) {
         settings.folders.removeAll { $0.id == id }
         removeSourceFromAllMenuViews(sourceID: id)
+        // Drop any cached resolved URL so removed folders don't linger in
+        // FileAccessService. The bookmark hash check would also evict on next
+        // access, but here we know the folder will never be accessed again.
+        fileAccessService.invalidateCache(for: id)
         if selectedFolderID == id {
             selectedFolderID = settings.folders.first?.id
         }
@@ -428,6 +432,10 @@ final class PreferencesStore: ObservableObject {
     func refreshShortcutsCatalog(showErrors: Bool = true) {
         isRefreshingShortcuts = true
         let linkedFolderNames = Set(settings.resolvedMenuViews.flatMap { $0.resolvedLinkedShortcutsFolders.map(\.folderName) })
+        // PreferencesStore is owned by AppContainer.shared for the app's lifetime,
+        // so a strong self capture here is not a leak. We deliberately avoid
+        // [weak self] which triggers Swift 6's mutable-capture warning in async
+        // Tasks.
         Task { [shortcutsService, linkedFolderNames] in
             do {
                 async let shortcuts = shortcutsService.listShortcuts()
@@ -469,6 +477,7 @@ final class PreferencesStore: ObservableObject {
     }
 
     func refreshLinkedShortcutsFolder(_ folderName: String, showErrors: Bool = true) {
+        // See refreshShortcutsCatalog above for why we capture self strongly.
         Task { [shortcutsService] in
             do {
                 let shortcuts = try await shortcutsService.listShortcuts(inFolder: folderName)
@@ -647,6 +656,9 @@ final class PreferencesStore: ObservableObject {
             config.originalPathHint = url.path
             config.displayName = FileManager.default.displayName(atPath: url.path)
             config.itemKind = itemKind
+            // Drop any cached resolution that referred to the previous bookmark
+            // so the next access path uses the freshly granted permission.
+            fileAccessService.invalidateCache(for: id)
             updateFolder(config)
         } catch {
             showError(error.localizedDescription)

@@ -32,6 +32,9 @@ final class ShortcutURLRouter {
         }
 
         let textInput = inputType == "text" ? text : nil
+        // ShortcutURLRouter is owned by AppContainer.shared for the app's lifetime,
+        // so capturing self strongly in the Task isn't a leak. We avoid [weak self]
+        // which triggers Swift 6's mutable-capture warning in concurrent closures.
         Task { [shortcutsService] in
             do {
                 try await shortcutsService.runShortcut(identifierOrName: identifierOrName, textInput: textInput)
