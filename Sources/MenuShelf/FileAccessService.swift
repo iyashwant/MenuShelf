@@ -46,6 +46,44 @@ final class FileAccessService {
     private var resolvedCache: [UUID: ResolvedBookmark] = [:]
     private let resolvedCacheLock = NSLock()
 
+    // Short-TTL cache of `directoryListing` results. AppKit calls
+    // NSMenuDelegate.menuNeedsUpdate every time a menu opens (or a submenu
+    // reopens), and a casual browse can re-stat the same 1000-item folder
+    // many times per second. The TTL plus an mtime check keeps the cache
+    // honest: we serve stale data for at most `listingCacheTTL`, and any
+    // change to the directory's contents (add/remove/rename of an entry)
+    // bumps the dir's mtime so we recompute even within the TTL window.
+    //
+    // ListingCacheKey covers every input the listing depends on. Adding
+    // a new MenuSettings field that affects the listing output requires
+    // adding it here.
+    private struct ListingCacheKey: Hashable {
+        let path: String
+        let visitedHash: Int
+        let sortKey: SortKey
+        let sortDirection: SortDirection
+        let keepFoldersOnTop: Bool
+        let keepAppsOnTop: Bool
+        let showHiddenFiles: Bool
+        let showFileExtensions: Bool
+        let followAliases: Bool
+        let followSymlinks: Bool
+        let filterMode: FilterMode
+        let maxItems: Int?
+        let ignoredNames: [String]
+    }
+
+    private struct ListingCacheEntry {
+        let listing: DirectoryListing
+        let timestamp: Date
+        let dirMtime: Date?
+    }
+
+    private var listingCache: [ListingCacheKey: ListingCacheEntry] = [:]
+    private let listingCacheLock = NSLock()
+    private let listingCacheTTL: TimeInterval = 2.0
+    private let listingCacheLimit = 32
+
     func accessItem(_ config: FolderConfig) throws -> SecurityScopedURL {
         let bookmarkHash = config.bookmarkData.hashValue
 
@@ -109,6 +147,38 @@ final class FileAccessService {
 
     func directoryListing(in folderURL: URL, config: FolderConfig, visited: Set<String>) throws -> DirectoryListing {
         let settings = config.menuSettings
+
+        // Build a cache key that captures everything the listing depends on.
+        let cacheKey = ListingCacheKey(
+            path: folderURL.standardizedFileURL.path,
+            visitedHash: visited.hashValue,
+            sortKey: settings.sortKey,
+            sortDirection: settings.sortDirection,
+            keepFoldersOnTop: settings.keepFoldersOnTop,
+            keepAppsOnTop: settings.keepAppsOnTop,
+            showHiddenFiles: settings.showHiddenFiles,
+            showFileExtensions: settings.showFileExtensions,
+            followAliases: settings.followAliases,
+            followSymlinks: settings.followSymlinks,
+            filterMode: settings.filterMode,
+            maxItems: settings.maxItems,
+            ignoredNames: settings.ignoredNames
+        )
+
+        // Cache hit path: serve if the entry is still within TTL and the
+        // directory's mtime hasn't moved since we cached it. Looking up
+        // mtime is one stat call; cheap compared to re-enumerating.
+        listingCacheLock.lock()
+        let cachedEntry = listingCache[cacheKey]
+        listingCacheLock.unlock()
+
+        if let cachedEntry,
+           Date().timeIntervalSince(cachedEntry.timestamp) < listingCacheTTL {
+            let currentMtime = (try? fileManager.attributesOfItem(atPath: cacheKey.path)[.modificationDate]) as? Date
+            if currentMtime == cachedEntry.dirMtime {
+                return cachedEntry.listing
+            }
+        }
 
         var options: FileManager.DirectoryEnumerationOptions = []
         if !settings.showHiddenFiles {
@@ -184,7 +254,25 @@ final class FileAccessService {
             omittedCount = max(0, totalCount - sorted.count)
         }
 
-        return DirectoryListing(items: limited, omittedCount: omittedCount, totalCount: totalCount)
+        let listing = DirectoryListing(items: limited, omittedCount: omittedCount, totalCount: totalCount)
+
+        // Capture mtime *after* the listing is computed. If anything changed
+        // mid-enumeration, the next call will see a different mtime and recompute.
+        let dirMtime = (try? fileManager.attributesOfItem(atPath: cacheKey.path)[.modificationDate]) as? Date
+
+        let entry = ListingCacheEntry(listing: listing, timestamp: Date(), dirMtime: dirMtime)
+        listingCacheLock.lock()
+        if listingCache.count >= listingCacheLimit, listingCache[cacheKey] == nil {
+            // Simple LRU-by-timestamp: evict the oldest entry. Limit is small (32),
+            // so a linear scan is fine and avoids pulling in a heap.
+            if let oldestKey = listingCache.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
+                listingCache.removeValue(forKey: oldestKey)
+            }
+        }
+        listingCache[cacheKey] = entry
+        listingCacheLock.unlock()
+
+        return listing
     }
 
     private func makeItem(url: URL, config: FolderConfig, visited: Set<String>) -> FileMenuItem? {

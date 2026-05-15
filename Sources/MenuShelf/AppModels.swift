@@ -479,6 +479,68 @@ struct LinkedMenuViewConfig: Codable, Identifiable, Equatable {
     }
 }
 
+struct AppleScriptConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var name: String
+    var source: String
+    var icon: FolderIconConfig?
+    var iconColorHex: String?
+    var quickKey: String?
+    var compiledAt: Date?
+    var compileError: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    static func make(name: String = "Untitled AppleScript") -> AppleScriptConfig {
+        AppleScriptConfig(
+            id: UUID(),
+            name: name,
+            source: "",
+            icon: nil,
+            iconColorHex: nil,
+            quickKey: nil,
+            compiledAt: nil,
+            compileError: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+struct AppleScriptMenuItemConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var appleScriptID: UUID
+    var titleOverride: String?
+    var sectionName: String?
+    var icon: FolderIconConfig?
+    var iconColorHex: String?
+    var quickKey: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    func displayTitle(fallbackName: String) -> String {
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        return fallbackName
+    }
+
+    static func make(appleScriptID: UUID) -> AppleScriptMenuItemConfig {
+        AppleScriptMenuItemConfig(
+            id: UUID(),
+            appleScriptID: appleScriptID,
+            titleOverride: nil,
+            sectionName: nil,
+            icon: nil,
+            iconColorHex: nil,
+            quickKey: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
 struct AppSpecificShortcutGroup: Codable, Identifiable, Equatable {
     var id: UUID
     var appName: String
@@ -505,6 +567,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var linkedShortcutsFolders: [LinkedShortcutsFolderConfig]?
     var linkedMenuViews: [LinkedMenuViewConfig]?
     var appSpecificShortcutGroups: [AppSpecificShortcutGroup]?
+    var appleScriptItems: [AppleScriptMenuItemConfig]?
     var createdAt: Date
     var updatedAt: Date
 
@@ -514,6 +577,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var resolvedLinkedShortcutsFolders: [LinkedShortcutsFolderConfig] { linkedShortcutsFolders ?? [] }
     var resolvedLinkedMenuViews: [LinkedMenuViewConfig] { linkedMenuViews ?? [] }
     var resolvedAppSpecificShortcutGroups: [AppSpecificShortcutGroup] { appSpecificShortcutGroups ?? [] }
+    var resolvedAppleScriptItems: [AppleScriptMenuItemConfig] { appleScriptItems ?? [] }
 
     static func make(title: String = "MenuShelf", defaults: MenuSettings = .defaults, sourceIDs: [UUID] = []) -> MenuViewConfig {
         MenuViewConfig(
@@ -532,6 +596,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             linkedShortcutsFolders: [],
             linkedMenuViews: [],
             appSpecificShortcutGroups: [],
+            appleScriptItems: [],
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -556,9 +621,10 @@ struct AppSettings: Codable, Equatable {
     var topLevelFolderIconSize: FileIconSize?
     var moreMenuBehavior: GlobalMoreMenuBehavior?
     var enableVerboseDiagnostics: Bool?
+    var appleScripts: [AppleScriptConfig]?
 
     static let defaults = AppSettings(
-        schemaVersion: 8,
+        schemaVersion: 9,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -573,7 +639,8 @@ struct AppSettings: Codable, Equatable {
         showTopLevelFolderIcons: true,
         topLevelFolderIconSize: .small,
         moreMenuBehavior: .visibleAtBottom,
-        enableVerboseDiagnostics: false
+        enableVerboseDiagnostics: false,
+        appleScripts: []
     )
 
     var resolvedShowFileAndFolderIcons: Bool { showFileAndFolderIcons ?? true }
@@ -585,6 +652,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedMoreMenuBehavior: GlobalMoreMenuBehavior { moreMenuBehavior ?? .visibleAtBottom }
     var resolvedMenuViews: [MenuViewConfig] { menuViews ?? [] }
     var resolvedEnableVerboseDiagnostics: Bool { enableVerboseDiagnostics ?? false }
+    var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
 }
 
 struct FileMetadata: Equatable {

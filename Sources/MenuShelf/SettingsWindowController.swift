@@ -13,13 +13,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         show()
     }
 
-    func show(selectedFolderID: UUID? = nil, selectedMenuViewID: UUID? = nil) {
+    func show(selectedFolderID: UUID? = nil, selectedMenuViewID: UUID? = nil, selectedAppleScriptID: UUID? = nil) {
         if let selectedMenuViewID {
             store.selectedMenuViewID = selectedMenuViewID
         }
 
         if let selectedFolderID {
             store.selectedFolderID = selectedFolderID
+        }
+
+        if let selectedAppleScriptID {
+            store.selectedAppleScriptID = selectedAppleScriptID
+            NotificationCenter.default.post(name: .menuShelfFocusAppleScripts, object: selectedAppleScriptID)
         }
 
         if window == nil {
@@ -51,4 +56,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         store.flushPendingSave()
     }
+}
+
+
+extension Notification.Name {
+    /// Posted when the settings window should switch to the AppleScripts pane
+    /// and focus a specific script. Object is the target UUID.
+    static let menuShelfFocusAppleScripts = Notification.Name("menuShelfFocusAppleScripts")
 }

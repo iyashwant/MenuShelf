@@ -33,6 +33,8 @@
 	<string>26.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 MenuShelf.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>MenuShelf runs the AppleScripts you author in Settings on your behalf. Granting access lets your scripts control other apps.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 </dict>

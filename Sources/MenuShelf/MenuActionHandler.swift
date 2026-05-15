@@ -41,6 +41,7 @@ enum MenuActionKind {
     case openShortcutForEditing
     case refreshShortcuts
     case runScript
+    case runAppleScript
 }
 
 final class MenuAction: NSObject {
@@ -57,6 +58,7 @@ final class MenuAction: NSObject {
     let shortcutName: String?
     let shortcutTextInput: String?
     let linkedMenuViewID: UUID?
+    let appleScriptID: UUID?
 
     init(
         kind: MenuActionKind,
@@ -71,7 +73,8 @@ final class MenuAction: NSObject {
         shortcutID: String? = nil,
         shortcutName: String? = nil,
         shortcutTextInput: String? = nil,
-        linkedMenuViewID: UUID? = nil
+        linkedMenuViewID: UUID? = nil,
+        appleScriptID: UUID? = nil
     ) {
         self.kind = kind
         self.url = url
@@ -86,6 +89,7 @@ final class MenuAction: NSObject {
         self.shortcutName = shortcutName
         self.shortcutTextInput = shortcutTextInput
         self.linkedMenuViewID = linkedMenuViewID
+        self.appleScriptID = appleScriptID
     }
 }
 
@@ -94,14 +98,25 @@ final class MenuAction: NSObject {
     private let fileAccessService: FileAccessService
     private let metadataService: MetadataService
     private let shortcutsService: ShortcutsService
+    let appleScriptService: AppleScriptService
+    private(set) lazy var appleScriptCoordinator: AppleScriptRunCoordinator = AppleScriptRunCoordinator(
+        store: store,
+        service: appleScriptService,
+        actionHandler: self
+    )
     private var temporarySharingWindow: NSWindow?
     private let sharingPickerDelegate = SharingPickerCloseDelegate()
 
-    init(store: PreferencesStore, fileAccessService: FileAccessService, metadataService: MetadataService, shortcutsService: ShortcutsService) {
+    init(store: PreferencesStore,
+         fileAccessService: FileAccessService,
+         metadataService: MetadataService,
+         shortcutsService: ShortcutsService,
+         appleScriptService: AppleScriptService) {
         self.store = store
         self.fileAccessService = fileAccessService
         self.metadataService = metadataService
         self.shortcutsService = shortcutsService
+        self.appleScriptService = appleScriptService
     }
 
     dynamic func handleMenuAction(_ sender: Any?) {
@@ -369,6 +384,10 @@ final class MenuAction: NSObject {
                     }
                 }
             }
+
+        case .runAppleScript:
+            guard let scriptID = action.appleScriptID else { return }
+            appleScriptCoordinator.run(scriptID: scriptID, fromMenuViewID: action.menuViewID)
         }
     }
 
@@ -646,6 +665,98 @@ final class MenuAction: NSObject {
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         store.removeMenuView(id: id)
+    }
+
+    // MARK: - AppleScript alerts
+
+    func showAppleScriptCompileAlert(scriptID: UUID, error: AppleScriptCompileError, scriptName: String) {
+        let truncatedName = String(scriptName.prefix(256))
+        let alert = NSAlert()
+        alert.messageText = "Compile error in \(truncatedName)"
+        alert.informativeText = composeCompileMessage(error: error)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Edit Script")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        AppContainer.shared.settingsWindowController.show(selectedAppleScriptID: scriptID)
+    }
+
+    func showAppleScriptExecutionAlert(error: AppleScriptExecutionError, scriptName: String) {
+        let truncatedName = String(scriptName.prefix(256))
+        let alert = NSAlert()
+        alert.messageText = "AppleScript failed: \(truncatedName)"
+        alert.informativeText = error.message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Copy Details")
+        alert.addButton(withTitle: "OK")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        copyExecutionErrorDictionary(error)
+    }
+
+    func showAppleScriptPermissionAlert(error: AppleScriptExecutionError, scriptName: String) {
+        let truncatedName = String(scriptName.prefix(256))
+        let target = error.appName ?? "another application"
+        let alert = NSAlert()
+        alert.messageText = "Automation permission required"
+        alert.informativeText = "MenuShelf needs permission to control \(target) to run \(truncatedName). Open System Settings → Privacy & Security → Automation to grant access. \(error.message)"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func showAppleScriptMissingAlert(scriptID: UUID) {
+        let alert = NSAlert()
+        alert.messageText = "AppleScript no longer exists"
+        alert.informativeText = "The AppleScript with id \(scriptID.uuidString) was removed before it could run."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        _ = alert.runModal()
+    }
+
+    func showAppleScriptTimeoutAlert(scriptName: String, elapsedMs: Int) {
+        let truncatedName = String(scriptName.prefix(256))
+        let alert = NSAlert()
+        alert.messageText = "AppleScript timed out: \(truncatedName)"
+        alert.informativeText = "Script did not return within the timeout window (\(elapsedMs) ms)."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        _ = alert.runModal()
+    }
+
+    private func composeCompileMessage(error: AppleScriptCompileError) -> String {
+        if error.isTimeout {
+            return "Compilation timed out after 5 seconds."
+        }
+        if error.isOversized {
+            return "Source is too large to compile (max 100,000 characters)."
+        }
+        if error.isEmpty {
+            return "Source is empty."
+        }
+        if let line = error.line {
+            return "Line \(line): \(error.message)"
+        }
+        return error.message
+    }
+
+    private func copyExecutionErrorDictionary(_ error: AppleScriptExecutionError) {
+        let lines = error.rawDictionary
+            .sorted(by: { $0.key < $1.key })
+            .map { "\($0.key): \($0.value)" }
+        let body = lines.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(body, forType: .string)
+        DiagnosticsLogger.shared.log("Copied AppleScript error details (\(body.count) chars)")
     }
 }
 

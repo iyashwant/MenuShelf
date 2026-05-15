@@ -11,11 +11,13 @@ final class PreferencesStore: ObservableObject {
     @Published var selectedMenuViewID: UUID?
     @Published var selectedMenuViewItemID: UUID?
     @Published var selectedFolderID: UUID?
+    @Published var selectedAppleScriptID: UUID?
     @Published var lastErrorMessage: String?
     @Published var availableShortcuts: [ShortcutInfo] = []
     @Published var availableShortcutFolders: [ShortcutsFolderInfo] = []
     @Published var shortcutsByFolder: [String: [ShortcutInfo]] = [:]
     @Published var isRefreshingShortcuts = false
+    @Published var lastAppleScriptRuns: [UUID: AppleScriptRunRecord] = [:]
 
     private let settingsURL: URL
     private let supportURL: URL
@@ -501,6 +503,166 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
+    // MARK: - AppleScripts
+
+    func appleScript(id: UUID) -> AppleScriptConfig? {
+        settings.resolvedAppleScripts.first { $0.id == id }
+    }
+
+    @discardableResult
+    func addAppleScript() -> AppleScriptConfig {
+        var scripts = settings.resolvedAppleScripts
+        let config = AppleScriptConfig.make()
+        scripts.append(config)
+        settings.appleScripts = scripts
+        selectedAppleScriptID = config.id
+        DiagnosticsLogger.shared.log("Created AppleScript \(config.id) (\(config.name))")
+        return config
+    }
+
+    func updateAppleScript(_ config: AppleScriptConfig) {
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == config.id }) else { return }
+        var updated = config
+        updated.updatedAt = Date()
+        scripts[index] = updated
+        settings.appleScripts = scripts
+    }
+
+    /// Renames an AppleScript. Trims whitespace; rejects empty or >100-char
+    /// names and surfaces an inline error without mutating storage.
+    func renameAppleScript(id: UUID, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 100 else {
+            DiagnosticsLogger.shared.log("Rejected AppleScript rename: invalid length (\(trimmed.count))")
+            showError("AppleScript names must be between 1 and 100 characters.")
+            return
+        }
+
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == id }) else { return }
+        scripts[index].name = trimmed
+        scripts[index].updatedAt = Date()
+        settings.appleScripts = scripts
+    }
+
+    /// Replaces source text. Rejects sources larger than 1,000,000 characters.
+    /// Resets the cached compile state because the script is now dirty.
+    func updateAppleScriptSource(id: UUID, source: String) {
+        guard source.count <= 1_000_000 else {
+            DiagnosticsLogger.shared.log("Rejected AppleScript source update: oversized (\(source.count) chars)")
+            showError("AppleScript source cannot exceed 1,000,000 characters.")
+            return
+        }
+
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == id }) else { return }
+        scripts[index].source = source
+        scripts[index].compiledAt = nil
+        scripts[index].compileError = nil
+        scripts[index].updatedAt = Date()
+        settings.appleScripts = scripts
+    }
+
+    func setAppleScriptCompileState(id: UUID, compiledAt: Date?, compileError: String?) {
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == id }) else { return }
+        scripts[index].compiledAt = compiledAt
+        scripts[index].compileError = compileError
+        scripts[index].updatedAt = Date()
+        settings.appleScripts = scripts
+    }
+
+    func setAppleScriptIcon(id: UUID, icon: FolderIconConfig?, colorHex: String?) {
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == id }) else { return }
+        scripts[index].icon = icon
+        scripts[index].iconColorHex = colorHex
+        scripts[index].updatedAt = Date()
+        settings.appleScripts = scripts
+    }
+
+    func duplicateAppleScript(id: UUID) {
+        guard var copy = appleScript(id: id) else { return }
+        copy.id = UUID()
+        copy.name = nextCopyName(
+            base: copy.name,
+            existing: settings.resolvedAppleScripts.map(\.name)
+        )
+        copy.compiledAt = nil
+        copy.compileError = nil
+        copy.createdAt = Date()
+        copy.updatedAt = Date()
+
+        var scripts = settings.resolvedAppleScripts
+        scripts.append(copy)
+        settings.appleScripts = scripts
+        selectedAppleScriptID = copy.id
+    }
+
+    func deleteAppleScript(id: UUID) {
+        var scripts = settings.resolvedAppleScripts
+        scripts.removeAll { $0.id == id }
+        settings.appleScripts = scripts
+
+        // Cascade: drop every menu item that referenced this script.
+        var views = settings.resolvedMenuViews
+        var anyChanged = false
+        for vi in views.indices {
+            let before = views[vi].resolvedAppleScriptItems.count
+            let filtered = views[vi].resolvedAppleScriptItems.filter { $0.appleScriptID != id }
+            if filtered.count != before {
+                views[vi].appleScriptItems = filtered
+                views[vi].updatedAt = Date()
+                anyChanged = true
+            }
+        }
+        if anyChanged {
+            settings.menuViews = views
+        }
+
+        if selectedAppleScriptID == id {
+            selectedAppleScriptID = scripts.first?.id
+        }
+
+        lastAppleScriptRuns.removeValue(forKey: id)
+    }
+
+    /// Append an AppleScriptMenuItemConfig to the target menu view (creating one
+    /// if needed). Skips when the script is already attached.
+    func attachAppleScript(_ scriptID: UUID, toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "AppleScripts", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard let index = views.firstIndex(where: { $0.id == targetID }) else { return }
+        var items = views[index].resolvedAppleScriptItems
+        guard !items.contains(where: { $0.appleScriptID == scriptID }) else {
+            settings.menuViews = views
+            return
+        }
+
+        items.append(AppleScriptMenuItemConfig.make(appleScriptID: scriptID))
+        views[index].appleScriptItems = items
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+    }
+
+    func recordAppleScriptRun(_ record: AppleScriptRunRecord) {
+        lastAppleScriptRuns[record.scriptID] = record
+    }
+
+    // MARK: - Sources
+
     func attachSource(_ sourceID: UUID, toMenuViewID menuViewID: UUID?) {
         var views = settings.resolvedMenuViews
         let targetID: UUID
@@ -846,6 +1008,17 @@ final class PreferencesStore: ObservableObject {
             settings.enableVerboseDiagnostics = settings.enableVerboseDiagnostics ?? false
         }
 
+        if settings.schemaVersion < 9 {
+            settings.schemaVersion = 9
+            settings.appleScripts = settings.appleScripts ?? []
+            if var views = settings.menuViews {
+                for index in views.indices {
+                    views[index].appleScriptItems = views[index].resolvedAppleScriptItems
+                }
+                settings.menuViews = views
+            }
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -853,6 +1026,7 @@ final class PreferencesStore: ObservableObject {
         settings.showTopLevelFolderIcons = settings.showTopLevelFolderIcons ?? true
         settings.topLevelFolderIconSize = settings.topLevelFolderIconSize ?? .small
         settings.moreMenuBehavior = settings.moreMenuBehavior ?? .visibleAtBottom
+        settings.appleScripts = settings.appleScripts ?? []
         applyMenuSettingsDefaults(&settings.defaultMenuSettings)
 
         for index in settings.folders.indices {
@@ -880,6 +1054,7 @@ final class PreferencesStore: ObservableObject {
                 linkedView.menuViewID != views[index].id && views.contains { $0.id == linkedView.menuViewID }
             }
             views[index].appSpecificShortcutGroups = views[index].appSpecificShortcutGroups ?? []
+            views[index].appleScriptItems = views[index].resolvedAppleScriptItems
             views[index].items = views[index].items.filter { item in
                 settings.folders.contains { $0.id == item.sourceID }
             }

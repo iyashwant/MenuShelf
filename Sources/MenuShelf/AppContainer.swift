@@ -7,6 +7,7 @@ final class AppContainer {
     let shortcutsService: ShortcutsService
     let fileAccessService: FileAccessService
     let metadataService: MetadataService
+    let appleScriptService: AppleScriptService
     let actionHandler: MenuActionHandler
     let menuBuilder: MenuBuilder
     let presentationCoordinator: MenuPresentationCoordinator
@@ -19,13 +20,15 @@ final class AppContainer {
     private init() {
         shortcutsService = ShortcutsService()
         fileAccessService = FileAccessService()
+        appleScriptService = AppleScriptService()
         store = PreferencesStore(shortcutsService: shortcutsService, fileAccessService: fileAccessService)
         metadataService = MetadataService()
         actionHandler = MenuActionHandler(
             store: store,
             fileAccessService: fileAccessService,
             metadataService: metadataService,
-            shortcutsService: shortcutsService
+            shortcutsService: shortcutsService,
+            appleScriptService: appleScriptService
         )
         menuBuilder = MenuBuilder(
             store: store,

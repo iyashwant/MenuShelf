@@ -7,6 +7,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case sources
     case menuDefaults
     case shortcuts
+    case appleScripts
     case advanced
 
     var id: String { rawValue }
@@ -18,18 +19,24 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .sources: "Sources"
         case .menuDefaults: "Menu Defaults"
         case .shortcuts: "Shortcuts"
+        case .appleScripts: "AppleScripts"
         case .advanced: "Advanced"
         }
     }
 
     var symbolName: String {
         switch self {
-        case .general: "gearshape"
-        case .menuViews: "menubar.rectangle"
-        case .sources: "externaldrive"
-        case .menuDefaults: "slider.horizontal.3"
-        case .shortcuts: "keyboard"
-        case .advanced: "wrench.and.screwdriver"
+        case .general: return "gearshape"
+        case .menuViews: return "menubar.rectangle"
+        case .sources: return "externaldrive"
+        case .menuDefaults: return "slider.horizontal.3"
+        case .shortcuts: return "keyboard"
+        case .appleScripts:
+            if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil {
+                return "applescript"
+            }
+            return "scroll"
+        case .advanced: return "wrench.and.screwdriver"
         }
     }
 }
@@ -58,12 +65,17 @@ struct SettingsView: View {
                     MenuDefaultsSettingsView()
                 case .shortcuts:
                     ShortcutsSettingsView()
+                case .appleScripts:
+                    AppleScriptSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.regularMaterial)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusAppleScripts)) { _ in
+            section = .appleScripts
         }
     }
 }
@@ -200,7 +212,7 @@ private struct MenuViewsSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $store.selectedMenuViewID) {
                     ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count)
+                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count)
                             .tag(Optional(view.id))
                             .contextMenu {
                                 Button("Duplicate") {
@@ -363,6 +375,7 @@ private enum UnifiedContentItem: Identifiable {
     case shortcut(ShortcutMenuItemConfig)
     case linkedMenuView(LinkedMenuViewConfig)
     case linkedShortcutsFolder(LinkedShortcutsFolderConfig)
+    case appleScript(AppleScriptMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -370,15 +383,21 @@ private enum UnifiedContentItem: Identifiable {
         case .shortcut(let item): item.id
         case .linkedMenuView(let item): item.id
         case .linkedShortcutsFolder(let item): item.id
+        case .appleScript(let item): item.id
         }
     }
 
     var kindIcon: String {
         switch self {
-        case .menuViewItem: "folder"
-        case .shortcut: "bolt.fill"
-        case .linkedMenuView: "menubar.rectangle"
-        case .linkedShortcutsFolder: "folder.badge.gearshape"
+        case .menuViewItem: return "folder"
+        case .shortcut: return "bolt.fill"
+        case .linkedMenuView: return "menubar.rectangle"
+        case .linkedShortcutsFolder: return "folder.badge.gearshape"
+        case .appleScript:
+            if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil {
+                return "applescript"
+            }
+            return "scroll"
         }
     }
 
@@ -388,6 +407,7 @@ private enum UnifiedContentItem: Identifiable {
         case .shortcut: .orange
         case .linkedMenuView: .blue
         case .linkedShortcutsFolder: .indigo
+        case .appleScript: .purple
         }
     }
 }
@@ -560,6 +580,24 @@ private struct MenuViewDetailView: View {
                             } label: {
                                 Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
                             }
+
+                            Divider()
+
+                            Menu {
+                                let attached = Set(view.resolvedAppleScriptItems.map(\.appleScriptID))
+                                let candidates = store.settings.resolvedAppleScripts.filter { !attached.contains($0.id) }
+                                if candidates.isEmpty {
+                                    Text("No AppleScripts available").disabled(true)
+                                } else {
+                                    ForEach(candidates) { script in
+                                        Button(script.name) {
+                                            store.attachAppleScript(script.id, toMenuViewID: view.id)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Add AppleScript", systemImage: appleScriptMenuSymbol)
+                            }
                         } label: {
                             Label("Add", systemImage: "plus")
                         }
@@ -655,7 +693,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count
     }
 
     private var unifiedItems: [UnifiedContentItem] {
@@ -663,8 +701,16 @@ private struct MenuViewDetailView: View {
         items.append(contentsOf: view.items.map { .menuViewItem($0) })
         items.append(contentsOf: view.resolvedLinkedMenuViews.map { .linkedMenuView($0) })
         items.append(contentsOf: view.resolvedShortcutItems.map { .shortcut($0) })
+        items.append(contentsOf: view.resolvedAppleScriptItems.map { .appleScript($0) })
         items.append(contentsOf: view.resolvedLinkedShortcutsFolders.map { .linkedShortcutsFolder($0) })
         return items
+    }
+
+    private var appleScriptMenuSymbol: String {
+        if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil {
+            return "applescript"
+        }
+        return "scroll"
     }
 
     private let listRowHeight: CGFloat = 44
@@ -692,6 +738,8 @@ private struct MenuViewDetailView: View {
             view.items.removeAll { $0.id == id }
         } else if view.resolvedShortcutItems.contains(where: { $0.id == id }) {
             removeShortcutItem(id: id)
+        } else if view.resolvedAppleScriptItems.contains(where: { $0.id == id }) {
+            removeAppleScriptItem(id: id)
         } else if view.resolvedLinkedMenuViews.contains(where: { $0.id == id }) {
             removeLinkedMenuView(id: id)
         } else if view.resolvedLinkedShortcutsFolders.contains(where: { $0.id == id }) {
@@ -708,6 +756,7 @@ private struct MenuViewDetailView: View {
         let sourcesEnd = view.items.count
         let linkedViewsEnd = sourcesEnd + view.resolvedLinkedMenuViews.count
         let shortcutsEnd = linkedViewsEnd + view.resolvedShortcutItems.count
+        let appleScriptsEnd = shortcutsEnd + view.resolvedAppleScriptItems.count
 
         let sourceItem = items[sourceIndex]
         var clampedDest = destination
@@ -722,8 +771,11 @@ private struct MenuViewDetailView: View {
         case .shortcut:
             if destination < linkedViewsEnd { clampedDest = linkedViewsEnd }
             if destination > shortcutsEnd { clampedDest = shortcutsEnd }
-        case .linkedShortcutsFolder:
+        case .appleScript:
             if destination < shortcutsEnd { clampedDest = shortcutsEnd }
+            if destination > appleScriptsEnd { clampedDest = appleScriptsEnd }
+        case .linkedShortcutsFolder:
+            if destination < appleScriptsEnd { clampedDest = appleScriptsEnd }
             if destination > items.count { clampedDest = items.count }
         }
 
@@ -748,9 +800,15 @@ private struct MenuViewDetailView: View {
             var arr = view.resolvedShortcutItems
             arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
             view.shortcutItems = arr
-        case .linkedShortcutsFolder:
+        case .appleScript:
             sourceGroupOffset = sourceIndex - shortcutsEnd
             groupOffset = clampedDest - shortcutsEnd
+            var arr = view.resolvedAppleScriptItems
+            arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
+            view.appleScriptItems = arr
+        case .linkedShortcutsFolder:
+            sourceGroupOffset = sourceIndex - appleScriptsEnd
+            groupOffset = clampedDest - appleScriptsEnd
             var arr = view.resolvedLinkedShortcutsFolders
             arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
             view.linkedShortcutsFolders = arr
@@ -828,6 +886,17 @@ private struct MenuViewDetailView: View {
                     }
                 }
             }
+        case .appleScript:
+            if let binding = appleScriptItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Edit AppleScript Item")
+                        .font(.headline)
+                    AppleScriptMenuItemEditor(item: binding) {
+                        removeContentItem(id: item.id)
+                        editingItem = nil
+                    }
+                }
+            }
         }
     }
 
@@ -876,10 +945,31 @@ private struct MenuViewDetailView: View {
         )
     }
 
+    private func appleScriptItemBinding(for id: UUID) -> Binding<AppleScriptMenuItemConfig>? {
+        guard let index = view.resolvedAppleScriptItems.firstIndex(where: { $0.id == id }) else { return nil }
+
+        return Binding(
+            get: { view.resolvedAppleScriptItems[index] },
+            set: { updated in
+                var items = view.resolvedAppleScriptItems
+                var copy = updated
+                copy.updatedAt = Date()
+                items[index] = copy
+                view.appleScriptItems = items
+            }
+        )
+    }
+
     private func removeShortcutItem(id: UUID) {
         var items = view.resolvedShortcutItems
         items.removeAll { $0.id == id }
         view.shortcutItems = items
+    }
+
+    private func removeAppleScriptItem(id: UUID) {
+        var items = view.resolvedAppleScriptItems
+        items.removeAll { $0.id == id }
+        view.appleScriptItems = items
     }
 
     private func removeLinkedMenuView(id: UUID) {
@@ -932,6 +1022,9 @@ private struct UnifiedContentItemRow: View {
             return linkedView.displayTitle(fallbackTitle: store.menuView(id: linkedView.menuViewID)?.title ?? "Missing View")
         case .linkedShortcutsFolder(let folder):
             return folder.folderName
+        case .appleScript(let script):
+            let fallback = store.appleScript(id: script.appleScriptID)?.name ?? "Missing AppleScript"
+            return script.displayTitle(fallbackName: fallback)
         }
     }
 
@@ -954,6 +1047,11 @@ private struct UnifiedContentItemRow: View {
             return "Linked View"
         case .linkedShortcutsFolder(let folder):
             return folder.shortcutFolderIdentifier ?? "Shortcuts Folder"
+        case .appleScript(let script):
+            if let section = script.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "AppleScript"
         }
     }
 }
@@ -1181,6 +1279,84 @@ private struct LinkedShortcutsFolderEditor: View {
         }
         .padding(10)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+struct AppleScriptMenuItemEditor: View {
+    @Binding var item: AppleScriptMenuItemConfig
+    let onRemove: () -> Void
+    @EnvironmentObject private var store: PreferencesStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: appleScriptSymbol)
+                    .foregroundStyle(.purple)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(scriptName)
+                        .lineLimit(1)
+                    Text("AppleScript")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Open in Editor") {
+                    AppContainer.shared.settingsWindowController.show(selectedAppleScriptID: item.appleScriptID)
+                }
+
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+
+            HStack {
+                TextField("Title override", text: Binding(
+                    get: { item.titleOverride ?? "" },
+                    set: { item.titleOverride = trimmedOrNil($0, maxLength: 200) }
+                ))
+
+                TextField("Section", text: Binding(
+                    get: { item.sectionName ?? "" },
+                    set: { item.sectionName = trimmedOrNil($0, maxLength: 100) }
+                ))
+
+                TextField("Quick key", text: Binding(
+                    get: { item.quickKey ?? "" },
+                    set: { item.quickKey = normalizedQuickKey($0) }
+                ))
+                .frame(width: 82)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var scriptName: String {
+        let fallback = store.appleScript(id: item.appleScriptID)?.name ?? "Missing AppleScript"
+        return item.displayTitle(fallbackName: fallback)
+    }
+
+    private var appleScriptSymbol: String {
+        if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil { return "applescript" }
+        if NSImage(systemSymbolName: "scroll", accessibilityDescription: nil) != nil { return "scroll" }
+        return "doc.text"
+    }
+
+    private func trimmedOrNil(_ value: String, maxLength: Int) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        return String(trimmed.prefix(maxLength))
+    }
+
+    private func normalizedQuickKey(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let first = trimmed.first else { return nil }
+        let allowed = "123456789abcdefghijklmnopqrstuvwxyz"
+        return allowed.contains(first) ? String(first) : nil
     }
 }
 

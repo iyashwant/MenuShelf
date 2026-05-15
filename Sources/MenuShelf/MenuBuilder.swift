@@ -93,6 +93,7 @@ final class MenuBuilder {
             || !view.resolvedLinkedMenuViews.isEmpty
             || !view.resolvedShortcutItems.isEmpty
             || !view.resolvedLinkedShortcutsFolders.isEmpty
+            || !view.resolvedAppleScriptItems.isEmpty
 
         if showManagementAtTop {
             menu.addItem(managementMenuItem(for: view))
@@ -119,19 +120,32 @@ final class MenuBuilder {
             }
 
             if !view.items.isEmpty,
-               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty) {
+               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty) {
                 menu.addItem(.separator())
                 currentSection = nil
             }
 
             addLinkedMenuViews(view.resolvedLinkedMenuViews, to: menu, currentSection: &currentSection, visitedMenuViewIDs: visitedMenuViewIDs)
             if !view.resolvedLinkedMenuViews.isEmpty,
-               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty),
+               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addShortcutItems(view.resolvedShortcutItems, to: menu, currentSection: &currentSection)
+            if !view.resolvedShortcutItems.isEmpty,
+               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty),
+               menu.items.last?.isSeparatorItem == false {
+                menu.addItem(.separator())
+                currentSection = nil
+            }
+            addAppleScriptItems(view.resolvedAppleScriptItems, to: menu, currentSection: &currentSection, menuViewID: view.id)
+            if !view.resolvedAppleScriptItems.isEmpty,
+               !view.resolvedLinkedShortcutsFolders.isEmpty,
+               menu.items.last?.isSeparatorItem == false {
+                menu.addItem(.separator())
+                currentSection = nil
+            }
             addLinkedShortcutFolders(view.resolvedLinkedShortcutsFolders, to: menu, currentSection: &currentSection)
         }
 
@@ -148,7 +162,8 @@ final class MenuBuilder {
         guard layout != .sourceList else { return nil }
         guard view.resolvedLinkedMenuViews.isEmpty,
               view.resolvedShortcutItems.isEmpty,
-              view.resolvedLinkedShortcutsFolders.isEmpty else {
+              view.resolvedLinkedShortcutsFolders.isEmpty,
+              view.resolvedAppleScriptItems.isEmpty else {
             return nil
         }
         guard view.items.count == 1,
@@ -641,6 +656,66 @@ final class MenuBuilder {
         return item
     }
 
+    private func addAppleScriptItems(_ items: [AppleScriptMenuItemConfig], to menu: NSMenu, currentSection: inout String?, menuViewID: UUID) {
+        for item in items {
+            let trimmedSection = item.sectionName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let section = trimmedSection, !section.isEmpty, section != currentSection {
+                if currentSection != nil || menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                }
+                addDisabled(section, to: menu)
+                currentSection = section
+            }
+
+            guard let script = store.appleScript(id: item.appleScriptID) else {
+                let missing = NSMenuItem(title: "Missing AppleScript", action: nil, keyEquivalent: "")
+                missing.toolTip = "The referenced AppleScript no longer exists."
+                missing.isEnabled = false
+                menu.addItem(missing)
+                continue
+            }
+
+            menu.addItem(appleScriptMenuItem(for: item, script: script, menuViewID: menuViewID))
+        }
+    }
+
+    private func appleScriptMenuItem(for item: AppleScriptMenuItemConfig, script: AppleScriptConfig, menuViewID: UUID) -> NSMenuItem {
+        let title = item.displayTitle(fallbackName: script.name)
+        let menuItem = actionItem(
+            title,
+            kind: .runAppleScript,
+            menuViewID: menuViewID,
+            appleScriptID: script.id
+        )
+        menuItem.image = icon(for: item, fallbackScript: script, size: 16)
+        applyQuickKey(item.quickKey, to: menuItem)
+        return menuItem
+    }
+
+    private func applyQuickKey(_ value: String?, to menuItem: NSMenuItem) {
+        guard let raw = value, !raw.isEmpty else {
+            menuItem.keyEquivalent = ""
+            return
+        }
+        let scalars = Array(raw.unicodeScalars)
+        guard scalars.count == 1 else {
+            menuItem.keyEquivalent = ""
+            return
+        }
+        let scalar = scalars[0]
+        let category = scalar.properties.generalCategory
+        let disallowed: Set<Unicode.GeneralCategory> = [
+            .control, .format, .surrogate, .privateUse, .unassigned,
+            .spaceSeparator, .lineSeparator, .paragraphSeparator
+        ]
+        guard !disallowed.contains(category) else {
+            menuItem.keyEquivalent = ""
+            return
+        }
+        menuItem.keyEquivalent = String(scalar).lowercased()
+        menuItem.keyEquivalentModifierMask = []
+    }
+
     private func makeFileSubmenu(for item: FileMenuItem, config: FolderConfig) -> NSMenu {
         let menu = NSMenu(title: item.displayName)
         menu.autoenablesItems = false
@@ -896,7 +971,8 @@ final class MenuBuilder {
         shortcutID: String? = nil,
         shortcutName: String? = nil,
         shortcutTextInput: String? = nil,
-        linkedMenuViewID: UUID? = nil
+        linkedMenuViewID: UUID? = nil,
+        appleScriptID: UUID? = nil
     ) -> NSMenuItem {
         let item: NSMenuItem
 
@@ -921,7 +997,8 @@ final class MenuBuilder {
             shortcutID: shortcutID,
             shortcutName: shortcutName,
             shortcutTextInput: shortcutTextInput,
-            linkedMenuViewID: linkedMenuViewID
+            linkedMenuViewID: linkedMenuViewID,
+            appleScriptID: appleScriptID
         )
         item.isEnabled = true
         return item
@@ -1000,6 +1077,39 @@ final class MenuBuilder {
             updatedAt: shortcut.updatedAt
         )
         return icon(for: pseudoSource, size: size)
+    }
+
+    func icon(for item: AppleScriptMenuItemConfig, fallbackScript: AppleScriptConfig, size: CGFloat) -> NSImage? {
+        let resolvedIcon = item.icon ?? fallbackScript.icon ?? .systemSymbol(name: appleScriptDefaultSymbolName(), tint: nil)
+        let pseudoSource = FolderConfig(
+            id: item.id,
+            displayName: item.displayTitle(fallbackName: fallbackScript.name),
+            bookmarkData: Data(),
+            originalPathHint: "",
+            itemKind: .folder,
+            isVisible: true,
+            displayModeOverride: nil,
+            icon: resolvedIcon,
+            menuBarStyle: .iconOnly,
+            menuSettings: .defaults,
+            shortcut: .disabled,
+            openBehavior: .browseFoldersAsSubmenus,
+            iconColorHex: item.iconColorHex ?? fallbackScript.iconColorHex,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+        )
+        return icon(for: pseudoSource, size: size)
+    }
+
+    private func appleScriptDefaultSymbolName() -> String {
+        if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil {
+            return "applescript"
+        }
+        if NSImage(systemSymbolName: "scroll", accessibilityDescription: nil) != nil {
+            return "scroll"
+        }
+        DiagnosticsLogger.shared.log("AppleScript SF Symbol fallback unavailable on this system")
+        return "doc.text"
     }
 
     func icon(for folder: LinkedShortcutsFolderConfig, size: CGFloat) -> NSImage? {

@@ -236,10 +236,18 @@ final class StatusItemManager: NSObject {
         }
     }
 
+    /// Toggle a "running" appearance on the status item for a menu view, used
+    /// while an AppleScript is executing. Tints the icon with the system accent
+    /// color; clears the tint on completion.
+    func setRunningIndicator(menuViewID: UUID, isRunning: Bool) {
+        guard let context = statusItems.first(where: { $0.menuViewID == menuViewID }),
+              let button = context.item.button else { return }
+        button.contentTintColor = isRunning ? NSColor.controlAccentColor : nil
+    }
+
     private func publishStatusItems() {
         var menuViews: [UUID: NSStatusItem] = [:]
         var fallback: NSStatusItem?
-
         for context in statusItems {
             if let menuViewID = context.menuViewID {
                 menuViews[menuViewID] = context.item
