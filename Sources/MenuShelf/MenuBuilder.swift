@@ -51,22 +51,6 @@ final class FolderMenuDelegate: NSObject, NSMenuDelegate {
     }
 }
 
-final class BrowserFlipMenuDelegate: NSObject, NSMenuDelegate {
-    weak var builder: MenuBuilder?
-
-    init(builder: MenuBuilder) {
-        self.builder = builder
-    }
-
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        builder?.populateBrowserFlipMenu(menu)
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        builder?.store.refreshBrowsers()
-    }
-}
-
 /// Delegate that lazily repopulates a menu view's top-level NSMenu when it is
 /// about to be opened. Without this, the status item caches a stale snapshot
 /// of the view's contents until the next status item rebuild (which only
@@ -470,83 +454,6 @@ final class MenuBuilder {
         return item
     }
 
-    private func browserFlipMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Default Browser", action: nil, keyEquivalent: "")
-        let submenu = NSMenu(title: "Default Browser")
-        submenu.autoenablesItems = false
-        let delegate = BrowserFlipMenuDelegate(builder: self)
-        submenu.delegate = delegate
-        MenuDelegateRetainer.shared.retain(delegate, for: submenu)
-        item.submenu = submenu
-        return item
-    }
-
-    func populateBrowserFlipMenu(_ menu: NSMenu) {
-        menu.removeAllItems()
-        menu.autoenablesItems = false
-
-        store.currentDefaultBrowserID = DefaultBrowserService.shared.currentDefaultBrowserID()
-
-        let visibleBrowsers = store.discoveredBrowsers
-            .filter { $0.isVisible }
-            .sorted { $0.sortOrder < $1.sortOrder }
-
-        // "Ask Everytime" is MenuShelf itself acting as the default browser.
-        // Selecting it sets MenuShelf's own bundle ID as the default http(s)
-        // handler — link clicks then trigger MenuShelfPickerController. This
-        // is independent of Browser Flip.app being installed; the picker
-        // code lives inside MenuShelf.
-        let askEverytime = MenuBuilder.askEverytimeBrowser()
-        let askItem = actionItem(
-            "Ask Everytime",
-            kind: .switchBrowser,
-            browserInfo: askEverytime
-        )
-        askItem.keyEquivalent = "0"
-        let askIcon = NSWorkspace.shared.icon(forFile: askEverytime.appURL.path)
-        askIcon.size = NSSize(width: 16, height: 16)
-        askItem.image = askIcon
-        askItem.state = (askEverytime.id == store.currentDefaultBrowserID) ? .on : .off
-        menu.addItem(askItem)
-
-        let nonSelfVisible = visibleBrowsers.filter { $0.id != askEverytime.id }
-
-        if !nonSelfVisible.isEmpty {
-            menu.addItem(.separator())
-            for (index, browser) in nonSelfVisible.prefix(9).enumerated() {
-                let browserItem = actionItem(
-                    browser.name,
-                    kind: .switchBrowser,
-                    browserInfo: browser
-                )
-                browserItem.keyEquivalent = String(index + 1)
-                let icon = NSWorkspace.shared.icon(forFile: browser.appURL.path)
-                icon.size = NSSize(width: 16, height: 16)
-                browserItem.image = icon
-                browserItem.state = (browser.id == store.currentDefaultBrowserID) ? .on : .off
-                menu.addItem(browserItem)
-            }
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(actionItem("Refresh Browsers", kind: .openSettings))
-    }
-
-    /// Returns a synthetic BrowserInfo for MenuShelf itself. Selecting this
-    /// from the menu sets MenuShelf as the default http(s) handler, which
-    /// triggers MenuShelfPickerController on every link click.
-    static func askEverytimeBrowser() -> BrowserInfo {
-        let bundleID = Bundle.main.bundleIdentifier ?? "app.menushelf.MenuShelf2"
-        let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-            ?? Bundle.main.bundleURL
-        return BrowserInfo(id: bundleID, name: "Ask Everytime", appURL: appURL)
-    }
-
-    /// Whether the given browser is MenuShelf itself in "Ask Everytime" mode.
-    static func isAskEverytime(_ browser: BrowserInfo) -> Bool {
-        return browser.id == (Bundle.main.bundleIdentifier ?? "app.menushelf.MenuShelf2")
-    }
-
     private func addExistingMenuViewMenuItem(for view: MenuViewConfig) -> NSMenuItem {
         let item = NSMenuItem(title: "Add Existing View", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "Add Existing View")
@@ -857,27 +764,6 @@ final class MenuBuilder {
         }
 
         return item
-    }
-
-    private func addBrowserFlipMenuItem(_ config: BrowserFlipMenuItemConfig, to menu: NSMenu, currentSection: inout String?) {
-        let trimmedSection = config.sectionName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let section = trimmedSection, !section.isEmpty, section != currentSection {
-            if currentSection != nil || menu.items.last?.isSeparatorItem == false {
-                menu.addItem(.separator())
-            }
-            addDisabled(section, to: menu)
-            currentSection = section
-        }
-
-        let item = NSMenuItem(title: config.displayTitle, action: nil, keyEquivalent: "")
-        item.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-        let submenu = NSMenu(title: config.displayTitle)
-        submenu.autoenablesItems = false
-        let delegate = BrowserFlipMenuDelegate(builder: self)
-        submenu.delegate = delegate
-        MenuDelegateRetainer.shared.retain(delegate, for: submenu)
-        item.submenu = submenu
-        menu.addItem(item)
     }
 
     private func addAppleScriptItems(_ items: [AppleScriptMenuItemConfig], to menu: NSMenu, currentSection: inout String?, menuViewID: UUID) {
