@@ -67,6 +67,39 @@ final class BrowserFlipMenuDelegate: NSObject, NSMenuDelegate {
     }
 }
 
+/// Delegate that lazily repopulates a menu view's top-level NSMenu when it is
+/// about to be opened. Without this, the status item caches a stale snapshot
+/// of the view's contents until the next status item rebuild (which only
+/// happens for title/icon/visibility/hotkey changes).
+final class MenuViewMenuDelegate: NSObject, NSMenuDelegate {
+    weak var builder: MenuBuilder?
+    let menuViewID: UUID
+    let includeManagement: Bool
+
+    init(builder: MenuBuilder, menuViewID: UUID, includeManagement: Bool) {
+        self.builder = builder
+        self.menuViewID = menuViewID
+        self.includeManagement = includeManagement
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        builder?.populateMenuViewMenu(menu, menuViewID: menuViewID, includeManagement: includeManagement)
+    }
+}
+
+/// Delegate for the fallback "grouped" menu shown when no menu views exist.
+final class GroupedMenuDelegate: NSObject, NSMenuDelegate {
+    weak var builder: MenuBuilder?
+
+    init(builder: MenuBuilder) {
+        self.builder = builder
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        builder?.populateGroupedMenu(menu)
+    }
+}
+
 final class MenuBuilder {
     let store: PreferencesStore
     private let fileAccessService: FileAccessService
@@ -92,7 +125,44 @@ final class MenuBuilder {
     }
 
     func makeMenuViewMenu(for view: MenuViewConfig) -> NSMenu {
-        makeMenuViewMenu(for: view, includeManagement: true, visitedMenuViewIDs: [view.id])
+        // Top-level entry point: install a delegate so the menu refreshes lazily
+        // when the user opens it. This keeps the cached NSMenu on each status item
+        // up to date with view contents (sources, shortcuts, applescripts, browser
+        // flip, etc.) without depending on the StatusItemManager rebuilding the
+        // status items, which only fires for menu bar shape changes.
+        if let directMenu = makeDirectSingleFolderMenu(for: view) {
+            return directMenu
+        }
+
+        let menu = NSMenu(title: view.title)
+        menu.autoenablesItems = false
+        let delegate = MenuViewMenuDelegate(builder: self, menuViewID: view.id, includeManagement: true)
+        menu.delegate = delegate
+        MenuDelegateRetainer.shared.retain(delegate, for: menu)
+        return menu
+    }
+
+    /// Lazy populate path used by `MenuViewMenuDelegate` when the menu opens.
+    /// Re-resolves the latest `MenuViewConfig` from the store every time, so the
+    /// menu reflects the current settings without needing a status item rebuild.
+    func populateMenuViewMenu(_ menu: NSMenu, menuViewID: UUID, includeManagement: Bool) {
+        menu.removeAllItems()
+        menu.autoenablesItems = false
+
+        guard let view = store.menuView(id: menuViewID) else {
+            addDisabled("View Removed", to: menu)
+            return
+        }
+
+        // Re-evaluate the direct single-folder shortcut on every open. If the
+        // view qualifies, populate the folder contents in place so the cached
+        // status item menu still reflects the current state.
+        if includeManagement, let source = directSingleFolderSource(for: view) {
+            populateFolderMenu(menu, configID: source.id, configOverride: source, menuView: view, folderURL: nil, isRoot: true, visited: [])
+            return
+        }
+
+        populateMenuViewBody(menu, for: view, includeManagement: includeManagement, visitedMenuViewIDs: [view.id])
     }
 
     private func makeMenuViewMenu(for view: MenuViewConfig, includeManagement: Bool, visitedMenuViewIDs: Set<UUID>) -> NSMenu {
@@ -102,7 +172,11 @@ final class MenuBuilder {
 
         let menu = NSMenu(title: view.title)
         menu.autoenablesItems = false
+        populateMenuViewBody(menu, for: view, includeManagement: includeManagement, visitedMenuViewIDs: visitedMenuViewIDs)
+        return menu
+    }
 
+    private func populateMenuViewBody(_ menu: NSMenu, for view: MenuViewConfig, includeManagement: Bool, visitedMenuViewIDs: Set<UUID>) {
         let showManagementAtTop = includeManagement && shouldShowGlobalManagementMenuAtTop()
         let showManagementAtBottom = includeManagement && shouldShowGlobalManagementMenuAtBottom()
         let hasContent = !view.items.isEmpty
@@ -110,6 +184,7 @@ final class MenuBuilder {
             || !view.resolvedShortcutItems.isEmpty
             || !view.resolvedLinkedShortcutsFolders.isEmpty
             || !view.resolvedAppleScriptItems.isEmpty
+            || view.browserFlipItem != nil
 
         if showManagementAtTop {
             menu.addItem(managementMenuItem(for: view))
@@ -136,50 +211,58 @@ final class MenuBuilder {
             }
 
             if !view.items.isEmpty,
-               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty) {
+               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil) {
                 menu.addItem(.separator())
                 currentSection = nil
             }
 
             addLinkedMenuViews(view.resolvedLinkedMenuViews, to: menu, currentSection: &currentSection, visitedMenuViewIDs: visitedMenuViewIDs)
             if !view.resolvedLinkedMenuViews.isEmpty,
-               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty),
+               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addShortcutItems(view.resolvedShortcutItems, to: menu, currentSection: &currentSection)
             if !view.resolvedShortcutItems.isEmpty,
-               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty),
+               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addAppleScriptItems(view.resolvedAppleScriptItems, to: menu, currentSection: &currentSection, menuViewID: view.id)
             if !view.resolvedAppleScriptItems.isEmpty,
-               !view.resolvedLinkedShortcutsFolders.isEmpty,
+               (!view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addLinkedShortcutFolders(view.resolvedLinkedShortcutsFolders, to: menu, currentSection: &currentSection)
+            if !view.resolvedLinkedShortcutsFolders.isEmpty,
+               view.browserFlipItem != nil,
+               menu.items.last?.isSeparatorItem == false {
+                menu.addItem(.separator())
+                currentSection = nil
+            }
+            if let browserFlipItem = view.browserFlipItem {
+                addBrowserFlipMenuItem(browserFlipItem, to: menu, currentSection: &currentSection)
+            }
         }
 
         if showManagementAtBottom {
             menu.addItem(.separator())
             menu.addItem(managementMenuItem(for: view))
         }
-
-        return menu
     }
 
-    private func makeDirectSingleFolderMenu(for view: MenuViewConfig) -> NSMenu? {
+    private func directSingleFolderSource(for view: MenuViewConfig) -> FolderConfig? {
         let layout = view.resolvedLayout
         guard layout != .sourceList else { return nil }
         guard view.resolvedLinkedMenuViews.isEmpty,
               view.resolvedShortcutItems.isEmpty,
               view.resolvedLinkedShortcutsFolders.isEmpty,
-              view.resolvedAppleScriptItems.isEmpty else {
+              view.resolvedAppleScriptItems.isEmpty,
+              view.browserFlipItem == nil else {
             return nil
         }
         guard view.items.count == 1,
@@ -189,19 +272,24 @@ final class MenuBuilder {
             return nil
         }
 
-        if layout == .automatic || layout == .firstFolderContents {
-            source.displayName = view.title
-            source.icon = view.icon
-            source.iconColorHex = view.iconColorHex
-            source.menuBarStyle = view.menuBarStyle
-            source.menuSettings = view.menuSettings
-            let menu = NSMenu(title: view.title)
-            menu.autoenablesItems = false
-            attachFolderDelegate(to: menu, configID: source.id, configOverride: source, menuView: view, folderURL: nil, isRoot: true, visited: [])
-            return menu
+        guard layout == .automatic || layout == .firstFolderContents else {
+            return nil
         }
 
-        return nil
+        source.displayName = view.title
+        source.icon = view.icon
+        source.iconColorHex = view.iconColorHex
+        source.menuBarStyle = view.menuBarStyle
+        source.menuSettings = view.menuSettings
+        return source
+    }
+
+    private func makeDirectSingleFolderMenu(for view: MenuViewConfig) -> NSMenu? {
+        guard let source = directSingleFolderSource(for: view) else { return nil }
+        let menu = NSMenu(title: view.title)
+        menu.autoenablesItems = false
+        attachFolderDelegate(to: menu, configID: source.id, configOverride: source, menuView: view, folderURL: nil, isRoot: true, visited: [])
+        return menu
     }
 
     func makeAppMenu(for config: FolderConfig) -> NSMenu {
@@ -242,6 +330,18 @@ final class MenuBuilder {
     func makeGroupedMenu() -> NSMenu {
         let menu = NSMenu(title: "MenuShelf")
         menu.autoenablesItems = false
+        let delegate = GroupedMenuDelegate(builder: self)
+        menu.delegate = delegate
+        MenuDelegateRetainer.shared.retain(delegate, for: menu)
+        return menu
+    }
+
+    /// Lazy populate path used by `GroupedMenuDelegate` when the fallback
+    /// "MenuShelf" menu opens. Rebuilding on each open keeps it in sync with
+    /// folder add/remove and visibility changes without a status item rebuild.
+    func populateGroupedMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        menu.autoenablesItems = false
 
         let visibleItems = store.settings.folders.filter(\.isVisible)
         let showManagementAtTop = shouldShowGlobalManagementMenuAtTop()
@@ -268,8 +368,6 @@ final class MenuBuilder {
             menu.addItem(.separator())
             menu.addItem(managementMenuItem())
         }
-
-        return menu
     }
 
     private func groupedRootItem(for config: FolderConfig) -> NSMenuItem {
@@ -355,8 +453,15 @@ final class MenuBuilder {
         submenu.addItem(more)
 
         if store.settings.resolvedBrowserFlip.enableBrowserFlip {
-            submenu.addItem(.separator())
-            submenu.addItem(browserFlipMenuItem())
+            // Don't double-render: if the current view already has its own
+            // Default Browser entry inline, skip the one in "..." → "Default
+            // Browser". Falls through for views without an inline entry, and
+            // for the global / non-view-scoped management menu.
+            let viewHasInlineDefaultBrowser = (view?.browserFlipItem != nil)
+            if !viewHasInlineDefaultBrowser {
+                submenu.addItem(.separator())
+                submenu.addItem(browserFlipMenuItem())
+            }
         }
 
         submenu.addItem(.separator())
@@ -366,8 +471,8 @@ final class MenuBuilder {
     }
 
     private func browserFlipMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Browsers", action: nil, keyEquivalent: "")
-        let submenu = NSMenu(title: "Browsers")
+        let item = NSMenuItem(title: "Default Browser", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Default Browser")
         submenu.autoenablesItems = false
         let delegate = BrowserFlipMenuDelegate(builder: self)
         submenu.delegate = delegate
@@ -386,10 +491,29 @@ final class MenuBuilder {
             .filter { $0.isVisible }
             .sorted { $0.sortOrder < $1.sortOrder }
 
-        if visibleBrowsers.isEmpty {
-            addDisabled("No browsers found", to: menu)
-        } else {
-            for (index, browser) in visibleBrowsers.prefix(9).enumerated() {
+        // "Ask Everytime" is MenuShelf itself acting as the default browser.
+        // Selecting it sets MenuShelf's own bundle ID as the default http(s)
+        // handler — link clicks then trigger MenuShelfPickerController. This
+        // is independent of Browser Flip.app being installed; the picker
+        // code lives inside MenuShelf.
+        let askEverytime = MenuBuilder.askEverytimeBrowser()
+        let askItem = actionItem(
+            "Ask Everytime",
+            kind: .switchBrowser,
+            browserInfo: askEverytime
+        )
+        askItem.keyEquivalent = "0"
+        let askIcon = NSWorkspace.shared.icon(forFile: askEverytime.appURL.path)
+        askIcon.size = NSSize(width: 16, height: 16)
+        askItem.image = askIcon
+        askItem.state = (askEverytime.id == store.currentDefaultBrowserID) ? .on : .off
+        menu.addItem(askItem)
+
+        let nonSelfVisible = visibleBrowsers.filter { $0.id != askEverytime.id }
+
+        if !nonSelfVisible.isEmpty {
+            menu.addItem(.separator())
+            for (index, browser) in nonSelfVisible.prefix(9).enumerated() {
                 let browserItem = actionItem(
                     browser.name,
                     kind: .switchBrowser,
@@ -406,6 +530,21 @@ final class MenuBuilder {
 
         menu.addItem(.separator())
         menu.addItem(actionItem("Refresh Browsers", kind: .openSettings))
+    }
+
+    /// Returns a synthetic BrowserInfo for MenuShelf itself. Selecting this
+    /// from the menu sets MenuShelf as the default http(s) handler, which
+    /// triggers MenuShelfPickerController on every link click.
+    static func askEverytimeBrowser() -> BrowserInfo {
+        let bundleID = Bundle.main.bundleIdentifier ?? "app.menushelf.MenuShelf2"
+        let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            ?? Bundle.main.bundleURL
+        return BrowserInfo(id: bundleID, name: "Ask Everytime", appURL: appURL)
+    }
+
+    /// Whether the given browser is MenuShelf itself in "Ask Everytime" mode.
+    static func isAskEverytime(_ browser: BrowserInfo) -> Bool {
+        return browser.id == (Bundle.main.bundleIdentifier ?? "app.menushelf.MenuShelf2")
     }
 
     private func addExistingMenuViewMenuItem(for view: MenuViewConfig) -> NSMenuItem {
@@ -718,6 +857,27 @@ final class MenuBuilder {
         }
 
         return item
+    }
+
+    private func addBrowserFlipMenuItem(_ config: BrowserFlipMenuItemConfig, to menu: NSMenu, currentSection: inout String?) {
+        let trimmedSection = config.sectionName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let section = trimmedSection, !section.isEmpty, section != currentSection {
+            if currentSection != nil || menu.items.last?.isSeparatorItem == false {
+                menu.addItem(.separator())
+            }
+            addDisabled(section, to: menu)
+            currentSection = section
+        }
+
+        let item = NSMenuItem(title: config.displayTitle, action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        let submenu = NSMenu(title: config.displayTitle)
+        submenu.autoenablesItems = false
+        let delegate = BrowserFlipMenuDelegate(builder: self)
+        submenu.delegate = delegate
+        MenuDelegateRetainer.shared.retain(delegate, for: submenu)
+        item.submenu = submenu
+        menu.addItem(item)
     }
 
     private func addAppleScriptItems(_ items: [AppleScriptMenuItemConfig], to menu: NSMenu, currentSection: inout String?, menuViewID: UUID) {

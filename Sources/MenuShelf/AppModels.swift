@@ -555,6 +555,32 @@ struct AppSpecificShortcutGroup: Codable, Identifiable, Equatable {
     var updatedAt: Date
 }
 
+struct BrowserFlipMenuItemConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var titleOverride: String?
+    var sectionName: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    var displayTitle: String {
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        return "Default Browser"
+    }
+
+    static func make() -> BrowserFlipMenuItemConfig {
+        BrowserFlipMenuItemConfig(
+            id: UUID(),
+            titleOverride: nil,
+            sectionName: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
 struct MenuViewConfig: Codable, Identifiable, Equatable {
     var id: UUID
     var title: String
@@ -572,6 +598,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var linkedMenuViews: [LinkedMenuViewConfig]?
     var appSpecificShortcutGroups: [AppSpecificShortcutGroup]?
     var appleScriptItems: [AppleScriptMenuItemConfig]?
+    var browserFlipItem: BrowserFlipMenuItemConfig?
     var createdAt: Date
     var updatedAt: Date
 
@@ -601,6 +628,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             linkedMenuViews: [],
             appSpecificShortcutGroups: [],
             appleScriptItems: [],
+            browserFlipItem: nil,
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -639,7 +667,7 @@ struct AppSettings: Codable, Equatable {
     var browserFlip: BrowserFlipSettings?
 
     static let defaults = AppSettings(
-        schemaVersion: 10,
+        schemaVersion: 11,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,

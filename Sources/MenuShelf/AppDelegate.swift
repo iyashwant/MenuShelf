@@ -38,7 +38,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         DiagnosticsLogger.shared.log("Open URLs: \(urls.map(\.absoluteString).joined(separator: ", "))")
-        container.shortcutURLRouter.handle(urls)
+
+        // Route http(s) and the custom menushelf-ask:// scheme into the
+        // "Ask Everytime" picker. This runs when MenuShelf is set as the
+        // system default browser.
+        var pickerURLs: [URL] = []
+        var routerURLs: [URL] = []
+        for url in urls {
+            switch url.scheme?.lowercased() {
+            case "http", "https", "menushelf-ask":
+                pickerURLs.append(url)
+            default:
+                routerURLs.append(url)
+            }
+        }
+
+        if !pickerURLs.isEmpty {
+            MenuShelfPickerController.shared.handle(urls: pickerURLs)
+        }
+        if !routerURLs.isEmpty {
+            container.shortcutURLRouter.handle(routerURLs)
+        }
+    }
+
+    func application(_ application: NSApplication, willContinueUserActivityWithType userActivityType: String) -> Bool {
+        return userActivityType == NSUserActivityTypeBrowsingWeb
+    }
+
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        if let url = userActivity.webpageURL {
+            MenuShelfPickerController.shared.handle(urls: [url])
+            return true
+        }
+        return false
     }
 
     private func installRescueStatusItem() {

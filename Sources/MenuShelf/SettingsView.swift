@@ -217,7 +217,7 @@ private struct MenuViewsSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $store.selectedMenuViewID) {
                     ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count)
+                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0))
                             .tag(Optional(view.id))
                             .contextMenu {
                                 Button("Duplicate") {
@@ -381,6 +381,7 @@ private enum UnifiedContentItem: Identifiable {
     case linkedMenuView(LinkedMenuViewConfig)
     case linkedShortcutsFolder(LinkedShortcutsFolderConfig)
     case appleScript(AppleScriptMenuItemConfig)
+    case browserFlip(BrowserFlipMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -389,6 +390,7 @@ private enum UnifiedContentItem: Identifiable {
         case .linkedMenuView(let item): item.id
         case .linkedShortcutsFolder(let item): item.id
         case .appleScript(let item): item.id
+        case .browserFlip(let item): item.id
         }
     }
 
@@ -403,6 +405,7 @@ private enum UnifiedContentItem: Identifiable {
                 return "applescript"
             }
             return "scroll"
+        case .browserFlip: return "globe"
         }
     }
 
@@ -413,6 +416,7 @@ private enum UnifiedContentItem: Identifiable {
         case .linkedMenuView: .blue
         case .linkedShortcutsFolder: .indigo
         case .appleScript: .purple
+        case .browserFlip: .teal
         }
     }
 }
@@ -430,14 +434,6 @@ private struct MenuViewDetailView: View {
                     title: view.title,
                     subtitle: "Menu bar icon with \(contentCount) item\(contentCount == 1 ? "" : "s")",
                     symbolName: "menubar.rectangle"
-                )
-
-                MenuPreviewCard(
-                    title: view.title,
-                    icon: view.icon,
-                    colorHex: view.iconColorHex,
-                    menuBarStyle: view.menuBarStyle,
-                    settings: view.menuSettings
                 )
 
                 SettingsCard("Menu View") {
@@ -603,6 +599,15 @@ private struct MenuViewDetailView: View {
                             } label: {
                                 Label("Add AppleScript", systemImage: appleScriptMenuSymbol)
                             }
+
+                            Divider()
+
+                            Button {
+                                store.addBrowserFlipItem(toMenuViewID: view.id)
+                            } label: {
+                                Label("Add Default Browser", systemImage: "globe")
+                            }
+                            .disabled(view.browserFlipItem != nil)
                         } label: {
                             Label("Add", systemImage: "plus")
                         }
@@ -698,7 +703,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0)
     }
 
     private var unifiedItems: [UnifiedContentItem] {
@@ -708,6 +713,9 @@ private struct MenuViewDetailView: View {
         items.append(contentsOf: view.resolvedShortcutItems.map { .shortcut($0) })
         items.append(contentsOf: view.resolvedAppleScriptItems.map { .appleScript($0) })
         items.append(contentsOf: view.resolvedLinkedShortcutsFolders.map { .linkedShortcutsFolder($0) })
+        if let browserFlip = view.browserFlipItem {
+            items.append(.browserFlip(browserFlip))
+        }
         return items
     }
 
@@ -749,6 +757,8 @@ private struct MenuViewDetailView: View {
             removeLinkedMenuView(id: id)
         } else if view.resolvedLinkedShortcutsFolders.contains(where: { $0.id == id }) {
             removeLinkedFolder(id: id)
+        } else if view.browserFlipItem?.id == id {
+            view.browserFlipItem = nil
         }
         selectedContentItemID = nil
     }
@@ -762,6 +772,7 @@ private struct MenuViewDetailView: View {
         let linkedViewsEnd = sourcesEnd + view.resolvedLinkedMenuViews.count
         let shortcutsEnd = linkedViewsEnd + view.resolvedShortcutItems.count
         let appleScriptsEnd = shortcutsEnd + view.resolvedAppleScriptItems.count
+        let linkedShortcutsFoldersEnd = appleScriptsEnd + view.resolvedLinkedShortcutsFolders.count
 
         let sourceItem = items[sourceIndex]
         var clampedDest = destination
@@ -781,7 +792,10 @@ private struct MenuViewDetailView: View {
             if destination > appleScriptsEnd { clampedDest = appleScriptsEnd }
         case .linkedShortcutsFolder:
             if destination < appleScriptsEnd { clampedDest = appleScriptsEnd }
-            if destination > items.count { clampedDest = items.count }
+            if destination > linkedShortcutsFoldersEnd { clampedDest = linkedShortcutsFoldersEnd }
+        case .browserFlip:
+            // Browser flip lives in a single-slot group; reordering is a no-op.
+            return
         }
 
         if sourceIndex < clampedDest { clampedDest -= 1 }
@@ -817,6 +831,12 @@ private struct MenuViewDetailView: View {
             var arr = view.resolvedLinkedShortcutsFolders
             arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
             view.linkedShortcutsFolders = arr
+        case .browserFlip:
+            // Already handled by the early return above; the values are unused.
+            sourceGroupOffset = 0
+            groupOffset = 0
+            _ = sourceGroupOffset
+            _ = groupOffset
         }
     }
 
@@ -902,6 +922,43 @@ private struct MenuViewDetailView: View {
                     }
                 }
             }
+        case .browserFlip:
+            if let binding = browserFlipItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit Default Browser")
+                        .font(.headline)
+
+                    Text("Lets you switch the system default browser from this menu.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    if !store.settings.resolvedBrowserFlip.enableBrowserFlip {
+                        Text("Browser Flip is disabled. Enable it in Settings → Browser Flip for the submenu to populate.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeContentItem(id: item.id)
+                            editingItem = nil
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -961,6 +1018,19 @@ private struct MenuViewDetailView: View {
                 copy.updatedAt = Date()
                 items[index] = copy
                 view.appleScriptItems = items
+            }
+        )
+    }
+
+    private func browserFlipItemBinding(for id: UUID) -> Binding<BrowserFlipMenuItemConfig>? {
+        guard let current = view.browserFlipItem, current.id == id else { return nil }
+
+        return Binding(
+            get: { view.browserFlipItem ?? current },
+            set: { updated in
+                var copy = updated
+                copy.updatedAt = Date()
+                view.browserFlipItem = copy
             }
         )
     }
@@ -1030,6 +1100,8 @@ private struct UnifiedContentItemRow: View {
         case .appleScript(let script):
             let fallback = store.appleScript(id: script.appleScriptID)?.name ?? "Missing AppleScript"
             return script.displayTitle(fallbackName: fallback)
+        case .browserFlip(let config):
+            return config.displayTitle
         }
     }
 
@@ -1057,6 +1129,11 @@ private struct UnifiedContentItemRow: View {
                 return "Section: \(section)"
             }
             return "AppleScript"
+        case .browserFlip(let config):
+            if let section = config.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "Default Browser"
         }
     }
 }
@@ -1401,14 +1478,6 @@ private struct FolderDetailView: View {
                     title: config.displayName,
                     subtitle: "\(config.resolvedItemKind.label) · \(config.originalPathHint)",
                     symbolName: config.resolvedItemKind.symbolName
-                )
-
-                MenuPreviewCard(
-                    title: config.displayName,
-                    icon: config.icon,
-                    colorHex: config.iconColorHex,
-                    menuBarStyle: config.menuBarStyle,
-                    settings: config.menuSettings
                 )
 
                 SettingsCard("Source") {
@@ -1918,7 +1987,7 @@ private struct BrowserFlipSettingsView: View {
                                         .scaledToFit()
                                         .frame(width: 18, height: 18)
 
-                                    Text(browser.name)
+                                    Text(MenuBuilder.isAskEverytime(browser) ? "Ask Everytime" : browser.name)
                                         .lineLimit(1)
 
                                     Spacer()

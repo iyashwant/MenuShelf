@@ -696,6 +696,41 @@ final class PreferencesStore: ObservableObject {
         lastAppleScriptRuns[record.scriptID] = record
     }
 
+    /// Append a Browser Flip menu item to the target menu view (creating one
+    /// if needed). Skips when the view already has a browser flip item, since
+    /// duplicates have no use.
+    func addBrowserFlipItem(toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "MenuShelf", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard let index = views.firstIndex(where: { $0.id == targetID }) else { return }
+        guard views[index].browserFlipItem == nil else {
+            settings.menuViews = views
+            return
+        }
+
+        views[index].browserFlipItem = BrowserFlipMenuItemConfig.make()
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+
+        if !settings.resolvedBrowserFlip.enableBrowserFlip {
+            // Auto-enable Browser Flip so the menu actually populates when opened.
+            setEnableBrowserFlip(true)
+        } else {
+            refreshBrowsers()
+        }
+    }
+
     // MARK: - Sources
 
     func attachSource(_ sourceID: UUID, toMenuViewID menuViewID: UUID?) {
@@ -1057,6 +1092,12 @@ final class PreferencesStore: ObservableObject {
         if settings.schemaVersion < 10 {
             settings.schemaVersion = 10
             settings.browserFlip = settings.browserFlip ?? .defaults
+        }
+
+        if settings.schemaVersion < 11 {
+            settings.schemaVersion = 11
+            // browserFlipItem is added per-menu-view as an optional field.
+            // Default is nil for existing menu views, so no backfill is needed.
         }
 
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
