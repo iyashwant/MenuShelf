@@ -36,12 +36,10 @@ final class StatusItemManager: NSObject {
         }
 
         let showMenuBarItemWhenEmpty: Bool
-        let enableBrowserFlip: Bool
         let views: [ViewSignature]
 
         init(_ settings: AppSettings) {
             self.showMenuBarItemWhenEmpty = settings.showMenuBarItemWhenEmpty
-            self.enableBrowserFlip = settings.resolvedBrowserFlip.enableBrowserFlip
             self.views = settings.resolvedMenuViews.map { view in
                 ViewSignature(
                     id: view.id,
