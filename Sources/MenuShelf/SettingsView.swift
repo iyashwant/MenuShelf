@@ -432,14 +432,6 @@ private struct MenuViewDetailView: View {
                     symbolName: "menubar.rectangle"
                 )
 
-                MenuPreviewCard(
-                    title: view.title,
-                    icon: view.icon,
-                    colorHex: view.iconColorHex,
-                    menuBarStyle: view.menuBarStyle,
-                    settings: view.menuSettings
-                )
-
                 SettingsCard("Menu View") {
                     SettingsRow("Title") {
                         TextField("", text: $view.title)
@@ -1401,14 +1393,6 @@ private struct FolderDetailView: View {
                     title: config.displayName,
                     subtitle: "\(config.resolvedItemKind.label) · \(config.originalPathHint)",
                     symbolName: config.resolvedItemKind.symbolName
-                )
-
-                MenuPreviewCard(
-                    title: config.displayName,
-                    icon: config.icon,
-                    colorHex: config.iconColorHex,
-                    menuBarStyle: config.menuBarStyle,
-                    settings: config.menuSettings
                 )
 
                 SettingsCard("Source") {
