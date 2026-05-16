@@ -582,6 +582,39 @@ final class PreferencesStore: ObservableObject {
         settings.appleScripts = scripts
     }
 
+    /// Sets a file reference for an AppleScript. The bookmark is created from the URL
+    /// and stored in the config. Setting a file reference clears the inline source.
+    func setAppleScriptFileBookmark(id: UUID, bookmark: Data?) {
+        var scripts = settings.resolvedAppleScripts
+        guard let index = scripts.firstIndex(where: { $0.id == id }) else { return }
+        scripts[index].sourceFileBookmark = bookmark
+        if bookmark != nil {
+            // Clear inline source when referencing a file
+            scripts[index].source = ""
+        }
+        scripts[index].updatedAt = Date()
+        settings.appleScripts = scripts
+        DiagnosticsLogger.shared.log("Set AppleScript file bookmark for \(id)")
+    }
+
+    /// Creates a bookmark for an AppleScript file URL and applies it to the script config.
+    /// This is the main entry point for the file picker UI.
+    func importAppleScriptFile(url: URL, for scriptID: UUID) {
+        do {
+            let bookmark = try FileAccessService.createAppleScriptBookmark(for: url)
+            setAppleScriptFileBookmark(id: scriptID, bookmark: bookmark)
+
+            // Update name to match file name if this is a new/empty script
+            if let config = appleScript(id: scriptID), config.name == "Untitled AppleScript" {
+                let fileName = url.deletingPathExtension().lastPathComponent
+                renameAppleScript(id: scriptID, to: fileName)
+            }
+        } catch {
+            showError("Could not import AppleScript file: \(error.localizedDescription)")
+            DiagnosticsLogger.shared.log("Failed to create bookmark for \(url.path): \(error)")
+        }
+    }
+
     func duplicateAppleScript(id: UUID) {
         guard var copy = appleScript(id: id) else { return }
         copy.id = UUID()

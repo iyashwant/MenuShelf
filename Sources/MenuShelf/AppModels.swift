@@ -483,6 +483,7 @@ struct AppleScriptConfig: Codable, Identifiable, Equatable {
     var id: UUID
     var name: String
     var source: String
+    var sourceFileBookmark: Data?
     var icon: FolderIconConfig?
     var iconColorHex: String?
     var quickKey: String?
@@ -491,11 +492,14 @@ struct AppleScriptConfig: Codable, Identifiable, Equatable {
     var createdAt: Date
     var updatedAt: Date
 
+    var isFileReference: Bool { sourceFileBookmark != nil }
+
     static func make(name: String = "Untitled AppleScript") -> AppleScriptConfig {
         AppleScriptConfig(
             id: UUID(),
             name: name,
             source: "",
+            sourceFileBookmark: nil,
             icon: nil,
             iconColorHex: nil,
             quickKey: nil,

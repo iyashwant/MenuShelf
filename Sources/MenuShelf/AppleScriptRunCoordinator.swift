@@ -53,10 +53,17 @@ final class AppleScriptRunCoordinator: @unchecked Sendable {
         logStart(config: config)
 
         let scriptName = config.name
-        let source = config.source
 
         Task { [service] in
-            let outcome = await service.run(source: source, scriptName: scriptName, timeout: Self.timeout)
+            let outcome: RunOutcome
+            if let bookmark = config.sourceFileBookmark {
+                // Run from file reference
+                outcome = await service.runFromFile(bookmark: bookmark, scriptName: scriptName, timeout: Self.timeout)
+            } else {
+                // Run from inline source
+                let source = config.source
+                outcome = await service.run(source: source, scriptName: scriptName, timeout: Self.timeout)
+            }
             await MainActor.run {
                 self.handleOutcome(scriptID: scriptID, menuViewID: menuViewID, outcome: outcome, name: scriptName)
             }

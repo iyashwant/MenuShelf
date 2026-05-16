@@ -33,6 +33,41 @@ final class SecurityScopedURL {
 }
 
 final class FileAccessService {
+    // MARK: - AppleScript File Bookmark Helpers
+
+    /// Creates a security-scoped bookmark for an AppleScript file (.scpt or .applescript).
+    /// This bookmark can be stored and later resolved to re-gain access to the file.
+    static func createAppleScriptBookmark(for url: URL) throws -> Data {
+        let access = url.startAccessingSecurityScopedResource()
+        defer {
+            if access {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let bookmarkData = try url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        return bookmarkData
+    }
+
+    /// Resolves a security-scoped bookmark and returns the URL if still valid.
+    /// Returns nil if the bookmark is stale or invalid.
+    static func resolveAppleScriptBookmark(_ bookmark: Data) -> (url: URL, isStale: Bool)? {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            return nil
+        }
+        return (url, isStale)
+    }
+
     private let fileManager = FileManager.default
 
     // Cache of resolved security-scoped URLs keyed by FolderConfig.id.

@@ -143,25 +143,65 @@ struct AppleScriptSettingsView: View {
                                 }
 
                                 HStack(spacing: 10) {
-                                    Button {
-                                        compile(scriptID: id, source: sourceDraft, name: nameDraft)
-                                    } label: {
-                                        Label("Compile", systemImage: "checkmark.seal")
-                                    }
-                                    .keyboardShortcut("k", modifiers: [.command])
+                                    if script.isFileReference {
+                                        // File reference mode - show file info
+                                        if let bookmark = script.sourceFileBookmark,
+                                           let resolved = FileAccessService.resolveAppleScriptBookmark(bookmark) {
+                                            HStack {
+                                                Image(systemName: "doc.badge.ellipsis")
+                                                    .foregroundStyle(.secondary)
+                                                Text(resolved.url.lastPathComponent)
+                                                    .foregroundStyle(.secondary)
+                                                if resolved.isStale {
+                                                    Image(systemName: "exclamationmark.triangle.fill")
+                                                        .foregroundStyle(.orange)
+                                                        .help("File has been moved or deleted. Re-import to update.")
+                                                }
+                                            }
+                                            .font(.callout)
 
-                                    if let badge = compileBadge {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: badge.success ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                                                .foregroundStyle(badge.success ? .green : .red)
-                                            Text(badge.success ? "Compiled" : "Failed")
-                                                .font(.callout)
-                                                .foregroundStyle(.secondary)
+                                            Button("Re-import") {
+                                                importFile(for: id)
+                                            }
+                                        } else {
+                                            Text("File reference broken")
+                                                .foregroundStyle(.red)
                                         }
-                                        .transition(.opacity)
+
+                                        Button("Clear Reference") {
+                                            store.setAppleScriptFileBookmark(id: id, bookmark: nil)
+                                        }
+                                        .foregroundStyle(.red)
+
+                                        Spacer()
+                                    } else {
+                                        // Inline source mode - show editor
+                                        Button {
+                                            compile(scriptID: id, source: sourceDraft, name: nameDraft)
+                                        } label: {
+                                            Label("Compile", systemImage: "checkmark.seal")
+                                        }
+                                        .keyboardShortcut("k", modifiers: [.command])
+
+                                        if let badge = compileBadge {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: badge.success ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                                                    .foregroundStyle(badge.success ? .green : .red)
+                                                Text(badge.success ? "Compiled" : "Failed")
+                                                    .font(.callout)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .transition(.opacity)
+                                        }
+
+                                        Spacer()
                                     }
 
-                                    Spacer()
+                                    Button {
+                                        importFile(for: id)
+                                    } label: {
+                                        Label("Import File...", systemImage: "doc.badge.plus")
+                                    }
                                 }
 
                                 if let compileError, !compileError.message.isEmpty {
@@ -251,6 +291,26 @@ struct AppleScriptSettingsView: View {
         return error.message
     }
 
+    // MARK: File Import
+
+    private func importFile(for scriptID: UUID) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [
+            .init(filenameExtension: "scpt")!,
+            .init(filenameExtension: "applescript")!,
+            .init(filenameExtension: "scptd")!
+        ]
+        panel.message = "Select an AppleScript file to import"
+        panel.prompt = "Import"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            store.importAppleScriptFile(url: url, for: scriptID)
+        }
+    }
+
     // MARK: Validation
 
     private func validateAndCommitName(_ value: String, scriptID: UUID) {
@@ -333,15 +393,21 @@ private struct AppleScriptRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: appleScriptSymbol)
-                .foregroundStyle(.purple)
+            Image(systemName: script.isFileReference ? "doc.badge.ellipsis" : appleScriptSymbol)
+                .foregroundStyle(script.isFileReference ? .blue : .purple)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(script.name)
                     .lineLimit(1)
-                Text(formatted(script.updatedAt))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if script.isFileReference {
+                    Text("File reference")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                } else {
+                    Text(formatted(script.updatedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -353,7 +419,11 @@ private struct AppleScriptRow: View {
 
     @ViewBuilder
     private var statusIndicator: some View {
-        if let error = script.compileError, !error.isEmpty {
+        if script.isFileReference {
+            Image(systemName: "doc.badge.link")
+                .foregroundStyle(.blue)
+                .help("References external file")
+        } else if let error = script.compileError, !error.isEmpty {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundStyle(.red)
                 .help(error)

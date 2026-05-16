@@ -177,6 +177,81 @@ actor AppleScriptService {
         }
     }
 
+    /// Run an AppleScript from a file URL. The script is loaded from disk and
+    /// executed directly without compilation (the .scpt bundle is already compiled).
+    /// Returns the first of: actual completion, or timeout.
+    func runFromFile(bookmark: Data, scriptName: String, timeout: Duration = .seconds(30)) async -> RunOutcome {
+        return await withCheckedContinuation { continuation in
+            self.queue.async {
+                // Resolve the bookmark to access the file
+                var isStale = false
+                guard let url = try? URL(
+                    resolvingBookmarkData: bookmark,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                ) else {
+                    let error = AppleScriptExecutionError(
+                        message: "Could not resolve script file. The file may have been moved or deleted.",
+                        errorNumber: 0,
+                        appName: nil,
+                        isPermissionFamily: false,
+                        rawDictionary: [:]
+                    )
+                    continuation.resume(returning: .executionFailed(error))
+                    return
+                }
+
+                guard url.startAccessingSecurityScopedResource() else {
+                    let error = AppleScriptExecutionError(
+                        message: "Could not access the script file. Permission denied.",
+                        errorNumber: 0,
+                        appName: nil,
+                        isPermissionFamily: false,
+                        rawDictionary: [:]
+                    )
+                    continuation.resume(returning: .executionFailed(error))
+                    return
+                }
+
+                defer { url.stopAccessingSecurityScopedResource() }
+
+                let clock = ContinuousClock()
+                let start = clock.now
+
+                guard let script = NSAppleScript(contentsOf: url, error: nil) else {
+                    let error = AppleScriptExecutionError(
+                        message: "Could not load AppleScript from file: \(url.lastPathComponent)",
+                        errorNumber: 0,
+                        appName: nil,
+                        isPermissionFamily: false,
+                        rawDictionary: [:]
+                    )
+                    continuation.resume(returning: .executionFailed(error))
+                    return
+                }
+
+                var errorInfo: NSDictionary?
+                let descriptor = script.executeAndReturnError(&errorInfo)
+                let elapsed = clock.now - start
+                let elapsedMs = Self.milliseconds(in: elapsed)
+
+                if let errorInfo {
+                    let execError = Self.executionError(from: errorInfo)
+                    if execError.isPermissionFamily {
+                        continuation.resume(returning: .executionFailed(execError))
+                    } else {
+                        continuation.resume(returning: .executionFailed(execError))
+                    }
+                    return
+                }
+
+                let stringValue = descriptor.stringValue ?? ""
+                continuation.resume(returning: .success(stringValue: stringValue, durationMs: elapsedMs))
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func withTimeout<T: Sendable>(
