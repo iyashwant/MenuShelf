@@ -61,6 +61,9 @@ final class AppContainer {
     }
 
     func start() {
+        if store.settings.resolvedBrowserFlip.enableBrowserFlip {
+            store.refreshBrowsers()
+        }
         statusItemManager.rebuildStatusItems()
     }
 }

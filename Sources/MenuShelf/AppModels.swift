@@ -607,6 +607,16 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     }
 }
 
+struct BrowserFlipSettings: Codable, Equatable {
+    var enableBrowserFlip: Bool
+    var savedBrowsers: [BrowserInfo]
+
+    static let defaults = BrowserFlipSettings(
+        enableBrowserFlip: false,
+        savedBrowsers: []
+    )
+}
+
 struct AppSettings: Codable, Equatable {
     var schemaVersion: Int
     // Deprecated: kept only so older settings decode cleanly while menuViews take over.
@@ -626,9 +636,10 @@ struct AppSettings: Codable, Equatable {
     var moreMenuBehavior: GlobalMoreMenuBehavior?
     var enableVerboseDiagnostics: Bool?
     var appleScripts: [AppleScriptConfig]?
+    var browserFlip: BrowserFlipSettings?
 
     static let defaults = AppSettings(
-        schemaVersion: 9,
+        schemaVersion: 10,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -644,7 +655,8 @@ struct AppSettings: Codable, Equatable {
         topLevelFolderIconSize: .small,
         moreMenuBehavior: .visibleAtBottom,
         enableVerboseDiagnostics: false,
-        appleScripts: []
+        appleScripts: [],
+        browserFlip: .defaults
     )
 
     var resolvedShowFileAndFolderIcons: Bool { showFileAndFolderIcons ?? true }
@@ -657,6 +669,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedMenuViews: [MenuViewConfig] { menuViews ?? [] }
     var resolvedEnableVerboseDiagnostics: Bool { enableVerboseDiagnostics ?? false }
     var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
+    var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
 }
 
 struct FileMetadata: Equatable {

@@ -51,8 +51,24 @@ final class FolderMenuDelegate: NSObject, NSMenuDelegate {
     }
 }
 
+final class BrowserFlipMenuDelegate: NSObject, NSMenuDelegate {
+    weak var builder: MenuBuilder?
+
+    init(builder: MenuBuilder) {
+        self.builder = builder
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        builder?.populateBrowserFlipMenu(menu)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        builder?.store.refreshBrowsers()
+    }
+}
+
 final class MenuBuilder {
-    private let store: PreferencesStore
+    let store: PreferencesStore
     private let fileAccessService: FileAccessService
     private let metadataService: MetadataService
     private let actionHandler: MenuActionHandler
@@ -338,10 +354,58 @@ final class MenuBuilder {
         more.submenu = moreSubmenu
         submenu.addItem(more)
 
+        if store.settings.resolvedBrowserFlip.enableBrowserFlip {
+            submenu.addItem(.separator())
+            submenu.addItem(browserFlipMenuItem())
+        }
+
         submenu.addItem(.separator())
         submenu.addItem(actionItem("Quit MenuShelf", kind: .quit))
         item.submenu = submenu
         return item
+    }
+
+    private func browserFlipMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Browsers", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Browsers")
+        submenu.autoenablesItems = false
+        let delegate = BrowserFlipMenuDelegate(builder: self)
+        submenu.delegate = delegate
+        MenuDelegateRetainer.shared.retain(delegate, for: submenu)
+        item.submenu = submenu
+        return item
+    }
+
+    func populateBrowserFlipMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        menu.autoenablesItems = false
+
+        store.currentDefaultBrowserID = DefaultBrowserService.shared.currentDefaultBrowserID()
+
+        let visibleBrowsers = store.discoveredBrowsers
+            .filter { $0.isVisible }
+            .sorted { $0.sortOrder < $1.sortOrder }
+
+        if visibleBrowsers.isEmpty {
+            addDisabled("No browsers found", to: menu)
+        } else {
+            for (index, browser) in visibleBrowsers.prefix(9).enumerated() {
+                let browserItem = actionItem(
+                    browser.name,
+                    kind: .switchBrowser,
+                    browserInfo: browser
+                )
+                browserItem.keyEquivalent = String(index + 1)
+                let icon = NSWorkspace.shared.icon(forFile: browser.appURL.path)
+                icon.size = NSSize(width: 16, height: 16)
+                browserItem.image = icon
+                browserItem.state = (browser.id == store.currentDefaultBrowserID) ? .on : .off
+                menu.addItem(browserItem)
+            }
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(actionItem("Refresh Browsers", kind: .openSettings))
     }
 
     private func addExistingMenuViewMenuItem(for view: MenuViewConfig) -> NSMenuItem {
@@ -972,7 +1036,8 @@ final class MenuBuilder {
         shortcutName: String? = nil,
         shortcutTextInput: String? = nil,
         linkedMenuViewID: UUID? = nil,
-        appleScriptID: UUID? = nil
+        appleScriptID: UUID? = nil,
+        browserInfo: BrowserInfo? = nil
     ) -> NSMenuItem {
         let item: NSMenuItem
 
@@ -998,7 +1063,8 @@ final class MenuBuilder {
             shortcutName: shortcutName,
             shortcutTextInput: shortcutTextInput,
             linkedMenuViewID: linkedMenuViewID,
-            appleScriptID: appleScriptID
+            appleScriptID: appleScriptID,
+            browserInfo: browserInfo
         )
         item.isEnabled = true
         return item

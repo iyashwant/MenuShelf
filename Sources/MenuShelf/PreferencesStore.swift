@@ -18,6 +18,8 @@ final class PreferencesStore: ObservableObject {
     @Published var shortcutsByFolder: [String: [ShortcutInfo]] = [:]
     @Published var isRefreshingShortcuts = false
     @Published var lastAppleScriptRuns: [UUID: AppleScriptRunRecord] = [:]
+    @Published var discoveredBrowsers: [BrowserInfo] = []
+    @Published var currentDefaultBrowserID: String?
 
     private let settingsURL: URL
     private let supportURL: URL
@@ -1052,6 +1054,11 @@ final class PreferencesStore: ObservableObject {
             }
         }
 
+        if settings.schemaVersion < 10 {
+            settings.schemaVersion = 10
+            settings.browserFlip = settings.browserFlip ?? .defaults
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1127,5 +1134,78 @@ final class PreferencesStore: ObservableObject {
             types.append(appType)
         }
         return types
+    }
+
+    // MARK: - Browser Flip
+
+    func refreshBrowsers() {
+        Task.detached(priority: .userInitiated) {
+            let newBrowsers = DefaultBrowserService.shared.discoverBrowsers()
+            await MainActor.run {
+                self.applyBrowserDiscovery(newBrowsers: newBrowsers)
+            }
+        }
+    }
+
+    private func applyBrowserDiscovery(newBrowsers: [BrowserInfo]) {
+        let savedBrowsers = settings.resolvedBrowserFlip.savedBrowsers
+
+        var merged: [BrowserInfo] = []
+        var usedIDs = Set<String>()
+
+        for saved in savedBrowsers {
+            if let discovered = newBrowsers.first(where: { $0.id == saved.id }) {
+                var browser = discovered
+                browser.isVisible = saved.isVisible
+                browser.sortOrder = saved.sortOrder
+                merged.append(browser)
+                usedIDs.insert(browser.id)
+            }
+        }
+
+        for discovered in newBrowsers where !usedIDs.contains(discovered.id) {
+            var browser = discovered
+            browser.sortOrder = merged.count
+            merged.append(browser)
+        }
+
+        discoveredBrowsers = merged
+        updateBrowserFlipSettings { $0.savedBrowsers = merged }
+        currentDefaultBrowserID = DefaultBrowserService.shared.currentDefaultBrowserID()
+    }
+
+    func updateBrowserFlipSettings(_ update: (inout BrowserFlipSettings) -> Void) {
+        var flip = settings.resolvedBrowserFlip
+        update(&flip)
+        settings.browserFlip = flip
+    }
+
+    func setBrowserVisible(_ browser: BrowserInfo, visible: Bool) {
+        if let index = discoveredBrowsers.firstIndex(where: { $0.id == browser.id }) {
+            discoveredBrowsers[index].isVisible = visible
+            updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+        }
+    }
+
+    func resetHiddenBrowsers() {
+        for index in discoveredBrowsers.indices {
+            discoveredBrowsers[index].isVisible = true
+        }
+        updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+    }
+
+    func moveBrowser(from source: IndexSet, to destination: Int) {
+        discoveredBrowsers.move(fromOffsets: source, toOffset: destination)
+        for (index, _) in discoveredBrowsers.enumerated() {
+            discoveredBrowsers[index].sortOrder = index
+        }
+        updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+    }
+
+    func setEnableBrowserFlip(_ enabled: Bool) {
+        updateBrowserFlipSettings { $0.enableBrowserFlip = enabled }
+        if enabled {
+            refreshBrowsers()
+        }
     }
 }
