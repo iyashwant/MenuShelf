@@ -42,6 +42,23 @@ final class FolderMenuDelegate: NSObject, NSMenuDelegate {
         builder?.populateFolderMenu(menu, configID: configID, configOverride: configOverride, menuView: menuView, folderURL: folderURL, isRoot: isRoot, visited: visited)
     }
 
+    /// Folder contents never carry key equivalents — file/folder rows and the
+    /// folder footer all use empty `keyEquivalent`. Returning false here tells
+    /// AppKit not to populate this submenu when searching for a matching key
+    /// equivalent on a keypress while the menu is open. Without this, every
+    /// keystroke triggered a recursive `menuNeedsUpdate` walk through the
+    /// entire folder tree (each call enumerating the directory and loading
+    /// resource values + icons), saturating the main thread and freezing the
+    /// menu.
+    func menuHasKeyEquivalent(
+        _ menu: NSMenu,
+        for event: NSEvent,
+        target: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+        action: UnsafeMutablePointer<Selector?>
+    ) -> Bool {
+        false
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         DiagnosticsLogger.shared.log("FolderMenuDelegate.menuWillOpen configID=\(configID)")
     }
@@ -581,7 +598,13 @@ final class MenuBuilder {
     private func menuItem(for item: FileMenuItem, config: FolderConfig, visited: Set<String>) -> NSMenuItem {
         let menuItem = NSMenuItem(title: item.displayName, action: nil, keyEquivalent: "")
         if store.settings.resolvedShowFileAndFolderIcons {
-            menuItem.image = smallIcon(item.icon, size: config.menuSettings.resolvedFileIconSize.pointSize)
+            // Fetch the icon lazily here rather than during directory enumeration.
+            // `metadataService.icon(for:size:)` caches per (path, size), so a folder
+            // that's been opened before pays no syscall cost. This avoids the
+            // worst-case "freeze on first open of a 50k-file repo folder" where
+            // every entry triggered a synchronous `NSWorkspace.shared.icon` call.
+            let size = config.menuSettings.resolvedFileIconSize.pointSize
+            menuItem.image = metadataService.icon(for: item.actionURL, size: size)
         }
 
         if item.hasSymlinkLoop {

@@ -412,7 +412,6 @@ final class FileAccessService {
             isSymlink: isSymlink,
             aliasIsBroken: aliasIsBroken,
             hasSymlinkLoop: hasSymlinkLoop,
-            icon: NSWorkspace.shared.icon(forFile: targetURL.path),
             metadata: metadata
         )
     }

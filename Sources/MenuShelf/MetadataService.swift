@@ -21,9 +21,13 @@ final class MetadataService {
     // NSWorkspace.icon(forFile:) returns a shared instance whose size we previously
     // mutated in place, which polluted other callers. Cache copies keyed by (path, size)
     // so a 1000-item folder costs ~1000 lookups on first open and ~0 thereafter.
+    //
+    // The limit is generous because folder sources can include repos with thousands
+    // of entries (Xcode builds, node_modules, etc.). Each entry is a small NSImage,
+    // so 4096 cached at a few KB each is well under a megabyte.
     private let iconCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 512
+        cache.countLimit = 4096
         return cache
     }()
 
