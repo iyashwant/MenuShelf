@@ -8,6 +8,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case menuDefaults
     case shortcuts
     case appleScripts
+    case browserFlip
     case advanced
 
     var id: String { rawValue }
@@ -20,6 +21,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .menuDefaults: "Menu Defaults"
         case .shortcuts: "Apple Shortcuts"
         case .appleScripts: "AppleScripts"
+        case .browserFlip: "Browser Flip"
         case .advanced: "Advanced"
         }
     }
@@ -36,6 +38,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
                 return "applescript"
             }
             return "scroll"
+        case .browserFlip: return "globe"
         case .advanced: return "wrench.and.screwdriver"
         }
     }
@@ -88,6 +91,8 @@ struct SettingsView: View {
                     ShortcutsSettingsView()
                 case .appleScripts:
                     AppleScriptSettingsView()
+                case .browserFlip:
+                    BrowserFlipSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
