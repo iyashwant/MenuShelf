@@ -32,15 +32,31 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 .environmentObject(store)
 
             let hostingController = NSHostingController(rootView: rootView)
-            let settingsWindow = NSWindow(contentViewController: hostingController)
-            settingsWindow.title = "MenuShelf Settings"
-            settingsWindow.setContentSize(NSSize(width: 900, height: 620))
+            let contentSize = NSSize(width: 840, height: 620)
+            let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            let initialContentRect = NSRect(origin: .zero, size: contentSize)
+
+            let settingsWindow = NSWindow(
+                contentRect: initialContentRect,
+                styleMask: styleMask,
+                backing: .buffered,
+                defer: false
+            )
+            settingsWindow.contentViewController = hostingController
+            settingsWindow.title = ""
             settingsWindow.minSize = NSSize(width: 760, height: 520)
-            settingsWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             settingsWindow.titlebarAppearsTransparent = true
+            settingsWindow.titleVisibility = .hidden
             settingsWindow.isReleasedWhenClosed = false
             settingsWindow.delegate = self
+
+            // Remove any stale saved frame from previous builds.
+            NSWindow.removeFrame(usingName: "MenuShelfSettings")
+
+            // Set the content size explicitly, then center on screen.
+            settingsWindow.setContentSize(contentSize)
             settingsWindow.center()
+
             window = settingsWindow
         }
 

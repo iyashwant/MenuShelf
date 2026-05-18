@@ -65,7 +65,7 @@ extension MenuBuilder {
         let askIcon = NSWorkspace.shared.icon(forFile: askEverytime.appURL.path)
         askIcon.size = NSSize(width: 16, height: 16)
         askItem.image = askIcon
-        askItem.state = (askEverytime.id == store.currentDefaultBrowserID) ? .on : .off
+        askItem.state = (askEverytime.id == store.currentDefaultBrowserID) ? NSControl.StateValue.on : .off
         menu.addItem(askItem)
 
         let nonSelfVisible = visibleBrowsers.filter { $0.id != askEverytime.id }
@@ -82,7 +82,7 @@ extension MenuBuilder {
                 let icon = NSWorkspace.shared.icon(forFile: browser.appURL.path)
                 icon.size = NSSize(width: 16, height: 16)
                 browserItem.image = icon
-                browserItem.state = (browser.id == store.currentDefaultBrowserID) ? .on : .off
+                browserItem.state = (browser.id == store.currentDefaultBrowserID) ? NSControl.StateValue.on : .off
                 menu.addItem(browserItem)
             }
         }

@@ -8,7 +8,6 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case menuDefaults
     case shortcuts
     case appleScripts
-    case browserFlip
     case advanced
 
     var id: String { rawValue }
@@ -19,9 +18,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .menuViews: "Menu Views"
         case .sources: "Sources"
         case .menuDefaults: "Menu Defaults"
-        case .shortcuts: "Shortcuts"
+        case .shortcuts: "Apple Shortcuts"
         case .appleScripts: "AppleScripts"
-        case .browserFlip: "Browser Flip"
         case .advanced: "Advanced"
         }
     }
@@ -32,13 +30,12 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .menuViews: return "menubar.rectangle"
         case .sources: return "externaldrive"
         case .menuDefaults: return "slider.horizontal.3"
-        case .shortcuts: return "keyboard"
+        case .shortcuts: return "bolt.fill"
         case .appleScripts:
             if NSImage(systemSymbolName: "applescript", accessibilityDescription: nil) != nil {
                 return "applescript"
             }
             return "scroll"
-        case .browserFlip: return "globe"
         case .advanced: return "wrench.and.screwdriver"
         }
     }
@@ -50,9 +47,30 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsSection.allCases, selection: $section) { section in
-                Label(section.title, systemImage: section.symbolName)
-                    .tag(section)
+            VStack(spacing: 0) {
+                List(SettingsSection.allCases, selection: $section) { section in
+                    Label(section.title, systemImage: section.symbolName)
+                        .tag(section)
+                }
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("MenuShelf")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Settings")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
         } detail: {
@@ -70,8 +88,6 @@ struct SettingsView: View {
                     ShortcutsSettingsView()
                 case .appleScripts:
                     AppleScriptSettingsView()
-                case .browserFlip:
-                    BrowserFlipSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
@@ -79,6 +95,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.regularMaterial)
         }
+        .navigationTitle("")
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusAppleScripts)) { _ in
             section = .appleScripts
         }
@@ -257,21 +274,28 @@ private struct MenuViewsSettingsView: View {
                 .padding(10)
             }
             .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
+            .frame(maxHeight: .infinity)
 
-            Group {
-                if store.settings.resolvedMenuViews.isEmpty {
-                    EmptyMenuViewsPanel()
-                        .frame(minWidth: 430)
-                } else if let id = store.selectedMenuViewID, let currentMenuView = store.menuView(id: id) {
-                    MenuViewDetailView(view: Binding(
-                        get: { store.menuView(id: id) ?? currentMenuView },
-                        set: { store.updateMenuView($0) }
-                    ))
-                    .frame(minWidth: 480)
-                } else {
-                    ContentUnavailableView("Select a Menu View", systemImage: "menubar.rectangle", description: Text("Choose a menu bar icon/view from the list, or create a new one."))
-                        .frame(minWidth: 430)
-                }
+            if store.settings.resolvedMenuViews.isEmpty {
+                EmptyMenuViewsPanel()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let id = store.selectedMenuViewID, let currentMenuView = store.menuView(id: id) {
+                MenuViewContentsView(view: Binding(
+                    get: { store.menuView(id: id) ?? currentMenuView },
+                    set: { store.updateMenuView($0) }
+                ))
+                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
+                .frame(maxHeight: .infinity)
+
+                MenuViewDetailView(view: Binding(
+                    get: { store.menuView(id: id) ?? currentMenuView },
+                    set: { store.updateMenuView($0) }
+                ))
+                .frame(minWidth: 380)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView("Select a Menu View", systemImage: "menubar.rectangle", description: Text("Choose a menu bar icon/view from the list, or create a new one."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -327,6 +351,7 @@ private struct SourcesSettingsView: View {
                 .padding(10)
             }
             .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
+            .frame(maxHeight: .infinity)
 
             Group {
                 if store.settings.folders.isEmpty {
@@ -337,12 +362,13 @@ private struct SourcesSettingsView: View {
                         get: { store.folder(id: id) ?? currentFolder },
                         set: { store.updateFolder($0) }
                     ))
-                    .frame(minWidth: 480)
+                    .frame(minWidth: 380)
                 } else {
                     ContentUnavailableView("Select a Source", systemImage: "externaldrive", description: Text("Choose a folder or app source from the library."))
-                        .frame(minWidth: 430)
+                        .frame(minWidth: 380)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -499,202 +525,6 @@ private struct MenuViewDetailView: View {
                     }
                 }
 
-                SettingsCard("View Contents") {
-                    SettingsBlockRow {
-                        HStack {
-                            Menu {
-                            Button {
-                                store.selectedMenuViewID = view.id
-                                store.addFolderFromPanel()
-                            } label: {
-                                Label("Add Folder", systemImage: "folder.badge.plus")
-                            }
-
-                            Button {
-                                store.selectedMenuViewID = view.id
-                                store.addAppFromPanel()
-                            } label: {
-                                Label("Add App", systemImage: "app.badge.plus")
-                            }
-
-                            Divider()
-
-                            Menu {
-                                ForEach(store.settings.folders) { source in
-                                    Button(source.displayName) {
-                                        store.attachSource(source.id, toMenuViewID: view.id)
-                                    }
-                                }
-                            } label: {
-                                Label("Add Existing Source", systemImage: "plus.square.on.square")
-                            }
-
-                            Menu {
-                                let candidates = store.settings.resolvedMenuViews.filter { candidate in
-                                    candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
-                                }
-
-                                if candidates.isEmpty {
-                                    Text("No available views")
-                                } else {
-                                    ForEach(candidates) { candidate in
-                                        Button(candidate.title) {
-                                            store.addLinkedMenuView(candidate.id, toMenuViewID: view.id)
-                                        }
-                                        .disabled(!store.canLinkMenuView(candidate.id, toMenuViewID: view.id))
-                                    }
-                                }
-                            } label: {
-                                Label("Add Existing View", systemImage: "menubar.rectangle")
-                            }
-
-                            Divider()
-
-                            Menu {
-                                if store.availableShortcuts.isEmpty {
-                                    Button("Refresh Shortcuts") {
-                                        store.refreshShortcutsCatalog()
-                                    }
-                                } else {
-                                    ForEach(store.availableShortcuts) { shortcut in
-                                        Button(shortcut.name) {
-                                            store.addShortcut(shortcut, toMenuViewID: view.id)
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Label("Add Shortcut", systemImage: "bolt.fill")
-                            }
-
-                            Menu {
-                                if store.availableShortcutFolders.isEmpty {
-                                    Button("Refresh Shortcuts Folders") {
-                                        store.refreshShortcutsCatalog()
-                                    }
-                                } else {
-                                    ForEach(store.availableShortcutFolders) { folder in
-                                        Button(folder.name) {
-                                            store.addLinkedShortcutsFolder(folder, toMenuViewID: view.id)
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
-                            }
-
-                            Divider()
-
-                            Menu {
-                                let attached = Set(view.resolvedAppleScriptItems.map(\.appleScriptID))
-                                let candidates = store.settings.resolvedAppleScripts.filter { !attached.contains($0.id) }
-                                if candidates.isEmpty {
-                                    Text("No AppleScripts available").disabled(true)
-                                } else {
-                                    ForEach(candidates) { script in
-                                        Button(script.name) {
-                                            store.attachAppleScript(script.id, toMenuViewID: view.id)
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Label("Add AppleScript", systemImage: appleScriptMenuSymbol)
-                            }
-
-                            Divider()
-
-                            Button {
-                                store.addBrowserFlipItem(toMenuViewID: view.id)
-                            } label: {
-                                Label("Add Default Browser", systemImage: "globe")
-                            }
-                            .disabled(view.browserFlipItem != nil)
-                        } label: {
-                            Label("Add", systemImage: "plus")
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-
-                        Button {
-                            if let id = selectedContentItemID,
-                               let item = unifiedItems.first(where: { $0.id == id }) {
-                                editingItem = item
-                            }
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        .disabled(selectedContentItemID == nil)
-
-                        Button {
-                            if let id = selectedContentItemID {
-                                removeContentItem(id: id)
-                            }
-                        } label: {
-                            Label("Remove", systemImage: "minus")
-                        }
-                        .disabled(selectedContentItemID == nil)
-
-                        Spacer()
-
-                        Button {
-                            store.refreshShortcutsCatalog()
-                        } label: {
-                            Label("Refresh Shortcuts", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(store.isRefreshingShortcuts)
-
-                        if store.isRefreshingShortcuts {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-                    }
-
-                    SettingsBlockRow {
-                    List(selection: $selectedContentItemID) {
-                        ForEach(unifiedItems) { item in
-                            UnifiedContentItemRow(item: item, store: store)
-                                .tag(item.id)
-                                .contextMenu {
-                                    Button {
-                                        editingItem = item
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-
-                                    Divider()
-
-                                    Button(role: .destructive) {
-                                        removeContentItem(id: item.id)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-
-                                    if case .shortcut(let shortcut) = item {
-                                        Button {
-                                            let identifierOrName = shortcut.shortcutIdentifier ?? shortcut.name
-                                            Task {
-                                                try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
-                                            }
-                                        } label: {
-                                            Label("Open in Shortcuts", systemImage: "app.connected.to.app.below.fill")
-                                        }
-                                    }
-                                }
-                        }
-                        .onMove { source, destination in
-                            handleContentMove(fromOffsets: source, toOffset: destination)
-                        }
-                    }
-                    .frame(height: listHeight)
-                    .scrollContentBackground(.hidden)
-                    }
-                }
-                .popover(item: $editingItem, arrowEdge: .trailing) { item in
-                    makePopoverEditor(for: item)
-                        .frame(minWidth: 340, idealWidth: 380)
-                        .padding()
-                }
-
                 MenuSettingsEditor(settings: $view.menuSettings)
             }
             .padding(28)
@@ -704,6 +534,219 @@ private struct MenuViewDetailView: View {
 
     private var contentCount: Int {
         view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0)
+    }
+}
+
+private struct MenuViewContentsView: View {
+    @EnvironmentObject private var store: PreferencesStore
+    @Binding var view: MenuViewConfig
+    @State private var selectedContentItemID: UUID?
+    @State private var editingItem: UnifiedContentItem?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("View Contents")
+                    .font(.headline)
+                Spacer()
+                if store.isRefreshingShortcuts {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            List(selection: $selectedContentItemID) {
+                ForEach(unifiedItems) { item in
+                    UnifiedContentItemRow(item: item, store: store)
+                        .tag(item.id)
+                        .contextMenu {
+                            Button {
+                                editingItem = item
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+
+                            Divider()
+
+                            Button(role: .destructive) {
+                                removeContentItem(id: item.id)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+
+                            if case .shortcut(let shortcut) = item {
+                                Button {
+                                    let identifierOrName = shortcut.shortcutIdentifier ?? shortcut.name
+                                    Task {
+                                        try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                                    }
+                                } label: {
+                                    Label("Open in Shortcuts", systemImage: "app.connected.to.app.below.fill")
+                                }
+                            }
+                        }
+                }
+                .onMove { source, destination in
+                    handleContentMove(fromOffsets: source, toOffset: destination)
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            Divider()
+
+            HStack {
+                Menu {
+                    Button {
+                        store.selectedMenuViewID = view.id
+                        store.addFolderFromPanel()
+                    } label: {
+                        Label("Add Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    Button {
+                        store.selectedMenuViewID = view.id
+                        store.addAppFromPanel()
+                    } label: {
+                        Label("Add App", systemImage: "app.badge.plus")
+                    }
+
+                    Divider()
+
+                    Menu {
+                        ForEach(store.settings.folders) { source in
+                            Button(source.displayName) {
+                                store.attachSource(source.id, toMenuViewID: view.id)
+                            }
+                        }
+                    } label: {
+                        Label("Add Existing Source", systemImage: "plus.square.on.square")
+                    }
+
+                    Menu {
+                        let candidates = store.settings.resolvedMenuViews.filter { candidate in
+                            candidate.id != view.id && !view.resolvedLinkedMenuViews.contains { $0.menuViewID == candidate.id }
+                        }
+
+                        if candidates.isEmpty {
+                            Text("No available views")
+                        } else {
+                            ForEach(candidates) { candidate in
+                                Button(candidate.title) {
+                                    store.addLinkedMenuView(candidate.id, toMenuViewID: view.id)
+                                }
+                                .disabled(!store.canLinkMenuView(candidate.id, toMenuViewID: view.id))
+                            }
+                        }
+                    } label: {
+                        Label("Add Existing View", systemImage: "menubar.rectangle")
+                    }
+
+                    Divider()
+
+                    Menu {
+                        if store.availableShortcuts.isEmpty {
+                            Button("Refresh Shortcuts") {
+                                store.refreshShortcutsCatalog()
+                            }
+                        } else {
+                            ForEach(store.availableShortcuts) { shortcut in
+                                Button(shortcut.name) {
+                                    store.addShortcut(shortcut, toMenuViewID: view.id)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Add Shortcut", systemImage: "bolt.fill")
+                    }
+
+                    Menu {
+                        if store.availableShortcutFolders.isEmpty {
+                            Button("Refresh Shortcuts Folders") {
+                                store.refreshShortcutsCatalog()
+                            }
+                        } else {
+                            ForEach(store.availableShortcutFolders) { folder in
+                                Button(folder.name) {
+                                    store.addLinkedShortcutsFolder(folder, toMenuViewID: view.id)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Link Shortcuts Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    Divider()
+
+                    Menu {
+                        let attached = Set(view.resolvedAppleScriptItems.map(\.appleScriptID))
+                        let candidates = store.settings.resolvedAppleScripts.filter { !attached.contains($0.id) }
+                        if candidates.isEmpty {
+                            Text("No AppleScripts available").disabled(true)
+                        } else {
+                            ForEach(candidates) { script in
+                                Button(script.name) {
+                                    store.attachAppleScript(script.id, toMenuViewID: view.id)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Add AppleScript", systemImage: appleScriptMenuSymbol)
+                    }
+
+                    Divider()
+
+                    Button {
+                        store.addBrowserFlipItem(toMenuViewID: view.id)
+                    } label: {
+                        Label("Add Default Browser", systemImage: "globe")
+                    }
+                    .disabled(view.browserFlipItem != nil)
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                Button {
+                    if let id = selectedContentItemID,
+                       let item = unifiedItems.first(where: { $0.id == id }) {
+                        editingItem = item
+                    }
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                .disabled(selectedContentItemID == nil)
+
+                Button {
+                    if let id = selectedContentItemID {
+                        removeContentItem(id: id)
+                    }
+                } label: {
+                    Label("Remove", systemImage: "minus")
+                }
+                .disabled(selectedContentItemID == nil)
+
+                Spacer()
+
+                Button {
+                    store.refreshShortcutsCatalog()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh Shortcuts")
+                .disabled(store.isRefreshingShortcuts)
+            }
+            .padding(10)
+        }
+        .popover(item: $editingItem, arrowEdge: .trailing) { item in
+            makePopoverEditor(for: item)
+                .frame(minWidth: 340, idealWidth: 380)
+                .padding()
+        }
     }
 
     private var unifiedItems: [UnifiedContentItem] {
@@ -724,13 +767,6 @@ private struct MenuViewDetailView: View {
             return "applescript"
         }
         return "scroll"
-    }
-
-    private let listRowHeight: CGFloat = 44
-
-    private var listHeight: CGFloat {
-        let count = unifiedItems.count
-        return count > 0 ? CGFloat(count) * listRowHeight + 32 : listRowHeight
     }
 
     private func menuViewItemBinding(for id: UUID) -> Binding<MenuViewItem>? {
@@ -1813,10 +1849,121 @@ private enum SuggestedFolder: String, CaseIterable, Identifiable {
 
 private struct ShortcutsSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
+    @State private var searchText = ""
 
     var body: some View {
+        HSplitView {
+            allShortcutsList
+                .frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
+                .frame(maxHeight: .infinity)
+
+            detailPane
+                .frame(minWidth: 360)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var allShortcutsList: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("All Shortcuts")
+                    .font(.headline)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search shortcuts", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Clear search")
+                    }
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            Divider()
+
+            Group {
+                if store.availableShortcuts.isEmpty {
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Text(store.isRefreshingShortcuts ? "Loading shortcuts…" : "No shortcuts found.")
+                            .foregroundStyle(.secondary)
+                        if !store.isRefreshingShortcuts {
+                            Button("Refresh Catalog") {
+                                store.refreshShortcutsCatalog()
+                            }
+                            .controlSize(.small)
+                        }
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else if filteredShortcuts.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("No shortcuts match \u{201C}\(searchText)\u{201D}.")
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(filteredShortcuts.enumerated()), id: \.element.id) { index, shortcut in
+                                AllShortcutsRow(shortcut: shortcut)
+                                if index < filteredShortcuts.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 38)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Button {
+                    store.refreshShortcutsCatalog()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(store.isRefreshingShortcuts)
+
+                if store.isRefreshingShortcuts {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Spacer()
+
+                Text("\(filteredShortcuts.count) of \(store.availableShortcuts.count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+        }
+    }
+
+    private var detailPane: some View {
         SettingsPane(
-            "Shortcuts",
+            "Apple Shortcuts",
             subtitle: "Run Shortcuts.app workflows directly from MenuShelf."
         ) {
             SettingsCard("Catalog") {
@@ -1882,32 +2029,9 @@ private struct ShortcutsSettingsView: View {
             }
 
             SettingsCard(
-                "Menu View Hotkeys",
+                "URL Scheme",
                 footer: "Option-click a shortcut menu item to open it for editing in Shortcuts.app."
             ) {
-                if store.settings.resolvedMenuViews.isEmpty {
-                    SettingsBlockRow {
-                        Text("Create a Menu View to assign hotkeys.")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    ForEach(store.settings.resolvedMenuViews) { view in
-                        SettingsRow(view.title, helper: hotkeyHelper(for: view)) {
-                            ShortcutRecorderView(shortcut: Binding(
-                                get: { store.menuView(id: view.id)?.shortcut ?? .disabled },
-                                set: { shortcut in
-                                    guard var updated = store.menuView(id: view.id) else { return }
-                                    updated.shortcut = shortcut
-                                    store.updateMenuView(updated)
-                                }
-                            ))
-                            .frame(width: 200, height: 30)
-                        }
-                    }
-                }
-            }
-
-            SettingsCard("URL Scheme") {
                 SettingsBlockRow {
                     Text("Trigger a shortcut from anywhere by name or identifier.")
                         .font(.footnote)
@@ -1920,10 +2044,86 @@ private struct ShortcutsSettingsView: View {
         }
     }
 
-    private func hotkeyHelper(for view: MenuViewConfig) -> String {
-        let sources = view.items.count
-        let shortcuts = view.resolvedShortcutItems.count
-        return "\(sources) source\(sources == 1 ? "" : "s") · \(shortcuts) shortcut\(shortcuts == 1 ? "" : "s")"
+    private var filteredShortcuts: [ShortcutInfo] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return store.availableShortcuts }
+        return store.availableShortcuts.filter { shortcut in
+            shortcut.name.localizedCaseInsensitiveContains(trimmed)
+                || (shortcut.identifier?.localizedCaseInsensitiveContains(trimmed) ?? false)
+        }
+    }
+}
+
+private struct AllShortcutsRow: View {
+    let shortcut: ShortcutInfo
+    @State private var isHovering = false
+    @State private var isRunning = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bolt.fill")
+                .foregroundStyle(.orange)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(shortcut.name)
+                    .lineLimit(1)
+                if let identifier = shortcut.identifier {
+                    Text(identifier)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if isRunning {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Button {
+                runShortcut()
+            } label: {
+                Label("Run", systemImage: "play.fill")
+            }
+            .controlSize(.small)
+            .disabled(isRunning)
+            .help("Run shortcut")
+
+            Button {
+                openInShortcuts()
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            .help("Open in Shortcuts")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(isHovering ? Color.primary.opacity(0.06) : Color.clear)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+    }
+
+    private var identifierOrName: String {
+        shortcut.identifier ?? shortcut.name
+    }
+
+    private func runShortcut() {
+        isRunning = true
+        Task {
+            try? await AppContainer.shared.shortcutsService.runShortcut(identifierOrName: identifierOrName)
+            await MainActor.run { isRunning = false }
+        }
+    }
+
+    private func openInShortcuts() {
+        Task {
+            try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+        }
     }
 }
 

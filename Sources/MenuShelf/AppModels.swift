@@ -689,7 +689,6 @@ struct FileMenuItem: Equatable {
     var isSymlink: Bool
     var aliasIsBroken: Bool
     var hasSymlinkLoop: Bool
-    var icon: NSImage
     var metadata: FileMetadata
 
     var actionURL: URL { resolvedURL ?? url }
