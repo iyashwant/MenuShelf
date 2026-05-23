@@ -95,8 +95,8 @@ extension MenuBuilder {
             // delegate so the clock list is rebuilt every time the
             // submenu opens. The parent item itself does not dispatch
             // an action — clicks open the submenu, the trailing items
-            // dispatch the actual `.openWorldClock` and `.openSettings`
-            // actions.
+            // dispatch the actual `.openWorldClock` and
+            // `.openWorldClockSettings` actions.
             let parent = NSMenuItem(
                 title: config.displayTitle,
                 action: nil,
@@ -141,7 +141,7 @@ extension MenuBuilder {
             menu.addItem(.separator())
             menu.addItem(actionItem(
                 "Open Settings…",
-                kind: .openSettings
+                kind: .openWorldClockSettings
             ))
             return
         }
@@ -186,7 +186,7 @@ extension MenuBuilder {
         // Requirement 1.9 — trailing actions: separator, then
         // "Open World Clock…" (`.openWorldClock`) carrying the
         // originating `menuViewID` so the controller can resolve the
-        // anchor, then "Open Settings…" (`.openSettings`).
+        // anchor, then "Open Settings…" (`.openWorldClockSettings`).
         menu.addItem(.separator())
         menu.addItem(actionItem(
             "Open World Clock…",
@@ -195,7 +195,7 @@ extension MenuBuilder {
         ))
         menu.addItem(actionItem(
             "Open Settings…",
-            kind: .openSettings
+            kind: .openWorldClockSettings
         ))
     }
 }

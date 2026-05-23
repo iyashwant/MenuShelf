@@ -19,7 +19,9 @@ struct SearchFieldView: View {
           .padding(.leading, 5)
           .opacity(0.8)
 
-        TextField(placeholder, text: $query)
+        TextField(text: $query, prompt: Text(placeholder, bundle: .module)) {
+          Text(placeholder, bundle: .module)
+        }
           .disableAutocorrection(true)
           .lineLimit(1)
           .textFieldStyle(.plain)

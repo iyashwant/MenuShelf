@@ -88,7 +88,7 @@ extension MenuBuilder {
         }
 
         menu.addItem(.separator())
-        menu.addItem(actionItem("Refresh Browsers", kind: .openSettings))
+        menu.addItem(actionItem("Refresh Browsers", kind: .openBrowserFlipSettings))
     }
 
     /// Returns a synthetic BrowserInfo for MenuShelf itself. Selecting this

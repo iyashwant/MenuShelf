@@ -11,8 +11,9 @@ final class StandaloneModuleClickRouter {
     ///
     /// The matrix is exhaustive over the documented input space and the
     /// branches are disjoint, evaluated top-down:
-    ///   - Branch A: right-click → open Settings deep-link.
-    ///   - Branch B: option + left-click → open Settings deep-link.
+    ///   - Branch A: right-click → open the bound module's settings pane.
+    ///   - Branch B: option + left-click → open the bound module's
+    ///     settings pane.
     ///   - Branch C: bound feature disabled → focus the feature's
     ///     settings pane.
     ///   - Branch D: otherwise → dispatch to the bound module's surface.
@@ -24,15 +25,15 @@ final class StandaloneModuleClickRouter {
         modifierFlags: NSEvent.ModifierFlags,
         presentationCoordinator: MenuPresentationCoordinator
     ) {
-        // Branch A: right-click opens the Settings deep-link
+        // Branch A: right-click opens the bound module's settings pane
         // (Requirement 6.4).
         if eventType == .rightMouseUp {
             openSettingsDeepLink(module: module)
             return
         }
 
-        // Branch B: option + left-click opens the Settings deep-link
-        // (Requirement 6.5).
+        // Branch B: option + left-click opens the bound module's
+        // settings pane (Requirement 6.5).
         if eventType == .leftMouseUp && modifierFlags.contains(.option) {
             openSettingsDeepLink(module: module)
             return
@@ -154,13 +155,25 @@ final class StandaloneModuleClickRouter {
         }
     }
 
-    /// Open Settings deep-linked to this module's row in the
-    /// Standalone Modules pane (Requirements 6.4, 6.5, 9.1).
+    /// Open Settings deep-linked to the bound module's specific
+    /// settings pane (Browser Flip, Clipboard Shelf, or World Clock).
+    /// Triggered from a right-click or option + left-click on a
+    /// standalone module's status item.
     private func openSettingsDeepLink(module: StandaloneModuleConfig) {
-        AppContainer.shared.settingsWindowController.show(
-            focusStandaloneModules: true,
-            scrollToStandaloneModuleID: module.id
-        )
+        switch module.kind {
+        case .clipboardShelf:
+            AppContainer.shared.settingsWindowController.show(
+                focusClipboardShelf: true
+            )
+        case .worldClock:
+            AppContainer.shared.settingsWindowController.show(
+                focusWorldClock: true
+            )
+        case .browserFlip:
+            AppContainer.shared.settingsWindowController.show(
+                focusBrowserFlip: true
+            )
+        }
     }
 }
 

@@ -145,7 +145,7 @@ private struct StandaloneModuleRow: View {
 
 // MARK: - Detail view (Task 10.6 + 10.7 + 10.8)
 
-private struct StandaloneModuleDetailView: View {
+struct StandaloneModuleDetailView: View {
     @EnvironmentObject private var store: PreferencesStore
     let module: StandaloneModuleConfig
 

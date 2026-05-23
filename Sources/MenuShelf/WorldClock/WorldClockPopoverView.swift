@@ -280,10 +280,17 @@ private struct TimeTravelSection: View {
             }
 
             HStack(spacing: 8) {
+                // No `step:` here — the controller's
+                // `quantizeAndClampOffset(_:)` already snaps the value
+                // to 15-minute increments. Passing `step:` to
+                // SwiftUI's Slider causes AppKit to render a row of
+                // tick marks under the track (192 dashes across the
+                // full -24h…+24h range), which reads as a band of
+                // tiny text on macOS. Quantizing in the binding setter
+                // gives the same behaviour without the visual noise.
                 Slider(
                     value: offsetBinding,
-                    in: -86_400...86_400,
-                    step: 900
+                    in: -86_400...86_400
                 )
                 .accessibilityLabel("Time Travel")
 
@@ -331,7 +338,7 @@ private struct OverflowMenuButton: View {
             .keyboardShortcut("+", modifiers: .command)
 
             Button("Open Settings…") {
-                AppContainer.shared.settingsWindowController.show()
+                AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
             }
 
             Divider()
@@ -354,6 +361,6 @@ private struct OverflowMenuButton: View {
     /// minimal. A future revision could surface a dedicated sheet
     /// directly inside the popover.
     private func openAddTimeZone() {
-        AppContainer.shared.settingsWindowController.show()
+        AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
     }
 }

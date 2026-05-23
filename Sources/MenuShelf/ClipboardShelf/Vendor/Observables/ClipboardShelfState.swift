@@ -10,7 +10,7 @@ import SwiftUI
 /// - `openPreferences()` and `openAbout()` are routed through MenuShelf
 ///   handlers configured at runtime by `ClipboardShelfController`.
 @Observable
-class ClipboardShelfState: Sendable {
+final class ClipboardShelfState: @unchecked Sendable {
   static let shared = ClipboardShelfState(history: History.shared, footer: Footer())
 
   let multiSelectionEnabled = false

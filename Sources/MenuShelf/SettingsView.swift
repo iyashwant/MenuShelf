@@ -4,7 +4,6 @@ import SwiftUI
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
     case menuViews
-    case standaloneModules
     case sources
     case menuDefaults
     case shortcuts
@@ -19,8 +18,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
-        case .menuViews: "Menu Views"
-        case .standaloneModules: "Standalone Modules"
+        case .menuViews: "Menu Bar"
         case .sources: "Sources"
         case .menuDefaults: "Menu Defaults"
         case .shortcuts: "Apple Shortcuts"
@@ -36,7 +34,6 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape"
         case .menuViews: return "menubar.rectangle"
-        case .standaloneModules: return "square.grid.2x2"
         case .sources: return "externaldrive"
         case .menuDefaults: return "slider.horizontal.3"
         case .shortcuts: return "bolt.fill"
@@ -92,8 +89,6 @@ struct SettingsView: View {
                     GeneralSettingsView()
                 case .menuViews:
                     MenuViewsSettingsView()
-                case .standaloneModules:
-                    StandaloneModulesSettingsView()
                 case .sources:
                     SourcesSettingsView()
                 case .menuDefaults:
@@ -126,7 +121,7 @@ struct SettingsView: View {
             section = .worldClock
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusStandaloneModules)) { _ in
-            section = .standaloneModules
+            section = .menuViews
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusBrowserFlip)) { _ in
             section = .browserFlip
@@ -267,60 +262,157 @@ private struct GeneralSettingsView: View {
     }
 }
 
+private enum MenuBarItemSelection: Hashable {
+    case menuView(UUID)
+    case standaloneModule(UUID)
+}
+
 private struct MenuViewsSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
+    @State private var selection: MenuBarItemSelection?
+    @State private var pendingScrollToStandaloneModule: UUID?
 
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
-                List(selection: $store.selectedMenuViewID) {
-                    ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.worldClockItem != nil ? 1 : 0))
-                            .tag(Optional(view.id))
-                            .contextMenu {
-                                Button("Duplicate") {
-                                    store.duplicateMenuView(id: view.id)
+                ScrollViewReader { proxy in
+                    List(selection: $selection) {
+                        if !store.settings.resolvedMenuViews.isEmpty {
+                            Section("Menu Views") {
+                                ForEach(store.settings.resolvedMenuViews) { view in
+                                    MenuViewRow(
+                                        view: view,
+                                        itemCount: view.items.count
+                                            + view.resolvedLinkedMenuViews.count
+                                            + view.resolvedShortcutItems.count
+                                            + view.resolvedLinkedShortcutsFolders.count
+                                            + view.resolvedAppleScriptItems.count
+                                            + (view.browserFlipItem != nil ? 1 : 0)
+                                            + (view.clipboardShelfItem != nil ? 1 : 0)
+                                            + (view.worldClockItem != nil ? 1 : 0)
+                                    )
+                                    .tag(Optional(MenuBarItemSelection.menuView(view.id)))
+                                    .id(MenuBarItemSelection.menuView(view.id))
+                                    .contextMenu {
+                                        Button("Duplicate") {
+                                            store.duplicateMenuView(id: view.id)
+                                        }
+                                        Divider()
+                                        Button("Delete", role: .destructive) {
+                                            store.removeMenuView(id: view.id)
+                                        }
+                                    }
                                 }
-                                Divider()
-                                Button("Delete", role: .destructive) {
-                                    store.removeMenuView(id: view.id)
+                                .onMove { source, destination in
+                                    store.moveMenuViews(fromOffsets: source, toOffset: destination)
                                 }
                             }
+                        }
+
+                        if !sortedStandaloneModules.isEmpty {
+                            Section("Standalone Modules") {
+                                ForEach(sortedStandaloneModules) { module in
+                                    StandaloneModuleListRow(module: module)
+                                        .tag(Optional(MenuBarItemSelection.standaloneModule(module.id)))
+                                        .id(MenuBarItemSelection.standaloneModule(module.id))
+                                        .contextMenu {
+                                            Button("Delete", role: .destructive) {
+                                                store.removeStandaloneModule(id: module.id)
+                                                if selection == .standaloneModule(module.id) {
+                                                    selection = nil
+                                                }
+                                            }
+                                        }
+                                }
+                                .onMove { source, destination in
+                                    store.moveStandaloneModules(fromOffsets: source, toOffset: destination)
+                                }
+                            }
+                        }
                     }
-                    .onMove { source, destination in
-                        store.moveMenuViews(fromOffsets: source, toOffset: destination)
+                    .onChange(of: pendingScrollToStandaloneModule) { _, newValue in
+                        if let id = newValue {
+                            withAnimation {
+                                proxy.scrollTo(MenuBarItemSelection.standaloneModule(id), anchor: .center)
+                            }
+                            pendingScrollToStandaloneModule = nil
+                        }
                     }
                 }
 
                 Divider()
 
                 HStack {
-                    Button {
-                        store.addMenuView()
+                    Menu {
+                        Button {
+                            store.addMenuView()
+                            if let id = store.settings.resolvedMenuViews.last?.id {
+                                selection = .menuView(id)
+                            }
+                        } label: {
+                            Label("Add Menu View", systemImage: "menubar.rectangle")
+                        }
+
+                        Divider()
+
+                        ForEach(ModuleKind.allCases) { kind in
+                            Button {
+                                let entry = store.addStandaloneModule(kind: kind)
+                                selection = .standaloneModule(entry.id)
+                            } label: {
+                                Label("Add \(kind.defaultTitle)", systemImage: kind.defaultIconSymbol)
+                            }
+                        }
                     } label: {
-                        Label("Add View", systemImage: "plus")
+                        Label("Add", systemImage: "plus")
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
 
                     Button {
-                        if let id = store.selectedMenuViewID {
-                            store.removeMenuView(id: id)
-                        }
+                        removeSelection()
                     } label: {
                         Label("Remove", systemImage: "minus")
                     }
-                    .disabled(store.selectedMenuViewID == nil)
+                    .disabled(selection == nil)
 
                     Spacer()
                 }
                 .padding(10)
             }
-            .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
+            .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
             .frame(maxHeight: .infinity)
 
-            if store.settings.resolvedMenuViews.isEmpty {
-                EmptyMenuViewsPanel()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let id = store.selectedMenuViewID, let currentMenuView = store.menuView(id: id) {
+            detailPane
+        }
+        .onAppear {
+            syncSelectionFromStore(initial: true)
+        }
+        .onChange(of: store.selectedMenuViewID) { _, newValue in
+            if let id = newValue, selection != .menuView(id) {
+                selection = .menuView(id)
+            }
+        }
+        .onChange(of: selection) { _, newValue in
+            if case .menuView(let id) = newValue {
+                if store.selectedMenuViewID != id {
+                    store.selectedMenuViewID = id
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfScrollToStandaloneModule)) { notification in
+            if let id = notification.userInfo?["standaloneModuleID"] as? UUID {
+                selection = .standaloneModule(id)
+                pendingScrollToStandaloneModule = id
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailPane: some View {
+        switch selection {
+        case .menuView(let id):
+            if let currentMenuView = store.menuView(id: id) {
                 MenuViewContentsView(view: Binding(
                     get: { store.menuView(id: id) ?? currentMenuView },
                     set: { store.updateMenuView($0) }
@@ -335,10 +427,90 @@ private struct MenuViewsSettingsView: View {
                 .frame(minWidth: 380)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Select a Menu View", systemImage: "menubar.rectangle", description: Text("Choose a menu bar icon/view from the list, or create a new one."))
+                emptySelectionPane
+            }
+        case .standaloneModule(let id):
+            if let module = store.settings.resolvedStandaloneModules.first(where: { $0.id == id }) {
+                StandaloneModuleDetailView(module: module)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                emptySelectionPane
+            }
+        case .none:
+            if store.settings.resolvedMenuViews.isEmpty && sortedStandaloneModules.isEmpty {
+                EmptyMenuViewsPanel()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                emptySelectionPane
             }
         }
+    }
+
+    private var emptySelectionPane: some View {
+        ContentUnavailableView(
+            "Select a menu bar item",
+            systemImage: "menubar.rectangle",
+            description: Text("Choose a menu view or standalone module from the list, or add a new one.")
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sortedStandaloneModules: [StandaloneModuleConfig] {
+        store.settings.resolvedStandaloneModules.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func syncSelectionFromStore(initial: Bool) {
+        if selection != nil { return }
+        if let id = store.selectedMenuViewID {
+            selection = .menuView(id)
+        } else if let firstMenuViewID = store.settings.resolvedMenuViews.first?.id {
+            selection = .menuView(firstMenuViewID)
+        } else if let firstModuleID = sortedStandaloneModules.first?.id {
+            selection = .standaloneModule(firstModuleID)
+        }
+        _ = initial
+    }
+
+    private func removeSelection() {
+        switch selection {
+        case .menuView(let id):
+            store.removeMenuView(id: id)
+            selection = store.settings.resolvedMenuViews.first.map { .menuView($0.id) }
+                ?? sortedStandaloneModules.first.map { .standaloneModule($0.id) }
+        case .standaloneModule(let id):
+            store.removeStandaloneModule(id: id)
+            selection = sortedStandaloneModules.first.map { .standaloneModule($0.id) }
+                ?? store.settings.resolvedMenuViews.first.map { .menuView($0.id) }
+        case .none:
+            return
+        }
+    }
+}
+
+private struct StandaloneModuleListRow: View {
+    let module: StandaloneModuleConfig
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: module.kind.defaultIconSymbol)
+                .foregroundStyle(module.isVisible ? .primary : .secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(module.title.isEmpty ? module.kind.defaultTitle : module.title)
+                    .lineLimit(1)
+                Text(module.kind.defaultTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if module.shortcut?.isEnabled == true {
+                Image(systemName: "keyboard")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

@@ -46,6 +46,9 @@ enum MenuActionKind {
     case switchBrowser
     case openClipboardShelf
     case openWorldClock
+    case openClipboardShelfSettings
+    case openWorldClockSettings
+    case openBrowserFlipSettings
 }
 
 final class MenuAction: NSObject {
@@ -452,6 +455,18 @@ final class MenuAction: NSObject {
                 }
                 WorldClockController.shared.togglePopover(anchor: anchor)
             }
+
+        case .openClipboardShelfSettings:
+            AppContainer.shared.settingsWindowController.show(focusClipboardShelf: true)
+            DiagnosticsLogger.shared.log("Requested settings window focused on Clipboard Shelf")
+
+        case .openWorldClockSettings:
+            AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
+            DiagnosticsLogger.shared.log("Requested settings window focused on World Clock")
+
+        case .openBrowserFlipSettings:
+            AppContainer.shared.settingsWindowController.show(focusBrowserFlip: true)
+            DiagnosticsLogger.shared.log("Requested settings window focused on Browser Flip")
         }
     }
 

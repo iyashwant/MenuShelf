@@ -93,7 +93,7 @@ final class ClipboardShelfController {
         }
         ClipboardShelfState.shared.panel = panel
         ClipboardShelfState.shared.openPreferencesHandler = {
-            AppContainer.shared.settingsWindowController.show()
+            AppContainer.shared.settingsWindowController.show(focusClipboardShelf: true)
         }
         self.panel = panel
 

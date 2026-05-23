@@ -148,7 +148,7 @@ private func populateWorldClockSubmenuShape(
         menu.addItem(.separator())
         menu.addItem(actionItemShape(
             "Open Settings…",
-            kind: .openSettings
+            kind: .openWorldClockSettings
         ))
         return
     }
@@ -190,7 +190,7 @@ private func populateWorldClockSubmenuShape(
     ))
     menu.addItem(actionItemShape(
         "Open Settings…",
-        kind: .openSettings
+        kind: .openWorldClockSettings
     ))
 }
 
@@ -409,9 +409,9 @@ private let arbitrarySectionSequence: AnyGenerator<[String?]> = AnyGenerator { r
 /// Property 32 splits into two cases by `enableWorldClock`:
 ///
 /// - When disabled: the submenu's items are exactly
-///   `[disabled "World Clock is disabled", separator, enabled "Open Settings…" with .openSettings]`.
+///   `[disabled "World Clock is disabled", separator, enabled "Open Settings…" with .openWorldClockSettings]`.
 /// - When enabled: the submenu's items are exactly
-///   `[N disabled per-clock rows, separator, "Open World Clock…" (.openWorldClock), "Open Settings…" (.openSettings)]`
+///   `[N disabled per-clock rows, separator, "Open World Clock…" (.openWorldClock), "Open Settings…" (.openWorldClockSettings)]`
 ///   where `N == clocks.filter(\.showInPopover).count` and the rows
 ///   appear in ascending `sortOrder`.
 @Test("Property 32: submenu when disabled emits the documented three-item shape")
@@ -433,17 +433,17 @@ func property32SubmenuDisabledShape() {
     // Second item: separator.
     #expect(menu.items[1].isSeparatorItem)
 
-    // Third item: enabled "Open Settings…" with .openSettings action.
+    // Third item: enabled "Open Settings…" with .openWorldClockSettings action.
     let third = menu.items[2]
     #expect(!third.isSeparatorItem)
     #expect(third.isEnabled == true)
     #expect(third.title == "Open Settings…")
     if let action = third.representedObject as? MenuAction {
         switch action.kind {
-        case .openSettings:
+        case .openWorldClockSettings:
             break
         default:
-            Issue.record("Expected .openSettings, got \(action.kind)")
+            Issue.record("Expected .openWorldClockSettings, got \(action.kind)")
         }
     } else {
         Issue.record("Trailing item must carry a MenuAction")
@@ -515,10 +515,10 @@ func property32SubmenuEnabledShape() {
         #expect(openSettings.isEnabled == true)
         if let action = openSettings.representedObject as? MenuAction {
             switch action.kind {
-            case .openSettings:
+            case .openWorldClockSettings:
                 break
             default:
-                Issue.record("Expected .openSettings, got \(action.kind)")
+                Issue.record("Expected .openWorldClockSettings, got \(action.kind)")
             }
         } else {
             Issue.record("\"Open Settings…\" must carry a MenuAction")

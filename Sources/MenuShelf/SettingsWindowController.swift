@@ -102,7 +102,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window = settingsWindow
         }
 
-        NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
         DiagnosticsLogger.shared.log("Settings window ordered front")
