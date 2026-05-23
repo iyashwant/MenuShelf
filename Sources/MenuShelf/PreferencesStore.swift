@@ -1065,6 +1065,11 @@ final class PreferencesStore: ObservableObject {
             // Default is nil for existing menu views, so no backfill is needed.
         }
 
+        if settings.schemaVersion < 12 {
+            settings.schemaVersion = 12
+            settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1073,6 +1078,7 @@ final class PreferencesStore: ObservableObject {
         settings.topLevelFolderIconSize = settings.topLevelFolderIconSize ?? .small
         settings.moreMenuBehavior = settings.moreMenuBehavior ?? .visibleAtBottom
         settings.appleScripts = settings.appleScripts ?? []
+        settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
         applyMenuSettingsDefaults(&settings.defaultMenuSettings)
 
         for index in settings.folders.indices {

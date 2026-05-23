@@ -130,6 +130,15 @@ private struct GeneralSettingsView: View {
                     )
                 )
 
+                SettingsToggle(
+                    "Show management items in root folder menus",
+                    helper: "Add Item, Settings, Hide From Menu Bar, and Remove Folder appear at the bottom of top-level folder menus.",
+                    isOn: Binding(
+                        get: { store.settings.resolvedShowRootFolderManagementItems },
+                        set: { value in store.updateGlobalSettings { $0.showRootFolderManagementItems = value } }
+                    )
+                )
+
                 SettingsRow("Top-level icon size") {
                     Picker("", selection: Binding(
                         get: { store.settings.resolvedTopLevelFolderIconSize },

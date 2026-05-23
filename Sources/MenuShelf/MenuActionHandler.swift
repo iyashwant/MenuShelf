@@ -9,6 +9,7 @@ enum MenuActionKind {
     case openSettings
     case quit
     case open
+    case openInTerminal
     case openWithApp
     case openWithOther
     case reveal
@@ -223,6 +224,12 @@ final class MenuAction: NSObject {
                 revealInFinder(url)
             }
 
+        case .openInTerminal:
+            guard let url = action.url else { return }
+            withFolderAccess(action.folderID) {
+                openTerminal(at: url)
+            }
+
         case .copyPath:
             guard let path = action.url?.path ?? action.stringValue else { return }
             NSPasteboard.general.clearContents()
@@ -330,11 +337,13 @@ final class MenuAction: NSObject {
             guard let folderID = action.folderID, let sortKey = action.sortKey, var folder = store.folder(id: folderID) else { return }
             folder.menuSettings.sortKey = sortKey
             store.updateFolder(folder)
+            reopenMenu(menuViewID: action.menuViewID, folderID: folderID)
 
         case .setSortDirection:
             guard let folderID = action.folderID, let sortDirection = action.sortDirection, var folder = store.folder(id: folderID) else { return }
             folder.menuSettings.sortDirection = sortDirection
             store.updateFolder(folder)
+            reopenMenu(menuViewID: action.menuViewID, folderID: folderID)
 
         case .setAllIconOnly:
             store.setAllMenuBarStyles(.iconOnly)
@@ -413,6 +422,23 @@ final class MenuAction: NSObject {
         } catch {
             DiagnosticsLogger.shared.log("Failed security scope: \(error.localizedDescription)")
             store.showError(error.localizedDescription)
+        }
+    }
+
+    /// Re-open the top-level menu after an in-menu setting change (like sort)
+    /// so the user immediately sees the updated listing instead of a closed menu.
+    /// We hop after a tick because AppKit is still tearing down the previous
+    /// menu tracking session when the action runs.
+    private func reopenMenu(menuViewID: UUID?, folderID: UUID?) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let coordinator = AppContainer.shared.presentationCoordinator
+            if let menuViewID {
+                coordinator.presentMenu(forMenuViewID: menuViewID, location: .menuBarItem)
+                return
+            }
+            // No menu view context (e.g. settings change from the grouped fallback
+            // menu): re-open the grouped menu anchored to the fallback status item.
+            coordinator.presentGroupedMenu()
         }
     }
 
@@ -566,6 +592,20 @@ final class MenuAction: NSObject {
         let runner = (ext == "ps1") ? "pwsh" : "bash"
         let shellCommand = "cd \(shellQuote(dir)) && \(runner) \(shellQuote(scriptPath))"
 
+        runInTerminal(shellCommand: shellCommand, errorPrefix: "Could not launch Terminal")
+    }
+
+    private func openTerminal(at url: URL) {
+        // Always open at the directory containing the URL. For directories this
+        // is the directory itself; for files it's the parent.
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        let target = (exists && isDirectory.boolValue) ? url : url.deletingLastPathComponent()
+        let shellCommand = "cd \(shellQuote(target.path))"
+        runInTerminal(shellCommand: shellCommand, errorPrefix: "Could not open Terminal")
+    }
+
+    private func runInTerminal(shellCommand: String, errorPrefix: String) {
         // Pass the shell command into AppleScript via an environment variable so
         // the path/contents never have to be escaped through both AppleScript and
         // shell quoting layers.
@@ -586,8 +626,8 @@ final class MenuAction: NSObject {
         do {
             try process.run()
         } catch {
-            DiagnosticsLogger.shared.log("Launch Terminal failed: \(error.localizedDescription)")
-            store.showError("Could not launch Terminal: \(error.localizedDescription)")
+            DiagnosticsLogger.shared.log("\(errorPrefix): \(error.localizedDescription)")
+            store.showError("\(errorPrefix): \(error.localizedDescription)")
         }
     }
 

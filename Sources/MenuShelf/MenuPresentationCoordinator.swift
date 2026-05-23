@@ -56,11 +56,37 @@ final class MenuPresentationCoordinator {
         // disabled until we can implement it via a CGEventTap or via the
         // accessibility APIs.
 
-        if atCursor || statusItem == nil {
+        if atCursor {
             menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
             return
         }
 
-        statusItem?.popUpMenu(menu)
+        guard let statusItem, let button = statusItem.button else {
+            menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+            return
+        }
+
+        // The only API that anchors a popup correctly under a status bar item
+        // is AppKit's built-in click handling. NSStatusItem.popUpMenu(_:) is
+        // deprecated and unreliable from a deferred dispatch; NSMenu.popUp
+        // doesn't position correctly relative to the menu bar host. So we
+        // temporarily detach our click handler, set the menu, and synthesize
+        // a click. AppKit then runs its normal status-item menu tracking,
+        // including the correct anchor under the menu bar icon. performClick
+        // is synchronous: it returns only after the menu closes, so we can
+        // restore the click handler immediately afterward.
+        let savedTarget = button.target
+        let savedAction = button.action
+        let savedItemMenu = statusItem.menu
+
+        button.target = nil
+        button.action = nil
+        statusItem.menu = menu
+
+        button.performClick(nil)
+
+        statusItem.menu = savedItemMenu
+        button.target = savedTarget
+        button.action = savedAction
     }
 }

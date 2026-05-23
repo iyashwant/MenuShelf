@@ -629,9 +629,10 @@ struct AppSettings: Codable, Equatable {
     var enableVerboseDiagnostics: Bool?
     var appleScripts: [AppleScriptConfig]?
     var browserFlip: BrowserFlipSettings?
+    var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 11,
+        schemaVersion: 12,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -648,7 +649,8 @@ struct AppSettings: Codable, Equatable {
         moreMenuBehavior: .visibleAtBottom,
         enableVerboseDiagnostics: false,
         appleScripts: [],
-        browserFlip: .defaults
+        browserFlip: .defaults,
+        showRootFolderManagementItems: true
     )
 
     var resolvedShowFileAndFolderIcons: Bool { showFileAndFolderIcons ?? true }
@@ -662,6 +664,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedEnableVerboseDiagnostics: Bool { enableVerboseDiagnostics ?? false }
     var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
     var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
+    var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 }
 
 struct FileMetadata: Equatable {

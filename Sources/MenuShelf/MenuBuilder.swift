@@ -600,7 +600,7 @@ final class MenuBuilder {
             if let menuView, isRoot {
                 addMenuViewFooter(to: menu, view: menuView, folderConfig: config, url: currentURL)
             } else {
-                addFolderFooter(to: menu, config: config, url: currentURL, isRoot: isRoot)
+                addFolderFooter(to: menu, config: config, url: currentURL, isRoot: isRoot, menuView: menuView)
             }
         } catch FileAccessError.staleBookmark {
             DiagnosticsLogger.shared.log("populateFolderMenu: stale bookmark for \(config.displayName)")
@@ -968,24 +968,25 @@ final class MenuBuilder {
         menu.addItem(.separator())
     }
 
-    private func addFolderFooter(to menu: NSMenu, config: FolderConfig, url: URL, isRoot: Bool) {
+    private func addFolderFooter(to menu: NSMenu, config: FolderConfig, url: URL, isRoot: Bool, menuView: MenuViewConfig? = nil) {
         menu.addItem(.separator())
         menu.addItem(actionItem("Open in Finder", kind: .open, url: url, folderID: config.id))
         menu.addItem(openWithItem(for: url, folderID: config.id))
+        menu.addItem(actionItem("Open in Terminal", kind: .openInTerminal, url: url, folderID: config.id))
         menu.addItem(actionItem("Show in Finder", kind: .reveal, url: url, folderID: config.id))
         menu.addItem(actionItem("Copy Path", kind: .copyPath, url: url, folderID: config.id))
 
-        if !isRoot, NSEvent.modifierFlags.contains(.shift) {
-            menu.addItem(.separator())
-            menu.addItem(sortOrderMenuItem(config: config))
-        }
+        menu.addItem(.separator())
+        menu.addItem(sortOrderMenuItem(config: config, menuViewID: menuView?.id))
 
         if isRoot {
-            menu.addItem(.separator())
-            menu.addItem(actionItem("Add Item...", kind: .openSettings))
-            menu.addItem(actionItem("Settings...", kind: .openSettings))
-            menu.addItem(actionItem("Hide From Menu Bar", kind: .hideFolder, folderID: config.id))
-            menu.addItem(actionItem("Remove Folder...", kind: .removeFolder, folderID: config.id))
+            if store.settings.resolvedShowRootFolderManagementItems {
+                menu.addItem(.separator())
+                menu.addItem(actionItem("Add Item...", kind: .openSettings))
+                menu.addItem(actionItem("Settings...", kind: .openSettings))
+                menu.addItem(actionItem("Hide From Menu Bar", kind: .hideFolder, folderID: config.id))
+                menu.addItem(actionItem("Remove Folder...", kind: .removeFolder, folderID: config.id))
+            }
             menu.addItem(.separator())
             menu.addItem(actionItem("Quit MenuShelf", kind: .quit))
         }
@@ -995,27 +996,31 @@ final class MenuBuilder {
         menu.addItem(.separator())
         menu.addItem(actionItem("Open in Finder", kind: .open, url: url, folderID: folderConfig.id))
         menu.addItem(openWithItem(for: url, folderID: folderConfig.id))
+        menu.addItem(actionItem("Open in Terminal", kind: .openInTerminal, url: url, folderID: folderConfig.id))
         menu.addItem(actionItem("Show in Finder", kind: .reveal, url: url, folderID: folderConfig.id))
         menu.addItem(actionItem("Copy Path", kind: .copyPath, url: url, folderID: folderConfig.id))
+
+        menu.addItem(.separator())
+        menu.addItem(sortOrderMenuItem(config: folderConfig, menuViewID: view.id))
 
         menu.addItem(.separator())
         menu.addItem(managementMenuItem(for: view))
     }
 
-    private func sortOrderMenuItem(config: FolderConfig) -> NSMenuItem {
+    private func sortOrderMenuItem(config: FolderConfig, menuViewID: UUID? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: "Sort Order", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "Sort Order")
         submenu.autoenablesItems = false
 
         for sortKey in SortKey.allCases {
-            let sortItem = actionItem(sortKey.label, kind: .setSortKey, folderID: config.id, sortKey: sortKey)
+            let sortItem = actionItem(sortKey.label, kind: .setSortKey, folderID: config.id, menuViewID: menuViewID, sortKey: sortKey)
             sortItem.state = config.menuSettings.sortKey == sortKey ? .on : .off
             submenu.addItem(sortItem)
         }
 
         submenu.addItem(.separator())
         for direction in SortDirection.allCases {
-            let directionItem = actionItem(direction.label, kind: .setSortDirection, folderID: config.id, sortDirection: direction)
+            let directionItem = actionItem(direction.label, kind: .setSortDirection, folderID: config.id, menuViewID: menuViewID, sortDirection: direction)
             directionItem.state = config.menuSettings.sortDirection == direction ? .on : .off
             submenu.addItem(directionItem)
         }
