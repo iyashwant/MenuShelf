@@ -407,35 +407,35 @@ final class WorldClockController {
 
     /// Set the shared `Time_Travel_Offset`. The input is quantized to
     /// the nearest 900 seconds and clamped to `[-86400, +86400]`
-    /// before being stored, then a 100ms `DispatchWorkItem` coalescer
-    /// fires the downstream redraws (Requirements 5.2, 10.4).
+    /// before being stored.
+    ///
+    /// `popoverState.timeTravelOffset` is written *synchronously* so
+    /// SwiftUI rows and the slider readout follow the drag in real
+    /// time. Pinned `NSStatusItem` title rewrites (which hit AppKit
+    /// layout) are coalesced to one per main-runloop tick so a fast
+    /// drag does not churn the menu bar at the slider's full update
+    /// rate. Requirement 5.3 caps propagation latency at 100ms; both
+    /// paths comfortably beat that.
     func setTimeTravelOffset(_ offset: TimeInterval) {
         let quantized = quantizeAndClampOffset(offset)
+        guard quantized != popoverState.timeTravelOffset else { return }
 
-        // Cancel any pending coalesced work so a continuous slider drag
-        // collapses into a single trailing redraw 100ms after the user
-        // stops moving (Requirement 10.4).
+        // Immediate: SwiftUI rows + slider readout.
+        popoverState.timeTravelOffset = quantized
+
+        // Coalesced: pinned status item titles. Schedule at most one
+        // pending work item per runloop tick. Using `async` (rather
+        // than `asyncAfter(.now() + 0.1)`) collapses repeated drag
+        // events into the next idle frame, which on a 60/120Hz main
+        // loop is well under the requirement's 100ms ceiling.
         coalesceWorkItem?.cancel()
-
         let workItem = DispatchWorkItem { [weak self] in
-            // The work item is scheduled on `DispatchQueue.main`, which
-            // serves the main run loop the controller's `@MainActor`
-            // isolation runs on. Hop explicitly so the assignments and
-            // the helper call observe `@MainActor` isolation.
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.popoverState.timeTravelOffset = quantized
-                self.redrawPinnedTitles()
-                // SwiftUI rows observe `popoverState.timeTravelOffset`
-                // directly through `@Observable`, so the assignment
-                // above is sufficient to re-render the popover rows.
+                self?.redrawPinnedTitles()
             }
         }
         coalesceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.1,
-            execute: workItem
-        )
+        DispatchQueue.main.async(execute: workItem)
     }
 
     /// Reset `Time_Travel_Offset` to zero and trigger an immediate
