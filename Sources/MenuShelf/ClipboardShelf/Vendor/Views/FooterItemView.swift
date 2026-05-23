@@ -7,7 +7,7 @@ struct FooterItemView: View {
   var body: some View {
     ConfirmationView(item: item) {
       ListItemView(id: item.id, selectionId: item.id, shortcuts: item.shortcuts, isSelected: item.isSelected) {
-        Text(LocalizedStringKey(item.title))
+        Text(LocalizedStringKey(item.title), bundle: .module)
       }
     }
     .onHover { hovering in
