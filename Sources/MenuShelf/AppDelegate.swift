@@ -27,6 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DiagnosticsLogger.shared.log("Application will terminate")
+        // Stop Clipboard Shelf monitor and release its container before
+        // settings flush so any clearOnQuit/clearPinnedOnQuit logic that
+        // future tasks add inside the controller has a chance to run.
+        ClipboardShelfController.shared.stop()
         // Flush any debounced settings save so user changes don't get lost on quit.
         container.store.flushPendingSave()
         DiagnosticsLogger.shared.endSession()

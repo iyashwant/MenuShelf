@@ -42,3 +42,7 @@ menushelf://run-shortcut?name=My%20Shortcut&input=text&text=Hello
 ```
 
 Shortcuts that show alerts or request input may block when executed from the command line. Prefer shortcuts that can run unattended for menu bar and URL automation workflows.
+
+## Acknowledgements
+
+The Clipboard Shelf feature vendors clipboard manager code from [Maccy](https://github.com/p0deje/Maccy) (MIT License) by Alex Rodionov. The full Maccy LICENSE is preserved verbatim at [`Sources/MenuShelf/ClipboardShelf/Vendor/MACCY_LICENSE.txt`](Sources/MenuShelf/ClipboardShelf/Vendor/MACCY_LICENSE.txt).

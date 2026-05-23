@@ -3,15 +3,28 @@ import PackageDescription
 
 let package = Package(
     name: "MenuShelf",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v26)
     ],
     products: [
         .executable(name: "MenuShelf", targets: ["MenuShelf"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/Clipy/Sauce", from: "2.4.0"),
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
+        .package(url: "https://github.com/sindresorhus/Defaults", from: "8.0.0"),
+        .package(url: "https://github.com/krisk/fuse-swift", from: "1.4.0")
+    ],
     targets: [
         .executableTarget(
             name: "MenuShelf",
+            dependencies: [
+                .product(name: "Sauce", package: "Sauce"),
+                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
+                .product(name: "Defaults", package: "Defaults"),
+                .product(name: "Fuse", package: "fuse-swift")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]

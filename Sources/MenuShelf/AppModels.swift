@@ -573,6 +573,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var appSpecificShortcutGroups: [AppSpecificShortcutGroup]?
     var appleScriptItems: [AppleScriptMenuItemConfig]?
     var browserFlipItem: BrowserFlipMenuItemConfig?
+    var clipboardShelfItem: ClipboardShelfMenuItemConfig?
     var createdAt: Date
     var updatedAt: Date
 
@@ -603,6 +604,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             appSpecificShortcutGroups: [],
             appleScriptItems: [],
             browserFlipItem: nil,
+            clipboardShelfItem: nil,
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -629,10 +631,11 @@ struct AppSettings: Codable, Equatable {
     var enableVerboseDiagnostics: Bool?
     var appleScripts: [AppleScriptConfig]?
     var browserFlip: BrowserFlipSettings?
+    var clipboardShelf: ClipboardShelfSettings?
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 12,
+        schemaVersion: 13,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -650,6 +653,7 @@ struct AppSettings: Codable, Equatable {
         enableVerboseDiagnostics: false,
         appleScripts: [],
         browserFlip: .defaults,
+        clipboardShelf: .defaults,
         showRootFolderManagementItems: true
     )
 
@@ -664,6 +668,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedEnableVerboseDiagnostics: Bool { enableVerboseDiagnostics ?? false }
     var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
     var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
+    var resolvedClipboardShelf: ClipboardShelfSettings { clipboardShelf ?? .defaults }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 }
 

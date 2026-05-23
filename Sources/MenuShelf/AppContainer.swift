@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 final class AppContainer {
@@ -16,6 +17,8 @@ final class AppContainer {
     let shortcutURLRouter: ShortcutURLRouter
     let statusItemManager: StatusItemManager
     let settingsWindowController: SettingsWindowController
+
+    private var clipboardShelfSettingsSubscription: AnyCancellable?
 
     private init() {
         shortcutsService = ShortcutsService()
@@ -64,6 +67,28 @@ final class AppContainer {
         if store.settings.resolvedBrowserFlip.enableBrowserFlip {
             store.refreshBrowsers()
         }
+
+        // Bring up Clipboard Shelf if enabled. The controller is idempotent
+        // and will no-op if it's already running. We also subscribe to
+        // settings changes so the controller picks up enable/disable
+        // toggles and live polling-interval / pasteboard-type changes
+        // without an app restart (Requirement 7.9, 2.2).
+        let initialClipboardShelf = store.settings.resolvedClipboardShelf
+        if initialClipboardShelf.enableClipboardShelf {
+            Task { @MainActor in
+                ClipboardShelfController.shared.start(with: initialClipboardShelf)
+            }
+        }
+        clipboardShelfSettingsSubscription = store.$settings
+            .map { $0.resolvedClipboardShelf }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { newSettings in
+                Task { @MainActor in
+                    ClipboardShelfController.shared.apply(settings: newSettings)
+                }
+            }
+
         statusItemManager.rebuildStatusItems()
     }
 }

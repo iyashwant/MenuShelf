@@ -19,6 +19,13 @@ final class StatusItemManager: NSObject {
     private var statusItemsByButton: [ObjectIdentifier: StatusContext] = [:]
     private var cancellable: AnyCancellable?
 
+    /// Returns the `NSStatusBarButton` for the menu view with the given id,
+    /// when the view has a visible status item. Used by Clipboard Shelf to
+    /// anchor the popup to the originating menu view's icon (Requirement 4.2).
+    func statusBarButton(for menuViewID: UUID) -> NSStatusBarButton? {
+        statusItems.first { $0.menuViewID == menuViewID }?.item.button
+    }
+
     /// The subset of settings that affect the menu bar's outward shape: which
     /// status items exist, their titles, icons, styles, and registered hotkeys.
     /// We rebuild only when this changes; menu *contents* refresh lazily through

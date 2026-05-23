@@ -44,6 +44,7 @@ enum MenuActionKind {
     case runScript
     case runAppleScript
     case switchBrowser
+    case openClipboardShelf
 }
 
 final class MenuAction: NSObject {
@@ -409,6 +410,27 @@ final class MenuAction: NSObject {
                 await MainActor.run {
                     self.handleBrowserSwitchResult(result, browser: browser, store: store)
                 }
+            }
+
+        case .openClipboardShelf:
+            let resolvedSettings = store.settings.resolvedClipboardShelf
+            if !resolvedSettings.enableClipboardShelf {
+                // Surface settings focused on the Clipboard Shelf section so the
+                // user can flip the toggle. Falls back to the regular show()
+                // when the dedicated deep-link is not available.
+                AppContainer.shared.settingsWindowController.show(focusClipboardShelf: true)
+                return
+            }
+            // The execute path is dispatched onto the main queue via the 50ms
+            // deferral in handleMenuAction(_:), but that is not statically
+            // visible to the compiler — hop through a Task to satisfy the
+            // MainActor-isolated togglePopup contract.
+            let menuViewID = action.menuViewID
+            Task { @MainActor in
+                let anchor = menuViewID.flatMap {
+                    AppContainer.shared.statusItemManager.statusBarButton(for: $0)
+                }
+                ClipboardShelfController.shared.togglePopup(anchor: anchor)
             }
         }
     }

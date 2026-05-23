@@ -1070,6 +1070,13 @@ final class PreferencesStore: ObservableObject {
             settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
         }
 
+        if settings.schemaVersion < 13 {
+            settings.schemaVersion = 13
+            settings.clipboardShelf = settings.clipboardShelf ?? .defaults
+            // clipboardShelfItem is added per-menu-view as an optional field.
+            // Default is nil for existing menu views, so no per-view backfill is needed.
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1078,6 +1085,7 @@ final class PreferencesStore: ObservableObject {
         settings.topLevelFolderIconSize = settings.topLevelFolderIconSize ?? .small
         settings.moreMenuBehavior = settings.moreMenuBehavior ?? .visibleAtBottom
         settings.appleScripts = settings.appleScripts ?? []
+        settings.clipboardShelf = settings.clipboardShelf ?? .defaults
         settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
         applyMenuSettingsDefaults(&settings.defaultMenuSettings)
 

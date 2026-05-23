@@ -9,6 +9,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case shortcuts
     case appleScripts
     case browserFlip
+    case clipboardShelf
     case advanced
 
     var id: String { rawValue }
@@ -22,6 +23,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .shortcuts: "Apple Shortcuts"
         case .appleScripts: "AppleScripts"
         case .browserFlip: "Browser Flip"
+        case .clipboardShelf: "Clipboard Shelf"
         case .advanced: "Advanced"
         }
     }
@@ -39,6 +41,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
             }
             return "scroll"
         case .browserFlip: return "globe"
+        case .clipboardShelf: return "clipboard"
         case .advanced: return "wrench.and.screwdriver"
         }
     }
@@ -93,6 +96,8 @@ struct SettingsView: View {
                     AppleScriptSettingsView()
                 case .browserFlip:
                     BrowserFlipSettingsView()
+                case .clipboardShelf:
+                    ClipboardShelfSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
@@ -103,6 +108,9 @@ struct SettingsView: View {
         .navigationTitle("")
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusAppleScripts)) { _ in
             section = .appleScripts
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusClipboardShelf)) { _ in
+            section = .clipboardShelf
         }
     }
 }
@@ -248,7 +256,7 @@ private struct MenuViewsSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $store.selectedMenuViewID) {
                     ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0))
+                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0))
                             .tag(Optional(view.id))
                             .contextMenu {
                                 Button("Duplicate") {
@@ -422,6 +430,7 @@ private enum UnifiedContentItem: Identifiable {
     case linkedShortcutsFolder(LinkedShortcutsFolderConfig)
     case appleScript(AppleScriptMenuItemConfig)
     case browserFlip(BrowserFlipMenuItemConfig)
+    case clipboardShelf(ClipboardShelfMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -431,6 +440,7 @@ private enum UnifiedContentItem: Identifiable {
         case .linkedShortcutsFolder(let item): item.id
         case .appleScript(let item): item.id
         case .browserFlip(let item): item.id
+        case .clipboardShelf(let item): item.id
         }
     }
 
@@ -446,6 +456,7 @@ private enum UnifiedContentItem: Identifiable {
             }
             return "scroll"
         case .browserFlip: return "globe"
+        case .clipboardShelf: return "clipboard"
         }
     }
 
@@ -457,6 +468,7 @@ private enum UnifiedContentItem: Identifiable {
         case .linkedShortcutsFolder: .indigo
         case .appleScript: .purple
         case .browserFlip: .teal
+        case .clipboardShelf: .green
         }
     }
 }
@@ -547,7 +559,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0)
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0)
     }
 }
 
@@ -719,6 +731,13 @@ private struct MenuViewContentsView: View {
                         Label("Add Default Browser", systemImage: "globe")
                     }
                     .disabled(view.browserFlipItem != nil)
+
+                    Button {
+                        store.addClipboardShelfItem(toMenuViewID: view.id)
+                    } label: {
+                        Label("Add Clipboard Shelf", systemImage: "clipboard")
+                    }
+                    .disabled(view.clipboardShelfItem != nil)
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -773,6 +792,9 @@ private struct MenuViewContentsView: View {
         if let browserFlip = view.browserFlipItem {
             items.append(.browserFlip(browserFlip))
         }
+        if let clipboardShelf = view.clipboardShelfItem {
+            items.append(.clipboardShelf(clipboardShelf))
+        }
         return items
     }
 
@@ -809,6 +831,8 @@ private struct MenuViewContentsView: View {
             removeLinkedFolder(id: id)
         } else if view.browserFlipItem?.id == id {
             view.browserFlipItem = nil
+        } else if view.clipboardShelfItem?.id == id {
+            view.clipboardShelfItem = nil
         }
         selectedContentItemID = nil
     }
@@ -846,6 +870,9 @@ private struct MenuViewContentsView: View {
         case .browserFlip:
             // Browser flip lives in a single-slot group; reordering is a no-op.
             return
+        case .clipboardShelf:
+            // Clipboard Shelf lives in a single-slot group; reordering is a no-op.
+            return
         }
 
         if sourceIndex < clampedDest { clampedDest -= 1 }
@@ -882,6 +909,12 @@ private struct MenuViewContentsView: View {
             arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
             view.linkedShortcutsFolders = arr
         case .browserFlip:
+            // Already handled by the early return above; the values are unused.
+            sourceGroupOffset = 0
+            groupOffset = 0
+            _ = sourceGroupOffset
+            _ = groupOffset
+        case .clipboardShelf:
             // Already handled by the early return above; the values are unused.
             sourceGroupOffset = 0
             groupOffset = 0
@@ -1009,6 +1042,43 @@ private struct MenuViewContentsView: View {
                     }
                 }
             }
+        case .clipboardShelf:
+            if let binding = clipboardShelfItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit Clipboard Shelf")
+                        .font(.headline)
+
+                    Text("Opens the Clipboard Shelf popup with your clipboard history.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    if !store.settings.resolvedClipboardShelf.enableClipboardShelf {
+                        Text("Clipboard Shelf is disabled. Enable it in Settings → Clipboard Shelf for the popup to populate.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeContentItem(id: item.id)
+                            editingItem = nil
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1085,6 +1155,19 @@ private struct MenuViewContentsView: View {
         )
     }
 
+    private func clipboardShelfItemBinding(for id: UUID) -> Binding<ClipboardShelfMenuItemConfig>? {
+        guard let current = view.clipboardShelfItem, current.id == id else { return nil }
+
+        return Binding(
+            get: { view.clipboardShelfItem ?? current },
+            set: { updated in
+                var copy = updated
+                copy.updatedAt = Date()
+                view.clipboardShelfItem = copy
+            }
+        )
+    }
+
     private func removeShortcutItem(id: UUID) {
         var items = view.resolvedShortcutItems
         items.removeAll { $0.id == id }
@@ -1152,6 +1235,8 @@ private struct UnifiedContentItemRow: View {
             return script.displayTitle(fallbackName: fallback)
         case .browserFlip(let config):
             return config.displayTitle
+        case .clipboardShelf(let config):
+            return config.displayTitle
         }
     }
 
@@ -1184,6 +1269,11 @@ private struct UnifiedContentItemRow: View {
                 return "Section: \(section)"
             }
             return "Default Browser"
+        case .clipboardShelf(let config):
+            if let section = config.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "Clipboard Shelf"
         }
     }
 }

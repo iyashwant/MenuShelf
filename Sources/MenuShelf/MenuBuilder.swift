@@ -186,6 +186,7 @@ final class MenuBuilder {
             || !view.resolvedLinkedShortcutsFolders.isEmpty
             || !view.resolvedAppleScriptItems.isEmpty
             || view.browserFlipItem != nil
+            || view.clipboardShelfItem != nil
 
         if showManagementAtTop {
             menu.addItem(managementMenuItem(for: view))
@@ -212,41 +213,54 @@ final class MenuBuilder {
             }
 
             if !view.items.isEmpty,
-               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil) {
+               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil) {
                 menu.addItem(.separator())
                 currentSection = nil
             }
 
             addLinkedMenuViews(view.resolvedLinkedMenuViews, to: menu, currentSection: &currentSection, visitedMenuViewIDs: visitedMenuViewIDs)
             if !view.resolvedLinkedMenuViews.isEmpty,
-               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil),
+               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addShortcutItems(view.resolvedShortcutItems, to: menu, currentSection: &currentSection)
             if !view.resolvedShortcutItems.isEmpty,
-               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil),
+               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addAppleScriptItems(view.resolvedAppleScriptItems, to: menu, currentSection: &currentSection, menuViewID: view.id)
             if !view.resolvedAppleScriptItems.isEmpty,
-               (!view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil),
+               (!view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addLinkedShortcutFolders(view.resolvedLinkedShortcutsFolders, to: menu, currentSection: &currentSection)
             if !view.resolvedLinkedShortcutsFolders.isEmpty,
-               view.browserFlipItem != nil,
+               (view.browserFlipItem != nil || view.clipboardShelfItem != nil),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             if let browserFlipItem = view.browserFlipItem {
                 addBrowserFlipMenuItem(browserFlipItem, to: menu, currentSection: &currentSection)
+            }
+            if let clipboardShelfItem = view.clipboardShelfItem {
+                if view.browserFlipItem != nil, menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                    currentSection = nil
+                }
+                addClipboardShelfMenuItem(
+                    clipboardShelfItem,
+                    to: menu,
+                    currentSection: &currentSection,
+                    menuViewID: view.id,
+                    enabled: store.settings.resolvedClipboardShelf.enableClipboardShelf
+                )
             }
         }
 
@@ -263,7 +277,8 @@ final class MenuBuilder {
               view.resolvedShortcutItems.isEmpty,
               view.resolvedLinkedShortcutsFolders.isEmpty,
               view.resolvedAppleScriptItems.isEmpty,
-              view.browserFlipItem == nil else {
+              view.browserFlipItem == nil,
+              view.clipboardShelfItem == nil else {
             return nil
         }
         guard view.items.count == 1,
