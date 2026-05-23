@@ -13,7 +13,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         show()
     }
 
-    func show(selectedFolderID: UUID? = nil, selectedMenuViewID: UUID? = nil, selectedAppleScriptID: UUID? = nil, focusClipboardShelf: Bool = false) {
+    func show(
+        selectedFolderID: UUID? = nil,
+        selectedMenuViewID: UUID? = nil,
+        selectedAppleScriptID: UUID? = nil,
+        focusClipboardShelf: Bool = false,
+        focusWorldClock: Bool = false,
+        scrollToClockID: UUID? = nil
+    ) {
         if let selectedMenuViewID {
             store.selectedMenuViewID = selectedMenuViewID
         }
@@ -29,6 +36,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         if focusClipboardShelf {
             NotificationCenter.default.post(name: .menuShelfFocusClipboardShelf, object: nil)
+        }
+
+        if focusWorldClock {
+            NotificationCenter.default.post(name: .menuShelfFocusWorldClock, object: nil)
+        }
+
+        if let scrollToClockID {
+            NotificationCenter.default.post(
+                name: .menuShelfScrollToWorldClock,
+                object: nil,
+                userInfo: ["clockID": scrollToClockID]
+            )
         }
 
         if window == nil {
@@ -86,4 +105,11 @@ extension Notification.Name {
 
     /// Posted when the settings window should switch to the Clipboard Shelf pane.
     static let menuShelfFocusClipboardShelf = Notification.Name("menuShelfFocusClipboardShelf")
+
+    /// Posted when the settings window should switch to the World Clock pane.
+    static let menuShelfFocusWorldClock = Notification.Name("menuShelfFocusWorldClock")
+
+    /// Posted when the World Clock settings view should scroll to a specific
+    /// clock row. `userInfo["clockID"]` carries the target `UUID`.
+    static let menuShelfScrollToWorldClock = Notification.Name("menuShelfScrollToWorldClock")
 }

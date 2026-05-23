@@ -10,6 +10,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case appleScripts
     case browserFlip
     case clipboardShelf
+    case worldClock
     case advanced
 
     var id: String { rawValue }
@@ -24,6 +25,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .appleScripts: "AppleScripts"
         case .browserFlip: "Browser Flip"
         case .clipboardShelf: "Clipboard Shelf"
+        case .worldClock: "World Clock"
         case .advanced: "Advanced"
         }
     }
@@ -42,6 +44,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
             return "scroll"
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
+        case .worldClock: return "clock"
         case .advanced: return "wrench.and.screwdriver"
         }
     }
@@ -98,6 +101,8 @@ struct SettingsView: View {
                     BrowserFlipSettingsView()
                 case .clipboardShelf:
                     ClipboardShelfSettingsView()
+                case .worldClock:
+                    WorldClockSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
@@ -111,6 +116,9 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusClipboardShelf)) { _ in
             section = .clipboardShelf
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusWorldClock)) { _ in
+            section = .worldClock
         }
     }
 }
@@ -256,7 +264,7 @@ private struct MenuViewsSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $store.selectedMenuViewID) {
                     ForEach(store.settings.resolvedMenuViews) { view in
-                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0))
+                        MenuViewRow(view: view, itemCount: view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.worldClockItem != nil ? 1 : 0))
                             .tag(Optional(view.id))
                             .contextMenu {
                                 Button("Duplicate") {
@@ -431,6 +439,7 @@ private enum UnifiedContentItem: Identifiable {
     case appleScript(AppleScriptMenuItemConfig)
     case browserFlip(BrowserFlipMenuItemConfig)
     case clipboardShelf(ClipboardShelfMenuItemConfig)
+    case worldClock(WorldClockMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -441,6 +450,7 @@ private enum UnifiedContentItem: Identifiable {
         case .appleScript(let item): item.id
         case .browserFlip(let item): item.id
         case .clipboardShelf(let item): item.id
+        case .worldClock(let item): item.id
         }
     }
 
@@ -457,6 +467,7 @@ private enum UnifiedContentItem: Identifiable {
             return "scroll"
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
+        case .worldClock: return "clock"
         }
     }
 
@@ -469,6 +480,7 @@ private enum UnifiedContentItem: Identifiable {
         case .appleScript: .purple
         case .browserFlip: .teal
         case .clipboardShelf: .green
+        case .worldClock: .cyan
         }
     }
 }
@@ -559,7 +571,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0)
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.worldClockItem != nil ? 1 : 0)
     }
 }
 
@@ -738,6 +750,13 @@ private struct MenuViewContentsView: View {
                         Label("Add Clipboard Shelf", systemImage: "clipboard")
                     }
                     .disabled(view.clipboardShelfItem != nil)
+
+                    Button {
+                        store.addWorldClockItem(toMenuViewID: view.id)
+                    } label: {
+                        Label("Add World Clock", systemImage: "clock")
+                    }
+                    .disabled(view.worldClockItem != nil)
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -795,6 +814,9 @@ private struct MenuViewContentsView: View {
         if let clipboardShelf = view.clipboardShelfItem {
             items.append(.clipboardShelf(clipboardShelf))
         }
+        if let worldClock = view.worldClockItem {
+            items.append(.worldClock(worldClock))
+        }
         return items
     }
 
@@ -833,6 +855,8 @@ private struct MenuViewContentsView: View {
             view.browserFlipItem = nil
         } else if view.clipboardShelfItem?.id == id {
             view.clipboardShelfItem = nil
+        } else if view.worldClockItem?.id == id {
+            store.removeWorldClockItem(fromMenuViewID: view.id)
         }
         selectedContentItemID = nil
     }
@@ -872,6 +896,9 @@ private struct MenuViewContentsView: View {
             return
         case .clipboardShelf:
             // Clipboard Shelf lives in a single-slot group; reordering is a no-op.
+            return
+        case .worldClock:
+            // World Clock lives in a single-slot group; reordering is a no-op.
             return
         }
 
@@ -915,6 +942,12 @@ private struct MenuViewContentsView: View {
             _ = sourceGroupOffset
             _ = groupOffset
         case .clipboardShelf:
+            // Already handled by the early return above; the values are unused.
+            sourceGroupOffset = 0
+            groupOffset = 0
+            _ = sourceGroupOffset
+            _ = groupOffset
+        case .worldClock:
             // Already handled by the early return above; the values are unused.
             sourceGroupOffset = 0
             groupOffset = 0
@@ -1079,6 +1112,43 @@ private struct MenuViewContentsView: View {
                     }
                 }
             }
+        case .worldClock:
+            if let binding = worldClockItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit World Clock")
+                        .font(.headline)
+
+                    Text("Opens the World Clock with your configured clocks.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    if !store.settings.resolvedWorldClock.enableWorldClock {
+                        Text("World Clock is disabled. Enable it in Settings → World Clock for the popover to populate.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeContentItem(id: item.id)
+                            editingItem = nil
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1168,6 +1238,19 @@ private struct MenuViewContentsView: View {
         )
     }
 
+    private func worldClockItemBinding(for id: UUID) -> Binding<WorldClockMenuItemConfig>? {
+        guard let current = view.worldClockItem, current.id == id else { return nil }
+
+        return Binding(
+            get: { view.worldClockItem ?? current },
+            set: { updated in
+                var copy = updated
+                copy.updatedAt = Date()
+                view.worldClockItem = copy
+            }
+        )
+    }
+
     private func removeShortcutItem(id: UUID) {
         var items = view.resolvedShortcutItems
         items.removeAll { $0.id == id }
@@ -1237,6 +1320,8 @@ private struct UnifiedContentItemRow: View {
             return config.displayTitle
         case .clipboardShelf(let config):
             return config.displayTitle
+        case .worldClock(let config):
+            return config.displayTitle
         }
     }
 
@@ -1274,6 +1359,11 @@ private struct UnifiedContentItemRow: View {
                 return "Section: \(section)"
             }
             return "Clipboard Shelf"
+        case .worldClock(let config):
+            if let section = config.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "World Clock"
         }
     }
 }

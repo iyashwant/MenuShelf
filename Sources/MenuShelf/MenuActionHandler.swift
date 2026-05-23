@@ -45,6 +45,7 @@ enum MenuActionKind {
     case runAppleScript
     case switchBrowser
     case openClipboardShelf
+    case openWorldClock
 }
 
 final class MenuAction: NSObject {
@@ -431,6 +432,25 @@ final class MenuAction: NSObject {
                     AppContainer.shared.statusItemManager.statusBarButton(for: $0)
                 }
                 ClipboardShelfController.shared.togglePopup(anchor: anchor)
+            }
+
+        case .openWorldClock:
+            let resolvedWorldClock = store.settings.resolvedWorldClock
+            if !resolvedWorldClock.enableWorldClock {
+                // Surface settings so the user can flip the enable toggle.
+                AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
+                return
+            }
+            // The 50ms deferral inside handleMenuAction(_:) covers the
+            // dispatch hop, but the compiler can't see that — hop through
+            // a Task to satisfy the MainActor-isolated togglePopover
+            // contract.
+            let worldClockMenuViewID = action.menuViewID
+            Task { @MainActor in
+                let anchor = worldClockMenuViewID.flatMap {
+                    AppContainer.shared.statusItemManager.statusBarButton(for: $0)
+                }
+                WorldClockController.shared.togglePopover(anchor: anchor)
             }
         }
     }

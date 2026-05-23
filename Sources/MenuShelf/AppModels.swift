@@ -574,6 +574,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var appleScriptItems: [AppleScriptMenuItemConfig]?
     var browserFlipItem: BrowserFlipMenuItemConfig?
     var clipboardShelfItem: ClipboardShelfMenuItemConfig?
+    var worldClockItem: WorldClockMenuItemConfig?
     var createdAt: Date
     var updatedAt: Date
 
@@ -605,6 +606,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             appleScriptItems: [],
             browserFlipItem: nil,
             clipboardShelfItem: nil,
+            worldClockItem: nil,
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -632,10 +634,11 @@ struct AppSettings: Codable, Equatable {
     var appleScripts: [AppleScriptConfig]?
     var browserFlip: BrowserFlipSettings?
     var clipboardShelf: ClipboardShelfSettings?
+    var worldClock: WorldClockSettings?
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 13,
+        schemaVersion: 14,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -654,6 +657,7 @@ struct AppSettings: Codable, Equatable {
         appleScripts: [],
         browserFlip: .defaults,
         clipboardShelf: .defaults,
+        worldClock: .defaults,
         showRootFolderManagementItems: true
     )
 
@@ -669,6 +673,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
     var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
     var resolvedClipboardShelf: ClipboardShelfSettings { clipboardShelf ?? .defaults }
+    var resolvedWorldClock: WorldClockSettings { worldClock ?? .defaults }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 }
 

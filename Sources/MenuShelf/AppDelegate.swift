@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DiagnosticsLogger.shared.log("Application will terminate")
+        // Stop World Clock first so its pinned status items are removed
+        // and the minute-aligned timer is invalidated before the
+        // Clipboard Shelf controller releases its container. Both stops
+        // run before the settings flush so any future quit-time logic
+        // inside either controller has a chance to run.
+        WorldClockController.shared.stop()
         // Stop Clipboard Shelf monitor and release its container before
         // settings flush so any clearOnQuit/clearPinnedOnQuit logic that
         // future tasks add inside the controller has a chance to run.

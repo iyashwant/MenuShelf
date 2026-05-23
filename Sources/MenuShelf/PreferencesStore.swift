@@ -1077,6 +1077,13 @@ final class PreferencesStore: ObservableObject {
             // Default is nil for existing menu views, so no per-view backfill is needed.
         }
 
+        if settings.schemaVersion < 14 {
+            settings.schemaVersion = 14
+            settings.worldClock = settings.worldClock ?? .defaults
+            // worldClockItem is added per-menu-view as an optional field.
+            // Default is nil for existing menu views, so no per-view backfill is needed.
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1086,6 +1093,7 @@ final class PreferencesStore: ObservableObject {
         settings.moreMenuBehavior = settings.moreMenuBehavior ?? .visibleAtBottom
         settings.appleScripts = settings.appleScripts ?? []
         settings.clipboardShelf = settings.clipboardShelf ?? .defaults
+        settings.worldClock = settings.worldClock ?? .defaults
         settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
         applyMenuSettingsDefaults(&settings.defaultMenuSettings)
 

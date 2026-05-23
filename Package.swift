@@ -35,6 +35,14 @@ let package = Package(
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]
+        ),
+        .testTarget(
+            name: "WorldClockTests",
+            dependencies: ["MenuShelf"],
+            path: "Tests/WorldClockTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
         )
     ]
 )

@@ -19,6 +19,7 @@ final class AppContainer {
     let settingsWindowController: SettingsWindowController
 
     private var clipboardShelfSettingsSubscription: AnyCancellable?
+    private var worldClockSettingsSubscription: AnyCancellable?
 
     private init() {
         shortcutsService = ShortcutsService()
@@ -86,6 +87,27 @@ final class AppContainer {
             .sink { newSettings in
                 Task { @MainActor in
                     ClipboardShelfController.shared.apply(settings: newSettings)
+                }
+            }
+
+        // Bring up World Clock if enabled. The controller is idempotent
+        // and will no-op if it's already running. We also subscribe to
+        // settings changes so the controller picks up enable/disable
+        // toggles, clock list edits, and appearance changes without an
+        // app restart (Requirement 13.5).
+        let initialWorldClock = store.settings.resolvedWorldClock
+        if initialWorldClock.enableWorldClock {
+            Task { @MainActor in
+                WorldClockController.shared.start(with: initialWorldClock)
+            }
+        }
+        worldClockSettingsSubscription = store.$settings
+            .map { $0.resolvedWorldClock }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { newSettings in
+                Task { @MainActor in
+                    WorldClockController.shared.apply(settings: newSettings)
                 }
             }
 
