@@ -141,7 +141,7 @@ struct ClipboardShelfSettings: Codable, Equatable {
         clipboardCheckInterval: 1.0,
         size: 200,
         sortBy: .firstCopiedAt,
-        searchMode: .fuzzy,
+        searchMode: .exact,
         pasteByDefault: true,
         removeFormattingByDefault: false,
         pinTo: .top,

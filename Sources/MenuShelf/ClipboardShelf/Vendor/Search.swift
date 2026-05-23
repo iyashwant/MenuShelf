@@ -33,7 +33,7 @@ class Search {
 
   typealias Searchable = HistoryItemDecorator
 
-  private let fuse = Fuse(threshold: 0.7) // threshold found by trial-and-error
+  private let fuse = Fuse(threshold: 0.4) // tightened from 0.7 to reduce noisy matches
   private let fuzzySearchLimit = 5_000
 
   func search(string: String, within: [Searchable]) -> [SearchResult] {
