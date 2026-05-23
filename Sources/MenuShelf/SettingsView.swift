@@ -4,6 +4,7 @@ import SwiftUI
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
     case menuViews
+    case standaloneModules
     case sources
     case menuDefaults
     case shortcuts
@@ -19,6 +20,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .menuViews: "Menu Views"
+        case .standaloneModules: "Standalone Modules"
         case .sources: "Sources"
         case .menuDefaults: "Menu Defaults"
         case .shortcuts: "Apple Shortcuts"
@@ -34,6 +36,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape"
         case .menuViews: return "menubar.rectangle"
+        case .standaloneModules: return "square.grid.2x2"
         case .sources: return "externaldrive"
         case .menuDefaults: return "slider.horizontal.3"
         case .shortcuts: return "bolt.fill"
@@ -89,6 +92,8 @@ struct SettingsView: View {
                     GeneralSettingsView()
                 case .menuViews:
                     MenuViewsSettingsView()
+                case .standaloneModules:
+                    StandaloneModulesSettingsView()
                 case .sources:
                     SourcesSettingsView()
                 case .menuDefaults:
@@ -119,6 +124,12 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusWorldClock)) { _ in
             section = .worldClock
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusStandaloneModules)) { _ in
+            section = .standaloneModules
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusBrowserFlip)) { _ in
+            section = .browserFlip
         }
     }
 }

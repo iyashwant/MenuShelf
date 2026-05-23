@@ -3,12 +3,15 @@ import Carbon
 import Foundation
 
 final class GlobalHotkeyService {
-    private let signature: OSType = 0x4D_53_48_46 // MSHF
+    let signature: OSType = 0x4D_53_48_46 // MSHF
     private var eventHandler: EventHandlerRef?
     private var registrations: [UInt32: EventHotKeyRef] = [:]
     private var menuViewIDsByHotKeyID: [UInt32: UUID] = [:]
-    private var nextHotKeyID: UInt32 = 1
+    var nextHotKeyID: UInt32 = 1
     private var onHotKey: ((UUID) -> Void)?
+    var standaloneModuleRegistrations: [UInt32: EventHotKeyRef] = [:]
+    var standaloneModuleIDsByHotKeyID: [UInt32: UUID] = [:]
+    var onStandaloneModuleHotKey: ((UUID) -> Void)?
 
     init() {
         installEventHandler()
@@ -22,6 +25,7 @@ final class GlobalHotkeyService {
             RemoveEventHandler(eventHandler)
         }
         unregisterAll()
+        unregisterAllStandaloneModuleRegistrations()
     }
 
     func registerShortcuts(for menuViews: [MenuViewConfig], onHotKey: @escaping (UUID) -> Void) {
@@ -67,6 +71,14 @@ final class GlobalHotkeyService {
         menuViewIDsByHotKeyID.removeAll()
     }
 
+    private func unregisterAllStandaloneModuleRegistrations() {
+        for ref in standaloneModuleRegistrations.values {
+            UnregisterEventHotKey(ref)
+        }
+        standaloneModuleRegistrations.removeAll()
+        standaloneModuleIDsByHotKeyID.removeAll()
+    }
+
     private func installEventHandler() {
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -105,13 +117,21 @@ final class GlobalHotkeyService {
     }
 
     private func handleHotKey(id: UInt32) {
-        guard let menuViewID = menuViewIDsByHotKeyID[id] else { return }
-        DispatchQueue.main.async { [onHotKey] in
-            onHotKey?(menuViewID)
+        if let menuViewID = menuViewIDsByHotKeyID[id] {
+            DispatchQueue.main.async { [onHotKey] in
+                onHotKey?(menuViewID)
+            }
+            return
+        }
+        if let standaloneModuleID = standaloneModuleIDsByHotKeyID[id] {
+            DispatchQueue.main.async { [onStandaloneModuleHotKey] in
+                onStandaloneModuleHotKey?(standaloneModuleID)
+            }
+            return
         }
     }
 
-    private func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+    func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
         var modifiers: UInt32 = 0
         if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
         if flags.contains(.option) { modifiers |= UInt32(optionKey) }

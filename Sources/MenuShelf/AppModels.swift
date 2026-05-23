@@ -613,6 +613,72 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     }
 }
 
+enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
+    case browserFlip
+    case clipboardShelf
+    case worldClock
+
+    var id: String { rawValue }
+
+    /// SF Symbol name used as the standalone module's default icon.
+    var defaultIconSymbol: String {
+        switch self {
+        case .browserFlip: "globe"
+        case .clipboardShelf: "clipboard"
+        case .worldClock: "clock"
+        }
+    }
+
+    /// Default `title` value applied at creation time.
+    var defaultTitle: String {
+        switch self {
+        case .browserFlip: "Browser Flip"
+        case .clipboardShelf: "Clipboard Shelf"
+        case .worldClock: "World Clock"
+        }
+    }
+
+    /// Human-readable bond label rendered in the Settings detail pane to
+    /// remind the user that this icon is hard-bound to a single module
+    /// kind.
+    var bondLabel: String {
+        "This icon opens \(defaultTitle)"
+    }
+}
+
+struct StandaloneModuleConfig: Codable, Identifiable, Equatable {
+    let id: UUID
+    let kind: ModuleKind
+    var isVisible: Bool
+    var title: String
+    var icon: FolderIconConfig
+    var iconColorHex: String?
+    var menuBarStyle: MenuBarStyle
+    var shortcut: KeyboardShortcutConfig?
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    var bondLabel: String { kind.bondLabel }
+
+    static func make(kind: ModuleKind, sortOrder: Int) -> StandaloneModuleConfig {
+        let now = Date()
+        return StandaloneModuleConfig(
+            id: UUID(),
+            kind: kind,
+            isVisible: true,
+            title: kind.defaultTitle,
+            icon: .systemSymbol(name: kind.defaultIconSymbol, tint: nil),
+            iconColorHex: nil,
+            menuBarStyle: .iconOnly,
+            shortcut: .disabled,
+            sortOrder: sortOrder,
+            createdAt: now,
+            updatedAt: now
+        )
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var schemaVersion: Int
     // Deprecated: kept only so older settings decode cleanly while menuViews take over.
@@ -635,10 +701,11 @@ struct AppSettings: Codable, Equatable {
     var browserFlip: BrowserFlipSettings?
     var clipboardShelf: ClipboardShelfSettings?
     var worldClock: WorldClockSettings?
+    var standaloneModules: [StandaloneModuleConfig]?
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 14,
+        schemaVersion: 15,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -658,6 +725,7 @@ struct AppSettings: Codable, Equatable {
         browserFlip: .defaults,
         clipboardShelf: .defaults,
         worldClock: .defaults,
+        standaloneModules: [],
         showRootFolderManagementItems: true
     )
 
@@ -674,6 +742,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
     var resolvedClipboardShelf: ClipboardShelfSettings { clipboardShelf ?? .defaults }
     var resolvedWorldClock: WorldClockSettings { worldClock ?? .defaults }
+    var resolvedStandaloneModules: [StandaloneModuleConfig] { standaloneModules ?? [] }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 }
 

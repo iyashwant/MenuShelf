@@ -22,7 +22,7 @@ final class PreferencesStore: ObservableObject {
     @Published var currentDefaultBrowserID: String?
 
     private let settingsURL: URL
-    private let supportURL: URL
+    let supportURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let launchAtLoginService = LaunchAtLoginService()
@@ -1084,6 +1084,12 @@ final class PreferencesStore: ObservableObject {
             // Default is nil for existing menu views, so no per-view backfill is needed.
         }
 
+        if settings.schemaVersion < 15 {
+            settings.schemaVersion = 15
+            settings.standaloneModules = settings.standaloneModules ?? []
+            DiagnosticsLogger.shared.log("Applied schema-15 migration: standalone modules field defaulted to []")
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1094,6 +1100,23 @@ final class PreferencesStore: ObservableObject {
         settings.appleScripts = settings.appleScripts ?? []
         settings.clipboardShelf = settings.clipboardShelf ?? .defaults
         settings.worldClock = settings.worldClock ?? .defaults
+        settings.standaloneModules = settings.standaloneModules ?? []
+        // Standalone modules: decode-time title fixup (Requirement 1.4).
+        // An empty / whitespace-only `title` substitutes the kind's default;
+        // a `title` longer than 200 characters is clamped. Both fixups land
+        // here so any decoded entry, whether from older builds (no field) or
+        // hand-edited JSON, normalises before reaching the runtime.
+        if var modules = settings.standaloneModules {
+            for index in modules.indices {
+                let trimmed = modules[index].title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    modules[index].title = modules[index].kind.defaultTitle
+                } else if trimmed.count > 200 {
+                    modules[index].title = String(trimmed.prefix(200))
+                }
+            }
+            settings.standaloneModules = modules
+        }
         settings.showRootFolderManagementItems = settings.showRootFolderManagementItems ?? true
         applyMenuSettingsDefaults(&settings.defaultMenuSettings)
 

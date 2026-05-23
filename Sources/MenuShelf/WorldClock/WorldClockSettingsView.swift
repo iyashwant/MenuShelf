@@ -233,44 +233,41 @@ struct WorldClockSettingsView: View {
     }
 
     /// Detect a `(keyCode, modifierFlags)` collision between the recorded
-    /// World Clock popover hotkey and either a menu view's shortcut or the
-    /// Clipboard Shelf popup shortcut. Recomputed on every render so the
-    /// warning appears the moment the user records a colliding chord and
-    /// disappears the moment they pick a different one.
-    private var currentConflict: HotkeyConflict? {
+    /// World Clock popover hotkey and any menu view, standalone module, or
+    /// the Clipboard Shelf popup hotkey. Delegates to the shared
+    /// `StandaloneModuleHotkeyConflict.scan(...)` helper so the world-clock
+    /// banner and the standalone-modules banner stay in lockstep.
+    ///
+    /// The World Clock popup itself is excluded from `knownPopupHotkeys` so
+    /// it does not report itself (Requirement 8.5).
+    private var currentConflict: StandaloneModuleHotkeyConflict? {
         guard let recorded = KeyboardShortcuts.getShortcut(for: .worldClockPopup),
               let recordedKey = recorded.key?.rawValue else {
             return nil
         }
-        let recordedModifiers = recorded.modifiers
-            .intersection(.deviceIndependentFlagsMask)
-            .rawValue
+        let recordedConfig = KeyboardShortcutConfig(
+            isEnabled: true,
+            keyEquivalent: "",
+            modifierFlags: recorded.modifiers.rawValue,
+            keyCode: UInt16(recordedKey)
+        )
 
-        // Menu view shortcuts (only enabled ones with a recorded keyCode).
-        for view in store.settings.resolvedMenuViews {
-            guard let shortcut = view.shortcut,
-                  shortcut.isEnabled,
-                  let keyCode = shortcut.keyCode else { continue }
-            let menuModifiers = NSEvent.ModifierFlags(rawValue: shortcut.modifierFlags)
-                .intersection(.deviceIndependentFlagsMask)
-                .rawValue
-            if Int(keyCode) == recordedKey && menuModifiers == recordedModifiers {
-                return HotkeyConflict(ownerName: "menu view \"\(view.title)\"")
-            }
-        }
-
-        // Clipboard Shelf popup hotkey.
+        var knownPopups: [StandaloneModuleHotkeyConflict.KnownPopupHotkey] = []
         if let popup = KeyboardShortcuts.getShortcut(for: .popup),
            let popupKey = popup.key?.rawValue {
-            let popupModifiers = popup.modifiers
-                .intersection(.deviceIndependentFlagsMask)
-                .rawValue
-            if popupKey == recordedKey && popupModifiers == recordedModifiers {
-                return HotkeyConflict(ownerName: "Clipboard Shelf popup")
-            }
+            knownPopups.append(.clipboardShelfPopup(
+                keyCode: UInt16(popupKey),
+                modifierFlags: popup.modifiers.rawValue
+            ))
         }
 
-        return nil
+        return StandaloneModuleHotkeyConflict.scan(
+            recorded: recordedConfig,
+            currentEntryID: nil,
+            menuViews: store.settings.resolvedMenuViews,
+            standaloneModules: store.settings.resolvedStandaloneModules,
+            knownPopupHotkeys: knownPopups
+        )
     }
 }
 
@@ -288,10 +285,6 @@ private enum TimeZoneSheetMode: Identifiable, Equatable {
         case .change(let id): "change-\(id.uuidString)"
         }
     }
-}
-
-private struct HotkeyConflict {
-    let ownerName: String
 }
 
 // MARK: - Clock row

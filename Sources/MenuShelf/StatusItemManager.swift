@@ -4,26 +4,53 @@ import Foundation
 
 final class StatusItemManager: NSObject {
     private let store: PreferencesStore
-    private let menuBuilder: MenuBuilder
+    let menuBuilder: MenuBuilder
     private let actionHandler: MenuActionHandler
     private let metadataService: MetadataService
     private let presentationCoordinator: MenuPresentationCoordinator
     private let hotkeyService: GlobalHotkeyService
-    private struct StatusContext {
-        var item: NSStatusItem
-        var menuViewID: UUID?
-        var isFallback: Bool
+    enum StatusContext {
+        case menuView(NSStatusItem, UUID)
+        case standaloneModule(NSStatusItem, StandaloneModuleConfig)
+        case fallback(NSStatusItem)
+
+        var item: NSStatusItem {
+            switch self {
+            case .menuView(let item, _),
+                 .standaloneModule(let item, _),
+                 .fallback(let item):
+                return item
+            }
+        }
     }
 
-    private var statusItems: [StatusContext] = []
-    private var statusItemsByButton: [ObjectIdentifier: StatusContext] = [:]
+    var statusItems: [StatusContext] = []
+    var statusItemsByButton: [ObjectIdentifier: StatusContext] = [:]
     private var cancellable: AnyCancellable?
 
     /// Returns the `NSStatusBarButton` for the menu view with the given id,
     /// when the view has a visible status item. Used by Clipboard Shelf to
     /// anchor the popup to the originating menu view's icon (Requirement 4.2).
     func statusBarButton(for menuViewID: UUID) -> NSStatusBarButton? {
-        statusItems.first { $0.menuViewID == menuViewID }?.item.button
+        for context in statusItems {
+            if case .menuView(let item, let id) = context, id == menuViewID {
+                return item.button
+            }
+        }
+        return nil
+    }
+
+    /// Returns the `NSStatusBarButton` for the standalone module with the
+    /// given id, when the module has a visible status item. Used by the
+    /// hotkey anchor fallback (Task 8) and the settings deep-link
+    /// (Task 9.3).
+    func statusBarButton(forStandaloneModuleID id: UUID) -> NSStatusBarButton? {
+        for context in statusItems {
+            if case .standaloneModule(let item, let module) = context, module.id == id {
+                return item.button
+            }
+        }
+        return nil
     }
 
     /// The subset of settings that affect the menu bar's outward shape: which
@@ -42,9 +69,21 @@ final class StatusItemManager: NSObject {
             let shortcut: KeyboardShortcutConfig?
         }
 
+        struct StandaloneModuleSignature: Equatable {
+            let id: UUID
+            let kind: ModuleKind
+            let isVisible: Bool
+            let title: String
+            let menuBarStyle: MenuBarStyle
+            let icon: FolderIconConfig
+            let iconColorHex: String?
+            let shortcut: KeyboardShortcutConfig?
+        }
+
         let showMenuBarItemWhenEmpty: Bool
         let enableBrowserFlip: Bool
         let views: [ViewSignature]
+        let standaloneModules: [StandaloneModuleSignature]
 
         init(_ settings: AppSettings) {
             self.showMenuBarItemWhenEmpty = settings.showMenuBarItemWhenEmpty
@@ -60,6 +99,20 @@ final class StatusItemManager: NSObject {
                     shortcut: view.shortcut
                 )
             }
+            self.standaloneModules = settings.resolvedStandaloneModules
+                .sorted { $0.sortOrder < $1.sortOrder }
+                .map { module in
+                    StandaloneModuleSignature(
+                        id: module.id,
+                        kind: module.kind,
+                        isVisible: module.isVisible,
+                        title: module.title,
+                        menuBarStyle: module.menuBarStyle,
+                        icon: module.icon,
+                        iconColorHex: module.iconColorHex,
+                        shortcut: module.shortcut
+                    )
+                }
         }
     }
     private var lastShape: MenuBarShape?
@@ -74,12 +127,31 @@ final class StatusItemManager: NSObject {
             let shortcut: KeyboardShortcutConfig?
             let isVisible: Bool
         }
+
+        struct StandaloneModuleEntry: Equatable {
+            let standaloneModuleID: UUID
+            let kind: ModuleKind
+            let shortcut: KeyboardShortcutConfig?
+            let isVisible: Bool
+        }
+
         let entries: [Entry]
+        let standaloneModuleEntries: [StandaloneModuleEntry]
 
         init(_ settings: AppSettings) {
             self.entries = settings.resolvedMenuViews.map {
                 Entry(menuViewID: $0.id, shortcut: $0.shortcut, isVisible: $0.isVisible)
             }
+            self.standaloneModuleEntries = settings.resolvedStandaloneModules
+                .sorted { $0.sortOrder < $1.sortOrder }
+                .map {
+                    StandaloneModuleEntry(
+                        standaloneModuleID: $0.id,
+                        kind: $0.kind,
+                        shortcut: $0.shortcut,
+                        isVisible: $0.isVisible
+                    )
+                }
         }
     }
     private var lastHotkeys: HotkeysSignature?
@@ -122,13 +194,27 @@ final class StatusItemManager: NSObject {
         removeAllStatusItems()
 
         let visibleViews = store.settings.resolvedMenuViews.filter(\.isVisible)
-        DiagnosticsLogger.shared.log("Rebuilding status items. visibleViews=\(visibleViews.count) totalViews=\(store.settings.resolvedMenuViews.count) sources=\(store.settings.folders.count)")
+        let visibleModules = store.settings.resolvedStandaloneModules
+            .filter(\.isVisible)
+            .sorted { $0.sortOrder < $1.sortOrder }
+        DiagnosticsLogger.shared.log(
+            "Rebuilding status items. visibleViews=\(visibleViews.count) "
+            + "visibleStandaloneModules=\(visibleModules.count) "
+            + "totalViews=\(store.settings.resolvedMenuViews.count) "
+            + "totalStandaloneModules=\(store.settings.resolvedStandaloneModules.count) "
+            + "sources=\(store.settings.folders.count)"
+        )
 
-        if visibleViews.isEmpty, store.settings.showMenuBarItemWhenEmpty {
+        if visibleViews.isEmpty
+            && visibleModules.isEmpty
+            && store.settings.showMenuBarItemWhenEmpty {
             makeEmptyStatusItem()
         } else {
             for view in visibleViews {
                 makeMenuViewStatusItem(view)
+            }
+            for module in visibleModules {
+                makeStandaloneModuleStatusItem(module)
             }
         }
 
@@ -140,6 +226,7 @@ final class StatusItemManager: NSObject {
         if hotkeys != lastHotkeys {
             lastHotkeys = hotkeys
             registerHotkeys()
+            registerStandaloneModuleHotkeys()
         }
     }
 
@@ -147,8 +234,8 @@ final class StatusItemManager: NSObject {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         configure(button: item.button, view: view)
         item.menu = menuBuilder.makeMenuViewMenu(for: view)
-        statusItems.append(StatusContext(item: item, menuViewID: view.id, isFallback: false))
-        configureClickHandling(item: item, menuViewID: view.id, isFallback: false)
+        statusItems.append(.menuView(item, view.id))
+        configureClickHandling(item: item, context: .menuView(item, view.id))
         DiagnosticsLogger.shared.log("Created status item for view \(view.title) title=\(item.button?.title ?? "nil") length=\(item.length) hasImage=\(item.button?.image != nil)")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             DiagnosticsLogger.shared.log(
@@ -159,7 +246,7 @@ final class StatusItemManager: NSObject {
 
     private func makeEmptyStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItems.append(StatusContext(item: item, menuViewID: nil, isFallback: true))
+        statusItems.append(.fallback(item))
 
         if let button = item.button {
             button.image = reliableMenuViewSymbol()
@@ -170,7 +257,7 @@ final class StatusItemManager: NSObject {
         }
 
         item.menu = menuBuilder.makeGroupedMenu()
-        configureClickHandling(item: item, menuViewID: nil, isFallback: true)
+        configureClickHandling(item: item, context: .fallback(item))
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             DiagnosticsLogger.shared.log(
                 "Empty status item attached window=\(String(describing: item.button?.window)) windowFrame=\(String(describing: item.button?.window?.frame)) frame=\(String(describing: item.button?.frame)) visible=\(item.isVisible) hasImage=\(item.button?.image != nil)"
@@ -213,35 +300,48 @@ final class StatusItemManager: NSObject {
         statusItemsByButton.removeAll()
     }
 
-    private func configureClickHandling(item: NSStatusItem, menuViewID: UUID?, isFallback: Bool) {
+    func configureClickHandling(item: NSStatusItem, context: StatusContext) {
         guard let button = item.button else { return }
         button.target = self
         button.action = #selector(handleStatusItemClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
-        let context = StatusContext(item: item, menuViewID: menuViewID, isFallback: isFallback)
         statusItemsByButton[ObjectIdentifier(button)] = context
     }
 
+    @MainActor
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
         guard let context = statusItemsByButton[ObjectIdentifier(sender)] else { return }
 
         let event = NSApp.currentEvent
-        let isAlternateOpen = event?.type == .rightMouseUp || event?.modifierFlags.contains(.option) == true
+        let eventType: NSEvent.EventType = event?.type ?? .leftMouseUp
+        let modifiers = event?.modifierFlags ?? []
+        let isAlternateOpen = eventType == .rightMouseUp || modifiers.contains(.option)
 
-        if isAlternateOpen {
-            if let menuViewID = context.menuViewID {
+        switch context {
+        case .menuView(let item, let menuViewID):
+            if isAlternateOpen {
                 AppContainer.shared.settingsWindowController.show(selectedMenuViewID: menuViewID)
-            } else {
-                AppContainer.shared.settingsWindowController.show()
+                return
             }
-            return
-        }
+            presentationCoordinator.presentMenu(forMenuViewID: menuViewID, location: .menuBarItem, anchoredTo: item)
 
-        if context.isFallback {
-            presentationCoordinator.presentGroupedMenu(anchoredTo: context.item)
-        } else if let menuViewID = context.menuViewID {
-            presentationCoordinator.presentMenu(forMenuViewID: menuViewID, location: .menuBarItem, anchoredTo: context.item)
+        case .standaloneModule(let item, let module):
+            StandaloneModuleClickRouter.shared.dispatch(
+                module: module,
+                anchorButton: sender,
+                anchorItem: item,
+                eventType: eventType,
+                modifierFlags: modifiers,
+                presentationCoordinator: presentationCoordinator
+            )
+
+        case .fallback(let item):
+            if isAlternateOpen {
+                AppContainer.shared.settingsWindowController.show()
+                return
+            }
+            presentationCoordinator.presentGroupedMenu(anchoredTo: item)
         }
     }
 
@@ -249,20 +349,26 @@ final class StatusItemManager: NSObject {
     /// while an AppleScript is executing. Tints the icon with the system accent
     /// color; clears the tint on completion.
     func setRunningIndicator(menuViewID: UUID, isRunning: Bool) {
-        guard let context = statusItems.first(where: { $0.menuViewID == menuViewID }),
-              let button = context.item.button else { return }
-        button.contentTintColor = isRunning ? NSColor.controlAccentColor : nil
+        for context in statusItems {
+            if case .menuView(let item, let id) = context, id == menuViewID {
+                item.button?.contentTintColor = isRunning ? NSColor.controlAccentColor : nil
+                return
+            }
+        }
     }
 
     private func publishStatusItems() {
         var menuViews: [UUID: NSStatusItem] = [:]
         var fallback: NSStatusItem?
         for context in statusItems {
-            if let menuViewID = context.menuViewID {
-                menuViews[menuViewID] = context.item
-            }
-            if context.isFallback {
-                fallback = context.item
+            switch context {
+            case .menuView(let item, let menuViewID):
+                menuViews[menuViewID] = item
+            case .standaloneModule:
+                // Skipped until Task 7 wires standalone-module publication.
+                break
+            case .fallback(let item):
+                fallback = item
             }
         }
 
@@ -276,6 +382,25 @@ final class StatusItemManager: NSObject {
                 forMenuViewID: menuViewID,
                 location: self.store.settings.resolvedShortcutOpenLocation
             )
+        }
+    }
+
+    private func registerStandaloneModuleHotkeys() {
+        hotkeyService.registerStandaloneModuleShortcuts(
+            for: store.settings.resolvedStandaloneModules
+        ) { [weak self] standaloneModuleID in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard let module = self.store.settings.resolvedStandaloneModules
+                    .first(where: { $0.id == standaloneModuleID }) else { return }
+                let anchor = self.statusBarButton(forStandaloneModuleID: standaloneModuleID)
+                StandaloneModuleClickRouter.shared.dispatchHotkey(
+                    module: module,
+                    anchorButton: anchor,
+                    anchorItem: nil,
+                    presentationCoordinator: self.presentationCoordinator
+                )
+            }
         }
     }
 
@@ -318,7 +443,7 @@ final class StatusItemManager: NSObject {
         return fallbackMenuViewImage(size: size)
     }
 
-    private func fallbackMenuViewImage(size: CGFloat) -> NSImage {
+    func fallbackMenuViewImage(size: CGFloat) -> NSImage {
         let image = NSImage(size: NSSize(width: size, height: size))
         image.lockFocus()
 

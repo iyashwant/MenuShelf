@@ -19,7 +19,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         selectedAppleScriptID: UUID? = nil,
         focusClipboardShelf: Bool = false,
         focusWorldClock: Bool = false,
-        scrollToClockID: UUID? = nil
+        scrollToClockID: UUID? = nil,
+        focusStandaloneModules: Bool = false,
+        scrollToStandaloneModuleID: UUID? = nil,
+        focusBrowserFlip: Bool = false
     ) {
         if let selectedMenuViewID {
             store.selectedMenuViewID = selectedMenuViewID
@@ -42,11 +45,27 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             NotificationCenter.default.post(name: .menuShelfFocusWorldClock, object: nil)
         }
 
+        if focusStandaloneModules {
+            NotificationCenter.default.post(name: .menuShelfFocusStandaloneModules, object: nil)
+        }
+
+        if focusBrowserFlip {
+            NotificationCenter.default.post(name: .menuShelfFocusBrowserFlip, object: nil)
+        }
+
         if let scrollToClockID {
             NotificationCenter.default.post(
                 name: .menuShelfScrollToWorldClock,
                 object: nil,
                 userInfo: ["clockID": scrollToClockID]
+            )
+        }
+
+        if let scrollToStandaloneModuleID {
+            NotificationCenter.default.post(
+                name: .menuShelfScrollToStandaloneModule,
+                object: nil,
+                userInfo: ["standaloneModuleID": scrollToStandaloneModuleID]
             )
         }
 
@@ -112,4 +131,15 @@ extension Notification.Name {
     /// Posted when the World Clock settings view should scroll to a specific
     /// clock row. `userInfo["clockID"]` carries the target `UUID`.
     static let menuShelfScrollToWorldClock = Notification.Name("menuShelfScrollToWorldClock")
+
+    /// Posted when the settings window should switch to the Standalone Modules pane.
+    static let menuShelfFocusStandaloneModules = Notification.Name("menuShelfFocusStandaloneModules")
+
+    /// Posted when the Standalone Modules settings view should scroll to a
+    /// specific module row. `userInfo["standaloneModuleID"]` carries the
+    /// target `UUID`.
+    static let menuShelfScrollToStandaloneModule = Notification.Name("menuShelfScrollToStandaloneModule")
+
+    /// Posted when the settings window should switch to the Browser Flip pane.
+    static let menuShelfFocusBrowserFlip = Notification.Name("menuShelfFocusBrowserFlip")
 }

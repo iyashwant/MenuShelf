@@ -2,8 +2,8 @@ import AppKit
 import Foundation
 
 final class MenuPresentationCoordinator {
-    private let store: PreferencesStore
-    private let menuBuilder: MenuBuilder
+    let store: PreferencesStore
+    let menuBuilder: MenuBuilder
     private var fallbackStatusItem: NSStatusItem?
     private var statusItemsByMenuViewID: [UUID: NSStatusItem] = [:]
 
