@@ -1090,6 +1090,12 @@ final class PreferencesStore: ObservableObject {
             DiagnosticsLogger.shared.log("Applied schema-15 migration: standalone modules field defaulted to []")
         }
 
+        if settings.schemaVersion < 16 {
+            settings.schemaVersion = 16
+            settings.bookmarkShelf = settings.bookmarkShelf ?? BookmarkShelfSettings.defaults
+            DiagnosticsLogger.shared.log("Applied schema-16 migration: bookmarkShelf field defaulted to .defaults")
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1101,6 +1107,7 @@ final class PreferencesStore: ObservableObject {
         settings.clipboardShelf = settings.clipboardShelf ?? .defaults
         settings.worldClock = settings.worldClock ?? .defaults
         settings.standaloneModules = settings.standaloneModules ?? []
+        settings.bookmarkShelf = settings.bookmarkShelf ?? BookmarkShelfSettings.defaults
         // Standalone modules: decode-time title fixup (Requirement 1.4).
         // An empty / whitespace-only `title` substitutes the kind's default;
         // a `title` longer than 200 characters is clamped. Both fixups land

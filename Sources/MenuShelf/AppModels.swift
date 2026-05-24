@@ -555,6 +555,122 @@ struct AppSpecificShortcutGroup: Codable, Identifiable, Equatable {
     var updatedAt: Date
 }
 
+/// A single Bookmark Shelf entry inside a `MenuViewConfig`. Mirrors
+/// `ClipboardShelfMenuItemConfig` and `WorldClockMenuItemConfig`
+/// field-for-field so the existing menu/render patterns transplant cleanly.
+struct BookmarkShelfMenuItemConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var titleOverride: String?
+    var sectionName: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    var displayTitle: String {
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        return "Bookmark Shelf"
+    }
+
+    static func make() -> BookmarkShelfMenuItemConfig {
+        BookmarkShelfMenuItemConfig(
+            id: UUID(),
+            titleOverride: nil,
+            sectionName: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+/// A single per-bookmark or per-folder content row inside a
+/// `MenuViewConfig` (`MenuViewConfig.bookmarkContentItems`). Each entry
+/// references one `BookmarkNode` by `nodeID`. Override fields override
+/// the referenced node's display-time values without mutating the
+/// underlying tree (Requirement 2.7, 10.4).
+struct BookmarkContentItemConfig: Codable, Identifiable, Equatable {
+    var id: UUID
+    var nodeID: UUID
+    var titleOverride: String?
+    var sectionName: String?
+    var iconOverride: FolderIconConfig?
+    var iconColorHexOverride: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    /// Resolved title: trimmed `titleOverride` wins when non-empty;
+    /// otherwise the referenced `BookmarkNode.title`; otherwise the
+    /// literal `"Bookmark unavailable"` placeholder. Per Requirement 10.6,
+    /// the caller MUST NOT interpolate a missing node's title into the
+    /// rendered string — the placeholder is returned unchanged.
+    func resolvedTitle(node: BookmarkNode?) -> String {
+        if let trimmed = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmed.isEmpty {
+            return trimmed
+        }
+        if let nodeTitle = node?.title { return nodeTitle }
+        return "Bookmark unavailable"
+    }
+
+    /// Resolved icon: `iconOverride` wins; otherwise the referenced
+    /// `BookmarkNode.icon`; otherwise an SF Symbol `"folder"` for
+    /// `.folder` nodes and `"globe"` for `.bookmark` nodes; otherwise
+    /// (missing node) the SF Symbol `"questionmark.circle"` so the
+    /// disabled placeholder still renders something visible.
+    func resolvedIcon(node: BookmarkNode?) -> FolderIconConfig {
+        if let override = iconOverride { return override }
+        if let icon = node?.icon { return icon }
+        switch node?.kind {
+        case .folder:
+            return .systemSymbol(name: "folder", tint: nil)
+        case .bookmark:
+            return .systemSymbol(name: "globe", tint: nil)
+        case .none:
+            return .systemSymbol(name: "questionmark.circle", tint: nil)
+        }
+    }
+
+    static func make(nodeID: UUID) -> BookmarkContentItemConfig {
+        BookmarkContentItemConfig(
+            id: UUID(),
+            nodeID: nodeID,
+            titleOverride: nil,
+            sectionName: nil,
+            iconOverride: nil,
+            iconColorHexOverride: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+}
+
+/// Top-level Bookmark Shelf settings persisted to MenuShelf's `settings.json`
+/// under `AppSettings.bookmarkShelf`. Lives inline in `AppModels.swift`
+/// because it is part of the persisted settings model (Requirement 20.1).
+/// Side-file types (`BookmarkNode`, `BookmarkNodeKind`) live in
+/// `Sources/MenuShelf/BookmarkShelf/BookmarkShelfModels.swift` because they
+/// are part of `bookmarks.json`, not part of `AppSettings`.
+struct BookmarkShelfSettings: Codable, Equatable {
+    var enableBookmarkShelf: Bool
+    var popupSize: CGSize
+    var popupHotkey: KeyboardShortcutConfig?
+    var defaultBrowserBundleID: String?
+    var showFavoritesSection: Bool
+    var confirmBeforeDelete: Bool
+    var lastImportSourceLabel: String?
+
+    static let defaults = BookmarkShelfSettings(
+        enableBookmarkShelf: false,
+        popupSize: CGSize(width: 320, height: 420),
+        popupHotkey: .disabled,
+        defaultBrowserBundleID: nil,
+        showFavoritesSection: true,
+        confirmBeforeDelete: true,
+        lastImportSourceLabel: nil
+    )
+}
+
 struct MenuViewConfig: Codable, Identifiable, Equatable {
     var id: UUID
     var title: String
@@ -575,6 +691,8 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var browserFlipItem: BrowserFlipMenuItemConfig?
     var clipboardShelfItem: ClipboardShelfMenuItemConfig?
     var worldClockItem: WorldClockMenuItemConfig?
+    var bookmarkShelfItem: BookmarkShelfMenuItemConfig?
+    var bookmarkContentItems: [BookmarkContentItemConfig]?
     var createdAt: Date
     var updatedAt: Date
 
@@ -585,6 +703,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var resolvedLinkedMenuViews: [LinkedMenuViewConfig] { linkedMenuViews ?? [] }
     var resolvedAppSpecificShortcutGroups: [AppSpecificShortcutGroup] { appSpecificShortcutGroups ?? [] }
     var resolvedAppleScriptItems: [AppleScriptMenuItemConfig] { appleScriptItems ?? [] }
+    var resolvedBookmarkContentItems: [BookmarkContentItemConfig] { bookmarkContentItems ?? [] }
 
     static func make(title: String = "MenuShelf", defaults: MenuSettings = .defaults, sourceIDs: [UUID] = []) -> MenuViewConfig {
         MenuViewConfig(
@@ -607,6 +726,8 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             browserFlipItem: nil,
             clipboardShelfItem: nil,
             worldClockItem: nil,
+            bookmarkShelfItem: nil,
+            bookmarkContentItems: nil,
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -617,6 +738,7 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
     case browserFlip
     case clipboardShelf
     case worldClock
+    case bookmarkShelf
 
     var id: String { rawValue }
 
@@ -626,6 +748,7 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
         case .browserFlip: "globe"
         case .clipboardShelf: "clipboard"
         case .worldClock: "clock"
+        case .bookmarkShelf: "bookmark"
         }
     }
 
@@ -635,6 +758,7 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
         case .browserFlip: "Browser Flip"
         case .clipboardShelf: "Clipboard Shelf"
         case .worldClock: "World Clock"
+        case .bookmarkShelf: "Bookmark Shelf"
         }
     }
 
@@ -702,10 +826,11 @@ struct AppSettings: Codable, Equatable {
     var clipboardShelf: ClipboardShelfSettings?
     var worldClock: WorldClockSettings?
     var standaloneModules: [StandaloneModuleConfig]?
+    var bookmarkShelf: BookmarkShelfSettings?
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 15,
+        schemaVersion: 16,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -726,6 +851,7 @@ struct AppSettings: Codable, Equatable {
         clipboardShelf: .defaults,
         worldClock: .defaults,
         standaloneModules: [],
+        bookmarkShelf: .defaults,
         showRootFolderManagementItems: true
     )
 
@@ -743,6 +869,7 @@ struct AppSettings: Codable, Equatable {
     var resolvedClipboardShelf: ClipboardShelfSettings { clipboardShelf ?? .defaults }
     var resolvedWorldClock: WorldClockSettings { worldClock ?? .defaults }
     var resolvedStandaloneModules: [StandaloneModuleConfig] { standaloneModules ?? [] }
+    var resolvedBookmarkShelf: BookmarkShelfSettings { bookmarkShelf ?? .defaults }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 }
 

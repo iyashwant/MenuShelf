@@ -20,6 +20,7 @@ final class AppContainer {
 
     private var clipboardShelfSettingsSubscription: AnyCancellable?
     private var worldClockSettingsSubscription: AnyCancellable?
+    private var bookmarkShelfSettingsSubscription: AnyCancellable?
 
     private init() {
         shortcutsService = ShortcutsService()
@@ -108,6 +109,27 @@ final class AppContainer {
             .sink { newSettings in
                 Task { @MainActor in
                     WorldClockController.shared.apply(settings: newSettings)
+                }
+            }
+
+        // Bring up Bookmark Shelf if enabled. The controller is idempotent
+        // and will no-op if it's already running. Subscribe to settings
+        // changes so the controller picks up enable/disable toggles, popup
+        // size and hotkey edits without an app restart (Requirement 17.2,
+        // 17.3).
+        let initialBookmark = store.settings.resolvedBookmarkShelf
+        if initialBookmark.enableBookmarkShelf {
+            Task { @MainActor in
+                BookmarkShelfController.shared.start(with: initialBookmark)
+            }
+        }
+        bookmarkShelfSettingsSubscription = store.$settings
+            .map { $0.resolvedBookmarkShelf }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { newSettings in
+                Task { @MainActor in
+                    BookmarkShelfController.shared.apply(settings: newSettings)
                 }
             }
 

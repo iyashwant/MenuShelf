@@ -75,6 +75,16 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
+        case .bookmarkShelf:
+            if !settings.resolvedBookmarkShelf.enableBookmarkShelf {
+                DiagnosticsLogger.shared.log(
+                    "Standalone module click ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
+                )
+                AppContainer.shared.settingsWindowController.show(
+                    focusBookmarkShelf: true
+                )
+                return
+            }
         }
 
         // Branch D: dispatch to the bound module's surface
@@ -87,6 +97,8 @@ final class StandaloneModuleClickRouter {
         case .browserFlip:
             guard let anchorItem else { return }
             presentationCoordinator.presentBrowserFlipStandalonePopup(anchoredTo: anchorItem)
+        case .bookmarkShelf:
+            BookmarkShelfController.shared.togglePopup(anchor: anchorButton)
         }
     }
 
@@ -137,6 +149,16 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
+        case .bookmarkShelf:
+            if !settings.resolvedBookmarkShelf.enableBookmarkShelf {
+                DiagnosticsLogger.shared.log(
+                    "Standalone module hotkey ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
+                )
+                AppContainer.shared.settingsWindowController.show(
+                    focusBookmarkShelf: true
+                )
+                return
+            }
         }
 
         // Branch D (mirror): dispatch to the bound module's surface
@@ -152,6 +174,8 @@ final class StandaloneModuleClickRouter {
             // still accepts a nil anchor item.
             guard let anchorItem else { return }
             presentationCoordinator.presentBrowserFlipStandalonePopup(anchoredTo: anchorItem)
+        case .bookmarkShelf:
+            BookmarkShelfController.shared.togglePopup(anchor: anchorButton)
         }
     }
 
@@ -172,6 +196,10 @@ final class StandaloneModuleClickRouter {
         case .browserFlip:
             AppContainer.shared.settingsWindowController.show(
                 focusBrowserFlip: true
+            )
+        case .bookmarkShelf:
+            AppContainer.shared.settingsWindowController.show(
+                focusBookmarkShelf: true
             )
         }
     }

@@ -188,6 +188,8 @@ final class MenuBuilder {
             || view.browserFlipItem != nil
             || view.clipboardShelfItem != nil
             || view.worldClockItem != nil
+            || view.bookmarkShelfItem != nil
+            || !view.resolvedBookmarkContentItems.isEmpty
 
         if showManagementAtTop {
             menu.addItem(managementMenuItem(for: view))
@@ -275,6 +277,31 @@ final class MenuBuilder {
                     currentSection: &currentSection,
                     menuViewID: view.id,
                     enabled: store.settings.resolvedWorldClock.enableWorldClock
+                )
+            }
+            if let bookmarkShelfItem = view.bookmarkShelfItem {
+                if (view.browserFlipItem != nil
+                    || view.clipboardShelfItem != nil
+                    || view.worldClockItem != nil),
+                   menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                    currentSection = nil
+                }
+                addBookmarkShelfMenuItem(
+                    bookmarkShelfItem,
+                    to: menu,
+                    currentSection: &currentSection,
+                    menuViewID: view.id,
+                    enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
+                )
+            }
+            for contentItem in view.resolvedBookmarkContentItems {
+                addBookmarkContentItem(
+                    contentItem,
+                    to: menu,
+                    currentSection: &currentSection,
+                    menuViewID: view.id,
+                    enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
                 )
             }
         }
@@ -1142,7 +1169,9 @@ final class MenuBuilder {
         shortcutTextInput: String? = nil,
         linkedMenuViewID: UUID? = nil,
         appleScriptID: UUID? = nil,
-        browserInfo: BrowserInfo? = nil
+        browserInfo: BrowserInfo? = nil,
+        bookmarkNodeID: UUID? = nil,
+        openInBrowserBundleID: String? = nil
     ) -> NSMenuItem {
         let item: NSMenuItem
 
@@ -1169,7 +1198,9 @@ final class MenuBuilder {
             shortcutTextInput: shortcutTextInput,
             linkedMenuViewID: linkedMenuViewID,
             appleScriptID: appleScriptID,
-            browserInfo: browserInfo
+            browserInfo: browserInfo,
+            bookmarkNodeID: bookmarkNodeID,
+            openInBrowserBundleID: openInBrowserBundleID
         )
         item.isEnabled = true
         return item

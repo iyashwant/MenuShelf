@@ -49,6 +49,9 @@ enum MenuActionKind {
     case openClipboardShelfSettings
     case openWorldClockSettings
     case openBrowserFlipSettings
+    case openBookmark
+    case openBookmarkIn
+    case openBookmarkShelfSettings
 }
 
 final class MenuAction: NSObject {
@@ -67,6 +70,8 @@ final class MenuAction: NSObject {
     let linkedMenuViewID: UUID?
     let appleScriptID: UUID?
     let browserInfo: BrowserInfo?
+    let bookmarkNodeID: UUID?
+    let openInBrowserBundleID: String?
 
     init(
         kind: MenuActionKind,
@@ -83,7 +88,9 @@ final class MenuAction: NSObject {
         shortcutTextInput: String? = nil,
         linkedMenuViewID: UUID? = nil,
         appleScriptID: UUID? = nil,
-        browserInfo: BrowserInfo? = nil
+        browserInfo: BrowserInfo? = nil,
+        bookmarkNodeID: UUID? = nil,
+        openInBrowserBundleID: String? = nil
     ) {
         self.kind = kind
         self.url = url
@@ -100,6 +107,8 @@ final class MenuAction: NSObject {
         self.linkedMenuViewID = linkedMenuViewID
         self.appleScriptID = appleScriptID
         self.browserInfo = browserInfo
+        self.bookmarkNodeID = bookmarkNodeID
+        self.openInBrowserBundleID = openInBrowserBundleID
     }
 }
 
@@ -467,6 +476,69 @@ final class MenuAction: NSObject {
         case .openBrowserFlipSettings:
             AppContainer.shared.settingsWindowController.show(focusBrowserFlip: true)
             DiagnosticsLogger.shared.log("Requested settings window focused on Browser Flip")
+
+        case .openBookmark:
+            // Resolve the bookmark node from the live storage handle
+            // and dispatch the URL to the system default browser via
+            // `NSWorkspace.shared.open(_:)` (Requirement 11.1). The
+            // ~50ms `handleMenuAction` deferral covers the dispatch
+            // hop — this case adds none of its own. Hop through a
+            // `Task { @MainActor in }` so the controller's
+            // MainActor-isolated `storageHandle` accessor is reachable.
+            let bookmarkNodeID = action.bookmarkNodeID
+            Task { @MainActor [store] in
+                guard let nodeID = bookmarkNodeID,
+                      let storage = BookmarkShelfController.shared.storageHandle,
+                      let node = storage.nodes.first(where: { $0.id == nodeID }),
+                      node.kind == .bookmark,
+                      let urlString = node.url,
+                      let url = URL(string: urlString) else {
+                    DiagnosticsLogger.shared.log("openBookmark: node lookup or URL parse failed")
+                    return
+                }
+                if !NSWorkspace.shared.open(url) {
+                    store.showError("Could not open the selected bookmark.")
+                    return
+                }
+                storage.recordOpened(id: nodeID)
+            }
+
+        case .openBookmarkIn:
+            // Resolve the bookmark node and the chosen browser bundle
+            // identifier; dispatch the URL through
+            // `NSWorkspace.shared.open(_:configuration:completionHandler:)`
+            // so the chosen browser receives the URL while leaving
+            // the system default unchanged (Requirement 11.5).
+            let bookmarkNodeID = action.bookmarkNodeID
+            let bundleID = action.openInBrowserBundleID
+            Task { @MainActor [store] in
+                guard let nodeID = bookmarkNodeID,
+                      let bundleID,
+                      let storage = BookmarkShelfController.shared.storageHandle,
+                      let node = storage.nodes.first(where: { $0.id == nodeID }),
+                      node.kind == .bookmark,
+                      let urlString = node.url,
+                      let url = URL(string: urlString) else {
+                    DiagnosticsLogger.shared.log("openBookmarkIn: node lookup or URL parse failed")
+                    return
+                }
+                guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+                    store.showError("Could not find the selected browser.")
+                    return
+                }
+                let configuration = NSWorkspace.OpenConfiguration()
+                NSWorkspace.shared.open(
+                    [url],
+                    withApplicationAt: appURL,
+                    configuration: configuration,
+                    completionHandler: nil
+                )
+                storage.recordOpened(id: nodeID)
+            }
+
+        case .openBookmarkShelfSettings:
+            AppContainer.shared.settingsWindowController.show(focusBookmarkShelf: true)
+            DiagnosticsLogger.shared.log("Requested settings window focused on Bookmark Shelf")
         }
     }
 

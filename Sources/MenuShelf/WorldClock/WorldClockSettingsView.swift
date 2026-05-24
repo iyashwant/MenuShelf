@@ -260,6 +260,13 @@ struct WorldClockSettingsView: View {
                 modifierFlags: popup.modifiers.rawValue
             ))
         }
+        if let bookmark = KeyboardShortcuts.getShortcut(for: .bookmarkShelfPopup),
+           let bookmarkKey = bookmark.key?.rawValue {
+            knownPopups.append(.bookmarkShelfPopup(
+                keyCode: UInt16(bookmarkKey),
+                modifierFlags: bookmark.modifiers.rawValue
+            ))
+        }
 
         return StandaloneModuleHotkeyConflict.scan(
             recorded: recordedConfig,

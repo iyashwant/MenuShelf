@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 import SwiftUI
 
 struct StandaloneModulesSettingsView: View {
@@ -230,12 +231,35 @@ struct StandaloneModuleDetailView: View {
     }
 
     private var currentConflict: StandaloneModuleHotkeyConflict? {
-        StandaloneModuleHotkeyConflict.scan(
+        var knownPopups: [StandaloneModuleHotkeyConflict.KnownPopupHotkey] = []
+        if let popup = KeyboardShortcuts.getShortcut(for: .popup),
+           let popupKey = popup.key?.rawValue {
+            knownPopups.append(.clipboardShelfPopup(
+                keyCode: UInt16(popupKey),
+                modifierFlags: popup.modifiers.rawValue
+            ))
+        }
+        if let worldClock = KeyboardShortcuts.getShortcut(for: .worldClockPopup),
+           let worldClockKey = worldClock.key?.rawValue {
+            knownPopups.append(.worldClockPopup(
+                keyCode: UInt16(worldClockKey),
+                modifierFlags: worldClock.modifiers.rawValue
+            ))
+        }
+        if let bookmark = KeyboardShortcuts.getShortcut(for: .bookmarkShelfPopup),
+           let bookmarkKey = bookmark.key?.rawValue {
+            knownPopups.append(.bookmarkShelfPopup(
+                keyCode: UInt16(bookmarkKey),
+                modifierFlags: bookmark.modifiers.rawValue
+            ))
+        }
+
+        return StandaloneModuleHotkeyConflict.scan(
             recorded: module.shortcut,
             currentEntryID: module.id,
             menuViews: store.settings.resolvedMenuViews,
             standaloneModules: store.settings.resolvedStandaloneModules,
-            knownPopupHotkeys: []
+            knownPopupHotkeys: knownPopups
         )
     }
 

@@ -10,6 +10,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case appleScripts
     case browserFlip
     case clipboardShelf
+    case bookmarkShelf
     case worldClock
     case advanced
 
@@ -25,6 +26,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .appleScripts: "AppleScripts"
         case .browserFlip: "Browser Flip"
         case .clipboardShelf: "Clipboard Shelf"
+        case .bookmarkShelf: "Bookmark Shelf"
         case .worldClock: "World Clock"
         case .advanced: "Advanced"
         }
@@ -44,6 +46,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
             return "scroll"
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
+        case .bookmarkShelf: return "bookmark"
         case .worldClock: return "clock"
         case .advanced: return "wrench.and.screwdriver"
         }
@@ -101,6 +104,8 @@ struct SettingsView: View {
                     BrowserFlipSettingsView()
                 case .clipboardShelf:
                     ClipboardShelfSettingsView()
+                case .bookmarkShelf:
+                    BookmarkShelfSettingsView()
                 case .worldClock:
                     WorldClockSettingsView()
                 case .advanced:
@@ -119,6 +124,9 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusWorldClock)) { _ in
             section = .worldClock
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusBookmarkShelf)) { _ in
+            section = .bookmarkShelf
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusStandaloneModules)) { _ in
             section = .menuViews

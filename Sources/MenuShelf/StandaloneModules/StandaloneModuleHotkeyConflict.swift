@@ -37,6 +37,15 @@ struct StandaloneModuleHotkeyConflict: Equatable {
                 modifierFlags: modifierFlags
             )
         }
+
+        /// The Bookmark Shelf popup hotkey.
+        static func bookmarkShelfPopup(keyCode: UInt16, modifierFlags: UInt) -> KnownPopupHotkey {
+            KnownPopupHotkey(
+                displayLabel: "Bookmark Shelf popup",
+                keyCode: keyCode,
+                modifierFlags: modifierFlags
+            )
+        }
     }
 
     /// Scan the recorded shortcut against menu views, other standalone

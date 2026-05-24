@@ -22,7 +22,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         scrollToClockID: UUID? = nil,
         focusStandaloneModules: Bool = false,
         scrollToStandaloneModuleID: UUID? = nil,
-        focusBrowserFlip: Bool = false
+        focusBrowserFlip: Bool = false,
+        focusBookmarkShelf: Bool = false
     ) {
         if let selectedMenuViewID {
             store.selectedMenuViewID = selectedMenuViewID
@@ -51,6 +52,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         if focusBrowserFlip {
             NotificationCenter.default.post(name: .menuShelfFocusBrowserFlip, object: nil)
+        }
+
+        // Post the bookmark-shelf focus notification BEFORE any
+        // window-creation step so the destination view is mounted when
+        // the focus signal arrives (Requirement 18.2).
+        if focusBookmarkShelf {
+            NotificationCenter.default.post(name: .menuShelfFocusBookmarkShelf, object: nil)
         }
 
         if let scrollToClockID {
@@ -142,4 +150,7 @@ extension Notification.Name {
 
     /// Posted when the settings window should switch to the Browser Flip pane.
     static let menuShelfFocusBrowserFlip = Notification.Name("menuShelfFocusBrowserFlip")
+
+    /// Posted when the settings window should switch to the Bookmark Shelf pane.
+    static let menuShelfFocusBookmarkShelf = Notification.Name("menuShelfFocusBookmarkShelf")
 }
