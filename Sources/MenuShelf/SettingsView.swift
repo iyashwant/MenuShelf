@@ -1569,9 +1569,16 @@ private struct MenuViewItemRow: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.titleOverride?.isEmpty == false ? item.titleOverride! : (source?.displayName ?? "Missing Source"))
+                let title = item.titleOverride.flatMap { $0.isEmpty ? nil : $0 }
+                    ?? source?.displayName
+                    ?? "Missing Source"
+                let subtitle = item.sectionName.flatMap { $0.isEmpty ? nil : "Section: \($0)" }
+                    ?? source?.originalPathHint
+                    ?? "Source no longer exists"
+
+                Text(title)
                     .lineLimit(1)
-                Text(item.sectionName?.isEmpty == false ? "Section: \(item.sectionName!)" : (source?.originalPathHint ?? "Source no longer exists"))
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

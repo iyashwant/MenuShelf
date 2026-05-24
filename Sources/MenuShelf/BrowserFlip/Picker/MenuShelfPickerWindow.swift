@@ -3,9 +3,7 @@
 //  MenuShelf
 //
 //  "Ask Everytime" picker. Self-contained inside MenuShelf — no dependency
-//  on Browser Flip.app being installed. Ported from Browserino's
-//  BrowserinoWindow (MIT licensed) via the BrowserFlip port.
-//
+//  on Browser Flip.app being installed. 
 
 import Foundation
 import AppKit

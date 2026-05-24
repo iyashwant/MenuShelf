@@ -25,9 +25,6 @@ let package = Package(
                 .product(name: "Defaults", package: "Defaults"),
                 .product(name: "Fuse", package: "fuse-swift")
             ],
-            exclude: [
-                "ClipboardShelf/Vendor/MACCY_LICENSE.txt"
-            ],
             resources: [
                 .copy("ClipboardShelf/Vendor/Sounds/Knock.caf"),
                 .copy("ClipboardShelf/Vendor/Sounds/Write.caf")

@@ -71,18 +71,16 @@ struct MenuShelfPickerItem: View {
             }
             .padding(8)
         }
-        .msIf(shortcut != nil) {
-            return $0.keyboardShortcut(
-                KeyEquivalent(shortcut!.lowercased().first!),
-                modifiers: [.shift]
-            ).background {
-                Button(action: action) {}
-                    .opacity(0)
-                    .keyboardShortcut(
-                        KeyEquivalent(shortcut!.lowercased().first!),
-                        modifiers: []
-                    )
-            }
+        .msIf(shortcut?.lowercased().first != nil) {
+            // `msIf`'s condition guarantees a non-nil first character; resolve
+            // it once here so we can avoid force unwraps in the closure.
+            let key: KeyEquivalent = shortcut?.lowercased().first.map { KeyEquivalent($0) } ?? KeyEquivalent(" ")
+            return $0.keyboardShortcut(key, modifiers: [.shift])
+                .background {
+                    Button(action: action) {}
+                        .opacity(0)
+                        .keyboardShortcut(key, modifiers: [])
+                }
         }
     }
 }

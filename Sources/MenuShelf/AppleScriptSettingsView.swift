@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Settings pane
 
@@ -298,11 +299,12 @@ struct AppleScriptSettingsView: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowedContentTypes = [
-            .init(filenameExtension: "scpt")!,
-            .init(filenameExtension: "applescript")!,
-            .init(filenameExtension: "scptd")!
-        ]
+        // `UTType(filenameExtension:)` returns nil for unregistered extensions;
+        // these three are stable AppleScript types but use `compactMap` so a
+        // future system-level change can't crash the importer.
+        panel.allowedContentTypes = ["scpt", "applescript", "scptd"].compactMap {
+            UTType(filenameExtension: $0)
+        }
         panel.message = "Select an AppleScript file to import"
         panel.prompt = "Import"
 

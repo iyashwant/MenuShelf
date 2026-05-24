@@ -447,8 +447,11 @@ final class MenuBuilder {
                 let access = try fileAccessService.accessItem(config)
                 item.action = #selector(MenuActionHandler.handleMenuAction(_:))
                 item.target = actionHandler
+                // We only need `access.url` as a value here — the scope is
+                // re-acquired by `MenuActionHandler.withFolderAccess(_:)`
+                // when the user selects the item. No need to extend the
+                // lifetime past this block.
                 item.representedObject = MenuAction(kind: .open, url: access.url, folderID: config.id)
-                _ = access
             } catch {
                 item.title = "\(config.displayName) Unavailable"
                 item.submenu = makeAppMenu(for: config)
@@ -1217,7 +1220,11 @@ final class MenuBuilder {
         switch config.icon {
         case .folderIcon:
             if let access = try? fileAccessService.accessItem(config) {
-                image = metadataService.icon(for: access.url, size: size)
+                // Keep the security scope alive for the full duration of the
+                // icon read (AGENTS.md §"Security-scoped bookmarks").
+                image = withExtendedLifetime(access) {
+                    metadataService.icon(for: access.url, size: size)
+                }
             } else {
                 let symbol = config.resolvedItemKind == .app ? "app" : "folder"
                 image = NSImage(systemSymbolName: symbol, accessibilityDescription: config.displayName)
@@ -1370,13 +1377,21 @@ final class MenuBuilder {
 
     private func customImage(from bookmarkData: Data, size: CGFloat) -> NSImage? {
         var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: bookmarkData,
-            options: [.withSecurityScope, .withoutUI],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else {
+        let url: URL
+        do {
+            url = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: [.withSecurityScope, .withoutUI],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        } catch {
+            DiagnosticsLogger.shared.log("Custom icon bookmark resolve failed: \(error.localizedDescription)")
             return NSImage(systemSymbolName: "photo", accessibilityDescription: "Custom icon")
+        }
+
+        if isStale {
+            DiagnosticsLogger.shared.log("Custom icon bookmark stale for \(url.path)")
         }
 
         let didStart = url.startAccessingSecurityScopedResource()
