@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  build-test:
+    # MenuShelf targets macOS 26 (see Package.swift) with the Swift 6.2
+    # toolchain, so this needs a macOS 26 runner image. Switch to
+    # `macos-latest` once GitHub's hosted latest is macOS 26.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test

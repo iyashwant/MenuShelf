@@ -94,7 +94,7 @@ final class FileAccessService {
     // adding it here.
     private struct ListingCacheKey: Hashable {
         let path: String
-        let visitedHash: Int
+        let visited: Set<String>
         let sortKey: SortKey
         let sortDirection: SortDirection
         let keepFoldersOnTop: Bool
@@ -186,7 +186,7 @@ final class FileAccessService {
         // Build a cache key that captures everything the listing depends on.
         let cacheKey = ListingCacheKey(
             path: folderURL.standardizedFileURL.path,
-            visitedHash: visited.hashValue,
+            visited: visited,
             sortKey: settings.sortKey,
             sortDirection: settings.sortDirection,
             keepFoldersOnTop: settings.keepFoldersOnTop,
@@ -266,8 +266,15 @@ final class FileAccessService {
         }
 
         // Reserve some headroom over maxItems because filterMode may drop entries
-        // and we still want to fill the menu.
-        let prefixCap = needsFullResourceLoad ? candidateURLs.count : min(candidateURLs.count, cap * 2 + 32)
+        // and we still want to fill the menu. Guard `cap * 2` against overflow when
+        // maxItems is unlimited (cap == Int.max): if the cap already exceeds the
+        // candidate count there is nothing to trim, so load them all.
+        let prefixCap: Int
+        if needsFullResourceLoad || cap > candidateURLs.count {
+            prefixCap = candidateURLs.count
+        } else {
+            prefixCap = min(candidateURLs.count, cap * 2 + 32)
+        }
         let toLoad = Array(candidateURLs.prefix(prefixCap))
 
         let items = toLoad.compactMap { url -> FileMenuItem? in

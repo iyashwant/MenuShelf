@@ -548,12 +548,13 @@ final class PreferencesStore: ObservableObject {
         settings.appleScripts = scripts
     }
 
-    /// Replaces source text. Rejects sources larger than 1,000,000 characters.
+    /// Replaces source text. Rejects sources larger than 100,000 characters
+    /// (the limit the AppleScript engine can compile/run).
     /// Resets the cached compile state because the script is now dirty.
     func updateAppleScriptSource(id: UUID, source: String) {
-        guard source.count <= 1_000_000 else {
+        guard source.count <= 100_000 else {
             DiagnosticsLogger.shared.log("Rejected AppleScript source update: oversized (\(source.count) chars)")
-            showError("AppleScript source cannot exceed 1,000,000 characters.")
+            showError("AppleScript source cannot exceed 100,000 characters.")
             return
         }
 
@@ -1001,7 +1002,9 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
-    private static func migratedSettings(_ decoded: AppSettings) -> AppSettings {
+    // Internal (not private) so the migration ladder can be unit-tested via
+    // `@testable import MenuShelf`. Still only called from `init`.
+    static func migratedSettings(_ decoded: AppSettings) -> AppSettings {
         var settings = decoded
 
         if settings.schemaVersion < 2 {

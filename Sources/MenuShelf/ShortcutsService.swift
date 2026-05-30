@@ -66,24 +66,27 @@ actor ShortcutsService {
             process.executableURL = URL(fileURLWithPath: shortcutsPath)
             process.arguments = arguments
 
-            // Drain pipes incrementally on background readability handlers to avoid
-            // the child blocking on a full ~64KB pipe buffer when the parent only
-            // reads after termination.
             let outputBuffer = PipeBuffer()
             let errorBuffer = PipeBuffer()
+            let drainGroup = DispatchGroup()
+
+            // Drain each captured pipe to EOF on its own background thread.
+            // `readDataToEndOfFile()` consumes incrementally as the child writes
+            // (so the child never blocks on a full pipe buffer) and a single
+            // reader per handle avoids the `availableData`/`readToEnd` race the
+            // previous readabilityHandler approach had.
+            func drain(_ pipe: Pipe, into buffer: PipeBuffer) {
+                drainGroup.enter()
+                DispatchQueue.global(qos: .utility).async {
+                    buffer.append(pipe.fileHandleForReading.readDataToEndOfFile())
+                    drainGroup.leave()
+                }
+            }
 
             let outputPipe: Pipe?
             if captureOutput {
                 let pipe = Pipe()
                 process.standardOutput = pipe
-                pipe.fileHandleForReading.readabilityHandler = { handle in
-                    let data = handle.availableData
-                    if data.isEmpty {
-                        handle.readabilityHandler = nil
-                    } else {
-                        outputBuffer.append(data)
-                    }
-                }
                 outputPipe = pipe
             } else {
                 process.standardOutput = FileHandle.nullDevice
@@ -91,14 +94,6 @@ actor ShortcutsService {
             }
 
             let errorPipe = Pipe()
-            errorPipe.fileHandleForReading.readabilityHandler = { handle in
-                let data = handle.availableData
-                if data.isEmpty {
-                    handle.readabilityHandler = nil
-                } else {
-                    errorBuffer.append(data)
-                }
-            }
             process.standardError = errorPipe
 
             let inputPipe: Pipe?
@@ -112,27 +107,25 @@ actor ShortcutsService {
             }
 
             process.terminationHandler = { process in
-                // Drain any leftovers and detach handlers.
-                if let outputPipe {
-                    outputPipe.fileHandleForReading.readabilityHandler = nil
-                    let remaining = (try? outputPipe.fileHandleForReading.readToEnd()) ?? nil
-                    if let remaining, !remaining.isEmpty { outputBuffer.append(remaining) }
-                }
-                errorPipe.fileHandleForReading.readabilityHandler = nil
-                let remainingError = (try? errorPipe.fileHandleForReading.readToEnd()) ?? nil
-                if let remainingError, !remainingError.isEmpty { errorBuffer.append(remainingError) }
+                // Resume only after both pipes reach EOF, so no output is lost.
+                drainGroup.notify(queue: DispatchQueue.global(qos: .utility)) {
+                    let output = outputBuffer.string()
+                    let error = errorBuffer.string()
 
-                let output = outputBuffer.string()
-                let error = errorBuffer.string()
-
-                if process.terminationStatus == 0 {
-                    continuation.resume(returning: output)
-                } else {
-                    let message = error.isEmpty ? output : error
-                    DiagnosticsLogger.shared.log("shortcuts \(arguments.joined(separator: " ")) failed status=\(process.terminationStatus): \(String(message.prefix(500)))")
-                    continuation.resume(throwing: ShortcutsServiceError.executionFailed(message: message, status: process.terminationStatus))
+                    if process.terminationStatus == 0 {
+                        continuation.resume(returning: output)
+                    } else {
+                        let message = error.isEmpty ? output : error
+                        DiagnosticsLogger.shared.log("shortcuts \(arguments.joined(separator: " ")) failed status=\(process.terminationStatus): \(String(message.prefix(500)))")
+                        continuation.resume(throwing: ShortcutsServiceError.executionFailed(message: message, status: process.terminationStatus))
+                    }
                 }
             }
+
+            // Start draining before launch so the readers are ready and the
+            // termination handler can never fire against an empty group.
+            if let outputPipe { drain(outputPipe, into: outputBuffer) }
+            drain(errorPipe, into: errorBuffer)
 
             do {
                 try process.run()
@@ -142,8 +135,11 @@ actor ShortcutsService {
                     try? inputPipe.fileHandleForWriting.close()
                 }
             } catch {
-                if let outputPipe { outputPipe.fileHandleForReading.readabilityHandler = nil }
-                errorPipe.fileHandleForReading.readabilityHandler = nil
+                // Launch failed: the child never started, so the parent still
+                // holds the pipe write ends and the drain reads would block
+                // forever. Close them to unblock the readers, then fail.
+                outputPipe?.fileHandleForWriting.closeFile()
+                errorPipe.fileHandleForWriting.closeFile()
                 continuation.resume(throwing: error)
             }
         }

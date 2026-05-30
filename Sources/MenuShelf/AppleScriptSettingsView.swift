@@ -333,8 +333,8 @@ struct AppleScriptSettingsView: View {
     }
 
     private func validateAndCommitSource(_ value: String, scriptID: UUID) {
-        if value.count > 1_000_000 {
-            sourceValidation = "Source cannot exceed 1,000,000 characters."
+        if value.count > 100_000 {
+            sourceValidation = "Source cannot exceed 100,000 characters."
             return
         }
         sourceValidation = nil
@@ -582,7 +582,7 @@ struct AppleScriptCodeEditor: NSViewRepresentable {
             let replacementLength = replacementString?.utf16.count ?? 0
             let removedLength = affectedCharRange.length
             let newLength = currentLength - removedLength + replacementLength
-            return newLength <= 1_000_000
+            return newLength <= 100_000
         }
 
         func textDidChange(_ notification: Notification) {

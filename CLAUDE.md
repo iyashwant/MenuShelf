@@ -82,7 +82,7 @@ AppDelegate (Entry Point)
 
 **Key Features:**
 - JSON encoding/decoding with ISO8601 dates
-- Schema versioning (current: v7)
+- Schema versioning (current: v16)
 - Automatic migration of old settings
 - Security-scoped bookmark management
 - Shortcuts catalog caching
@@ -233,7 +233,7 @@ MenuShelf is fully sandboxed with these entitlements:
 **Location:** `~/Library/Application Support/MenuShelf/settings.json`
 
 **Schema Versioning:**
-- Current version: 8
+- Current version: 16
 - Automatic migration on load
 - Preserves backward compatibility
 - Adds default values for new fields
