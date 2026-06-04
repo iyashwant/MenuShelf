@@ -871,6 +871,23 @@ struct AppSettings: Codable, Equatable {
     var resolvedStandaloneModules: [StandaloneModuleConfig] { standaloneModules ?? [] }
     var resolvedBookmarkShelf: BookmarkShelfSettings { bookmarkShelf ?? .defaults }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
+
+    /// True when a module of `kind` has an entry point in the UI: a visible
+    /// standalone menu-bar item, or an item embedded in any menu view. A module
+    /// with no presence (and no popup hotkey, checked separately) need not run
+    /// its background work.
+    func hasModulePresence(_ kind: ModuleKind) -> Bool {
+        if resolvedStandaloneModules.contains(where: { $0.kind == kind && $0.isVisible }) {
+            return true
+        }
+        let views = resolvedMenuViews
+        switch kind {
+        case .clipboardShelf: return views.contains { $0.clipboardShelfItem != nil }
+        case .worldClock: return views.contains { $0.worldClockItem != nil }
+        case .bookmarkShelf: return views.contains { $0.bookmarkShelfItem != nil || !$0.resolvedBookmarkContentItems.isEmpty }
+        case .browserFlip: return views.contains { $0.browserFlipItem != nil }
+        }
+    }
 }
 
 struct FileMetadata: Equatable {

@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import KeyboardShortcuts
 
 final class AppContainer {
     static let shared = AppContainer()
@@ -75,19 +76,24 @@ final class AppContainer {
         // settings changes so the controller picks up enable/disable
         // toggles and live polling-interval / pasteboard-type changes
         // without an app restart (Requirement 7.9, 2.2).
-        let initialClipboardShelf = store.settings.resolvedClipboardShelf
-        if initialClipboardShelf.enableClipboardShelf {
+        if menuShelfModuleShouldRun(.clipboardShelf, in: store.settings) {
+            let initialClipboardShelf = store.settings.resolvedClipboardShelf
             Task { @MainActor in
                 ClipboardShelfController.shared.start(with: initialClipboardShelf)
             }
         }
         clipboardShelfSettingsSubscription = store.$settings
-            .map { $0.resolvedClipboardShelf }
+            .map { ModuleRunState(settings: $0.resolvedClipboardShelf,
+                                  run: menuShelfModuleShouldRun(.clipboardShelf, in: $0)) }
             .removeDuplicates()
             .dropFirst()
-            .sink { newSettings in
+            .sink { state in
                 Task { @MainActor in
-                    ClipboardShelfController.shared.apply(settings: newSettings)
+                    if state.run {
+                        ClipboardShelfController.shared.start(with: state.settings)
+                    } else {
+                        ClipboardShelfController.shared.stop()
+                    }
                 }
             }
 
@@ -96,19 +102,24 @@ final class AppContainer {
         // settings changes so the controller picks up enable/disable
         // toggles, clock list edits, and appearance changes without an
         // app restart (Requirement 13.5).
-        let initialWorldClock = store.settings.resolvedWorldClock
-        if initialWorldClock.enableWorldClock {
+        if menuShelfModuleShouldRun(.worldClock, in: store.settings) {
+            let initialWorldClock = store.settings.resolvedWorldClock
             Task { @MainActor in
                 WorldClockController.shared.start(with: initialWorldClock)
             }
         }
         worldClockSettingsSubscription = store.$settings
-            .map { $0.resolvedWorldClock }
+            .map { ModuleRunState(settings: $0.resolvedWorldClock,
+                                  run: menuShelfModuleShouldRun(.worldClock, in: $0)) }
             .removeDuplicates()
             .dropFirst()
-            .sink { newSettings in
+            .sink { state in
                 Task { @MainActor in
-                    WorldClockController.shared.apply(settings: newSettings)
+                    if state.run {
+                        WorldClockController.shared.start(with: state.settings)
+                    } else {
+                        WorldClockController.shared.stop()
+                    }
                 }
             }
 
@@ -117,22 +128,67 @@ final class AppContainer {
         // changes so the controller picks up enable/disable toggles, popup
         // size and hotkey edits without an app restart (Requirement 17.2,
         // 17.3).
-        let initialBookmark = store.settings.resolvedBookmarkShelf
-        if initialBookmark.enableBookmarkShelf {
+        if menuShelfModuleShouldRun(.bookmarkShelf, in: store.settings) {
+            let initialBookmark = store.settings.resolvedBookmarkShelf
             Task { @MainActor in
                 BookmarkShelfController.shared.start(with: initialBookmark)
             }
         }
         bookmarkShelfSettingsSubscription = store.$settings
-            .map { $0.resolvedBookmarkShelf }
+            .map { ModuleRunState(settings: $0.resolvedBookmarkShelf,
+                                  run: menuShelfModuleShouldRun(.bookmarkShelf, in: $0)) }
             .removeDuplicates()
             .dropFirst()
-            .sink { newSettings in
+            .sink { state in
                 Task { @MainActor in
-                    BookmarkShelfController.shared.apply(settings: newSettings)
+                    if state.run {
+                        BookmarkShelfController.shared.start(with: state.settings)
+                    } else {
+                        BookmarkShelfController.shared.stop()
+                    }
                 }
             }
 
         statusItemManager.rebuildStatusItems()
     }
+}
+
+// MARK: - Module run gating
+
+/// A module's settings snapshot plus whether it should currently run.
+/// Equatable so the settings subscription only reacts to real changes.
+private struct ModuleRunState<S: Equatable>: Equatable {
+    let settings: S
+    let run: Bool
+}
+
+private func menuShelfPopupHotkeyName(for kind: ModuleKind) -> KeyboardShortcuts.Name? {
+    switch kind {
+    case .clipboardShelf: .popup
+    case .worldClock: .worldClockPopup
+    case .bookmarkShelf: .bookmarkShelfPopup
+    case .browserFlip: nil
+    }
+}
+
+private func menuShelfModuleEnabled(_ kind: ModuleKind, in s: AppSettings) -> Bool {
+    switch kind {
+    case .clipboardShelf: s.resolvedClipboardShelf.enableClipboardShelf
+    case .worldClock: s.resolvedWorldClock.enableWorldClock
+    case .bookmarkShelf: s.resolvedBookmarkShelf.enableBookmarkShelf
+    case .browserFlip: s.resolvedBrowserFlip.enableBrowserFlip
+    }
+}
+
+/// A module's background work (timers, monitors, storage) runs only when it is
+/// enabled AND reachable: it has UI presence (a visible standalone item or an
+/// item embedded in any menu view) or a configured popup hotkey. An enabled but
+/// unreachable module stays idle so it consumes no resources.
+private func menuShelfModuleShouldRun(_ kind: ModuleKind, in s: AppSettings) -> Bool {
+    guard menuShelfModuleEnabled(kind, in: s) else { return false }
+    if s.hasModulePresence(kind) { return true }
+    if let name = menuShelfPopupHotkeyName(for: kind), KeyboardShortcuts.getShortcut(for: name) != nil {
+        return true
+    }
+    return false
 }

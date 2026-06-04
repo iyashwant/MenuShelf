@@ -85,10 +85,12 @@ final class WorldClockController {
         // so the "token" is a sentinel marking that the registration
         // exists; the actual detach happens through
         // `KeyboardShortcuts.disable(.worldClockPopup)`).
-        KeyboardShortcuts.onKeyDown(for: .worldClockPopup) { [weak self] in
-            self?.handleHotkeyToggle()
+        if lastSubscriptionToken == nil {
+            KeyboardShortcuts.onKeyDown(for: .worldClockPopup) { [weak self] in
+                self?.handleHotkeyToggle()
+            }
+            lastSubscriptionToken = KeyboardShortcuts.Name.worldClockPopup
         }
-        lastSubscriptionToken = KeyboardShortcuts.Name.worldClockPopup
 
         // Forward to `apply(settings:)` so the very first call also
         // runs the diff-based reconcile and allocates pinned status
@@ -649,6 +651,9 @@ final class WorldClockController {
                 self?.handleMinuteTimerFire()
             }
         }
+        // A minute clock updating up to 5s late is invisible; the tolerance
+        // lets the OS coalesce the wakeup and stay idle longer.
+        timer.tolerance = 5
         RunLoop.main.add(timer, forMode: .common)
         minuteTimer = timer
     }

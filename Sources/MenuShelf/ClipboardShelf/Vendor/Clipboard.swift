@@ -48,13 +48,18 @@ class Clipboard {
   }
 
   func start() {
-    timer = Timer.scheduledTimer(
-      timeInterval: Defaults[.clipboardCheckInterval],
+    let interval = Defaults[.clipboardCheckInterval]
+    let timer = Timer.scheduledTimer(
+      timeInterval: interval,
       target: self,
       selector: #selector(checkForChangesInPasteboard),
       userInfo: nil,
       repeats: true
     )
+    // Let the OS coalesce these recurring wakeups with other timers to cut
+    // energy use; capturing a copy within interval + tolerance is fine.
+    timer.tolerance = interval * 0.2
+    self.timer = timer
   }
 
   func restart() {
