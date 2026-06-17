@@ -55,13 +55,13 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
-        case .worldClock:
-            if !settings.resolvedWorldClock.enableWorldClock {
+        case .clockShelf:
+            if !settings.resolvedClockShelf.enableClockShelf {
                 DiagnosticsLogger.shared.log(
                     "Standalone module click ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
                 )
                 AppContainer.shared.settingsWindowController.show(
-                    focusWorldClock: true
+                    focusClockShelf: true
                 )
                 return
             }
@@ -85,6 +85,16 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
+        case .caffeineShelf:
+            if !settings.resolvedCaffeineShelf.enableCaffeineShelf {
+                DiagnosticsLogger.shared.log(
+                    "Standalone module click ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
+                )
+                AppContainer.shared.settingsWindowController.show(
+                    focusCaffeineShelf: true
+                )
+                return
+            }
         }
 
         // Branch D: dispatch to the bound module's surface
@@ -92,13 +102,16 @@ final class StandaloneModuleClickRouter {
         switch module.kind {
         case .clipboardShelf:
             ClipboardShelfController.shared.togglePopup(anchor: anchorButton)
-        case .worldClock:
-            WorldClockController.shared.togglePopover(anchor: anchorButton)
+        case .clockShelf:
+            ClockShelfController.shared.togglePopover(anchor: anchorButton)
         case .browserFlip:
             guard let anchorItem else { return }
             presentationCoordinator.presentBrowserFlipStandalonePopup(anchoredTo: anchorItem)
         case .bookmarkShelf:
             BookmarkShelfController.shared.togglePopup(anchor: anchorButton)
+        case .caffeineShelf:
+            guard let anchorItem else { return }
+            presentationCoordinator.presentCaffeineShelfStandalonePopup(anchoredTo: anchorItem)
         }
     }
 
@@ -129,13 +142,13 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
-        case .worldClock:
-            if !settings.resolvedWorldClock.enableWorldClock {
+        case .clockShelf:
+            if !settings.resolvedClockShelf.enableClockShelf {
                 DiagnosticsLogger.shared.log(
                     "Standalone module hotkey ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
                 )
                 AppContainer.shared.settingsWindowController.show(
-                    focusWorldClock: true
+                    focusClockShelf: true
                 )
                 return
             }
@@ -159,6 +172,16 @@ final class StandaloneModuleClickRouter {
                 )
                 return
             }
+        case .caffeineShelf:
+            if !settings.resolvedCaffeineShelf.enableCaffeineShelf {
+                DiagnosticsLogger.shared.log(
+                    "Standalone module hotkey ignored — feature disabled. id=\(module.id.uuidString) kind=\(module.kind.rawValue)"
+                )
+                AppContainer.shared.settingsWindowController.show(
+                    focusCaffeineShelf: true
+                )
+                return
+            }
         }
 
         // Branch D (mirror): dispatch to the bound module's surface
@@ -166,8 +189,8 @@ final class StandaloneModuleClickRouter {
         switch module.kind {
         case .clipboardShelf:
             ClipboardShelfController.shared.togglePopup(anchor: anchorButton)
-        case .worldClock:
-            WorldClockController.shared.togglePopover(anchor: anchorButton)
+        case .clockShelf:
+            ClockShelfController.shared.togglePopover(anchor: anchorButton)
         case .browserFlip:
             // Defensive: the HotkeysSignature gate prevents a hotkey
             // on an invisible module from registering, but the helper
@@ -176,11 +199,16 @@ final class StandaloneModuleClickRouter {
             presentationCoordinator.presentBrowserFlipStandalonePopup(anchoredTo: anchorItem)
         case .bookmarkShelf:
             BookmarkShelfController.shared.togglePopup(anchor: anchorButton)
+        case .caffeineShelf:
+            // A hotkey has no anchor, so toggle awake directly rather than
+            // presenting the menu — this turns the per-icon shortcut into a
+            // global keep-awake toggle.
+            CaffeineShelfController.shared.toggle()
         }
     }
 
     /// Open Settings deep-linked to the bound module's specific
-    /// settings pane (Browser Flip, Clipboard Shelf, or World Clock).
+    /// settings pane (Browser Flip, Clipboard Shelf, or Clock Shelf).
     /// Triggered from a right-click or option + left-click on a
     /// standalone module's status item.
     private func openSettingsDeepLink(module: StandaloneModuleConfig) {
@@ -189,9 +217,9 @@ final class StandaloneModuleClickRouter {
             AppContainer.shared.settingsWindowController.show(
                 focusClipboardShelf: true
             )
-        case .worldClock:
+        case .clockShelf:
             AppContainer.shared.settingsWindowController.show(
-                focusWorldClock: true
+                focusClockShelf: true
             )
         case .browserFlip:
             AppContainer.shared.settingsWindowController.show(
@@ -200,6 +228,10 @@ final class StandaloneModuleClickRouter {
         case .bookmarkShelf:
             AppContainer.shared.settingsWindowController.show(
                 focusBookmarkShelf: true
+            )
+        case .caffeineShelf:
+            AppContainer.shared.settingsWindowController.show(
+                focusCaffeineShelf: true
             )
         }
     }

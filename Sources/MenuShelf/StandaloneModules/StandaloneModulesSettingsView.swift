@@ -239,11 +239,11 @@ struct StandaloneModuleDetailView: View {
                 modifierFlags: popup.modifiers.rawValue
             ))
         }
-        if let worldClock = KeyboardShortcuts.getShortcut(for: .worldClockPopup),
-           let worldClockKey = worldClock.key?.rawValue {
-            knownPopups.append(.worldClockPopup(
-                keyCode: UInt16(worldClockKey),
-                modifierFlags: worldClock.modifiers.rawValue
+        if let clockShelf = KeyboardShortcuts.getShortcut(for: .clockShelfPopup),
+           let clockShelfKey = clockShelf.key?.rawValue {
+            knownPopups.append(.clockShelfPopup(
+                keyCode: UInt16(clockShelfKey),
+                modifierFlags: clockShelf.modifiers.rawValue
             ))
         }
         if let bookmark = KeyboardShortcuts.getShortcut(for: .bookmarkShelfPopup),
@@ -418,7 +418,7 @@ private struct EmptyStandaloneModulesPanel: View {
                 .foregroundStyle(.secondary)
             Text("No standalone modules yet")
                 .font(.title3.weight(.semibold))
-            Text("Add a Browser Flip, Clipboard Shelf, or World Clock icon to your menu bar.")
+            Text("Add a Browser Flip, Clipboard Shelf, or Clock Shelf icon to your menu bar.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

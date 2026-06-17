@@ -4,16 +4,16 @@ import Foundation
 /// A reportable hotkey conflict surfaced inline in the Standalone Modules
 /// detail pane. The `ownerName` is human-readable and matches Requirement
 /// 8.4 exactly: `"menu view '<title>'"` / `"standalone module '<title>'"`
-/// / `"Clipboard Shelf popup"` / `"World Clock popup"`.
+/// / `"Clipboard Shelf popup"` / `"Clock Shelf popup"`.
 struct StandaloneModuleHotkeyConflict: Equatable {
     let ownerName: String
 
-    /// A known popup hotkey owner (Clipboard Shelf, World Clock).
+    /// A known popup hotkey owner (Clipboard Shelf, Clock Shelf).
     /// Carries a `displayLabel` that matches Requirement 8.4 formatting.
     /// The hotkey is provided as a `(keyCode, modifierFlags)` tuple so this
     /// helper does not depend on the `KeyboardShortcuts` package directly.
     /// Callers extract the live values from `KeyboardShortcuts.Name.popup`
-    /// / `.worldClockPopup` and build the appropriate value via the
+    /// / `.clockShelfPopup` and build the appropriate value via the
     /// factory helpers below.
     struct KnownPopupHotkey: Equatable {
         let displayLabel: String
@@ -29,10 +29,10 @@ struct StandaloneModuleHotkeyConflict: Equatable {
             )
         }
 
-        /// The World Clock popup hotkey.
-        static func worldClockPopup(keyCode: UInt16, modifierFlags: UInt) -> KnownPopupHotkey {
+        /// The Clock Shelf popup hotkey.
+        static func clockShelfPopup(keyCode: UInt16, modifierFlags: UInt) -> KnownPopupHotkey {
             KnownPopupHotkey(
-                displayLabel: "World Clock popup",
+                displayLabel: "Clock Shelf popup",
                 keyCode: keyCode,
                 modifierFlags: modifierFlags
             )
@@ -100,7 +100,7 @@ struct StandaloneModuleHotkeyConflict: Equatable {
             }
         }
 
-        // Priority 3: known popup hotkeys (Clipboard Shelf, World Clock).
+        // Priority 3: known popup hotkeys (Clipboard Shelf, Clock Shelf).
         for popup in knownPopupHotkeys {
             let flags = NSEvent.ModifierFlags(rawValue: popup.modifierFlags)
                 .intersection(.deviceIndependentFlagsMask).rawValue
