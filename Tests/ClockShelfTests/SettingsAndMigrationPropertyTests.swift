@@ -1,16 +1,16 @@
 //
 //  SettingsAndMigrationPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property-based tests for resolved-totality, schema migration, and
-//  Codable round-trip across the World Clock settings surfaces.
+//  Codable round-trip across the Clock Shelf settings surfaces.
 //
-//  - Property 29: `resolvedWorldClock` is total — never traps, always
-//    returns a populated `WorldClockSettings`.
+//  - Property 29: `resolvedClockShelf` is total — never traps, always
+//    returns a populated `ClockShelfSettings`.
 //  - Property 30: schema migration is field-scoped. The
 //    `PreferencesStore.migratedSettings(_:)` helper is `private`, so we
 //    exercise the same outcome through `AppSettings.defaults` and via
-//    the `resolvedWorldClock` accessor, which is the integration path
+//    the `resolvedClockShelf` accessor, which is the integration path
 //    that the rest of the app reads from.
 //  - Property 31: `presentationMode` round-trip and forward-decode.
 //    JSON round-trip preserves the value (including `nil`); a JSON
@@ -22,21 +22,21 @@ import Foundation
 import Testing
 @testable import MenuShelf
 
-// MARK: - Property 29: resolvedWorldClock totality
+// MARK: - Property 29: resolvedClockShelf totality
 
 /// **Validates: Requirements 12.1, 12.6**
 ///
-/// `resolvedWorldClock` is a non-failing computed property: it returns
-/// `worldClock` when set and `WorldClockSettings.defaults` otherwise. It
+/// `resolvedClockShelf` is a non-failing computed property: it returns
+/// `clockShelf` when set and `ClockShelfSettings.defaults` otherwise. It
 /// must never return a value with `nil`-bearing internal state because
-/// `WorldClockSettings` itself does not carry `Optional` storage for
+/// `ClockShelfSettings` itself does not carry `Optional` storage for
 /// any non-presentation field.
-@Test("Property 29: resolvedWorldClock is total for any AppSettings shape")
-func property29ResolvedWorldClockIsTotal() {
+@Test("Property 29: resolvedClockShelf is total for any AppSettings shape")
+func property29ResolvedClockShelfIsTotal() {
     forAll(arbitraryAppSettingsPreV14) { settings in
         // The property is that the access never traps and always returns
-        // a populated `WorldClockSettings`.
-        let resolved = settings.resolvedWorldClock
+        // a populated `ClockShelfSettings`.
+        let resolved = settings.resolvedClockShelf
         // popoverTextSize is non-optional; resolved variant should clamp.
         let resolvedSize = resolved.resolvedPopoverTextSize
         #expect(resolvedSize >= 11)
@@ -48,19 +48,19 @@ func property29ResolvedWorldClockIsTotal() {
     }
 }
 
-@Test("Property 29: resolvedWorldClock falls back to defaults when worldClock is nil")
-func property29ResolvedWorldClockNilFallback() {
+@Test("Property 29: resolvedClockShelf falls back to defaults when clockShelf is nil")
+func property29ResolvedClockShelfNilFallback() {
     var settings = AppSettings.defaults
-    settings.worldClock = nil
-    #expect(settings.resolvedWorldClock == WorldClockSettings.defaults)
+    settings.clockShelf = nil
+    #expect(settings.resolvedClockShelf == ClockShelfSettings.defaults)
 }
 
-@Test("Property 29: resolvedWorldClock returns the stored value when present")
-func property29ResolvedWorldClockReturnsStoredValue() {
-    forAll(arbitraryWorldClockSettings) { wc in
+@Test("Property 29: resolvedClockShelf returns the stored value when present")
+func property29ResolvedClockShelfReturnsStoredValue() {
+    forAll(arbitraryClockShelfSettings) { wc in
         var settings = AppSettings.defaults
-        settings.worldClock = wc
-        #expect(settings.resolvedWorldClock == wc)
+        settings.clockShelf = wc
+        #expect(settings.resolvedClockShelf == wc)
     }
 }
 
@@ -72,29 +72,29 @@ func property29ResolvedWorldClockReturnsStoredValue() {
 /// call it directly from this test target. The accessible surface is:
 ///
 /// 1. `AppSettings.defaults` already carries `schemaVersion == 14`
-///    and `worldClock == .defaults`.
-/// 2. The `resolvedWorldClock` integration path returns
-///    `WorldClockSettings.defaults` for any settings missing the field.
+///    and `clockShelf == .defaults`.
+/// 2. The `resolvedClockShelf` integration path returns
+///    `ClockShelfSettings.defaults` for any settings missing the field.
 /// 3. Round-tripping a pre-v14 `AppSettings` through JSON and decoding
-///    back yields a value whose `resolvedWorldClock` is non-nil and
-///    whose every other non-WorldClock field is preserved.
+///    back yields a value whose `resolvedClockShelf` is non-nil and
+///    whose every other non-ClockShelf field is preserved.
 ///
 /// These three facts are equivalent to the migration outcome called out
-/// in the property: post-migration, `worldClock` resolves correctly and
+/// in the property: post-migration, `clockShelf` resolves correctly and
 /// every other top-level field is byte-equal modulo the existing
 /// tail-block defaulting.
 @Test("Property 30: AppSettings.defaults is at schema version 14")
 func property30DefaultsAtSchema14() {
     #expect(AppSettings.defaults.schemaVersion == 14)
-    #expect(AppSettings.defaults.worldClock == WorldClockSettings.defaults)
+    #expect(AppSettings.defaults.clockShelf == ClockShelfSettings.defaults)
 }
 
-@Test("Property 30: AppSettings with worldClock=nil resolves to defaults via integration path")
-func property30NilWorldClockResolvesToDefaults() {
+@Test("Property 30: AppSettings with clockShelf=nil resolves to defaults via integration path")
+func property30NilClockShelfResolvesToDefaults() {
     var settings = AppSettings.defaults
-    settings.worldClock = nil
+    settings.clockShelf = nil
     settings.schemaVersion = 13
-    #expect(settings.resolvedWorldClock == WorldClockSettings.defaults)
+    #expect(settings.resolvedClockShelf == ClockShelfSettings.defaults)
 }
 
 @Test("Property 30: pre-v14 AppSettings round-trips through JSON without losing other fields")
@@ -121,11 +121,11 @@ func property30PreV14JSONRoundTrip() throws {
         // Schema version is preserved by raw JSON decode (migration
         // only runs through the private `migratedSettings(_:)` ladder).
         #expect(decoded.schemaVersion == settings.schemaVersion)
-        // The resolvedWorldClock accessor is total even for nil.
-        let resolved = decoded.resolvedWorldClock
+        // The resolvedClockShelf accessor is total even for nil.
+        let resolved = decoded.resolvedClockShelf
         #expect(resolved.resolvedPopoverTextSize >= 11)
         #expect(resolved.resolvedPopoverTextSize <= 22)
-        // Other non-WorldClock fields survive the JSON round-trip.
+        // Other non-ClockShelf fields survive the JSON round-trip.
         #expect(decoded.displayMode == settings.displayMode)
         #expect(decoded.showMenuBarItemWhenEmpty == settings.showMenuBarItemWhenEmpty)
         #expect(decoded.launchAtLogin == settings.launchAtLogin)
@@ -134,13 +134,13 @@ func property30PreV14JSONRoundTrip() throws {
     }
 }
 
-@Test("Property 30: pre-v14 AppSettings missing worldClock still resolves to defaults")
-func property30MissingWorldClockResolves() throws {
-    // Build a JSON blob that explicitly omits the `worldClock` field
+@Test("Property 30: pre-v14 AppSettings missing clockShelf still resolves to defaults")
+func property30MissingClockShelfResolves() throws {
+    // Build a JSON blob that explicitly omits the `clockShelf` field
     // (mirroring an old settings.json from before schema 14).
     var settings = AppSettings.defaults
     settings.schemaVersion = 13
-    settings.worldClock = nil
+    settings.clockShelf = nil
 
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
@@ -150,8 +150,8 @@ func property30MissingWorldClockResolves() throws {
     decoder.dateDecodingStrategy = .iso8601
     let decoded = try decoder.decode(AppSettings.self, from: data)
 
-    #expect(decoded.worldClock == nil)
-    #expect(decoded.resolvedWorldClock == WorldClockSettings.defaults)
+    #expect(decoded.clockShelf == nil)
+    #expect(decoded.resolvedClockShelf == ClockShelfSettings.defaults)
 }
 
 // MARK: - Property 31: presentationMode round-trip and forward decode
@@ -161,9 +161,9 @@ func property30MissingWorldClockResolves() throws {
 /// JSON round-trip preserves `presentationMode` exactly (including
 /// `nil`); a JSON blob missing the key decodes with `presentationMode
 /// == nil` and `resolvedPresentationMode == .popover`.
-@Test("Property 31: WorldClockSettings JSON round-trip preserves presentationMode")
+@Test("Property 31: ClockShelfSettings JSON round-trip preserves presentationMode")
 func property31PresentationModeRoundTrip() throws {
-    forAll(arbitraryWorldClockSettings, iterations: 50) { settings in
+    forAll(arbitraryClockShelfSettings, iterations: 50) { settings in
         // Round dates to integer seconds before encoding so the
         // floating-point round-trip through JSON's `Double` representation
         // is exact. Production settings.json values are written through
@@ -178,7 +178,7 @@ func property31PresentationModeRoundTrip() throws {
 
         do {
             let data = try encoder.encode(normalized)
-            let decoded = try decoder.decode(WorldClockSettings.self, from: data)
+            let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
             #expect(decoded == normalized)
             #expect(decoded.presentationMode == normalized.presentationMode)
             #expect(decoded.resolvedPresentationMode == normalized.resolvedPresentationMode)
@@ -188,12 +188,12 @@ func property31PresentationModeRoundTrip() throws {
     }
 }
 
-/// Round every Date in a `WorldClockSettings` to whole seconds so the
+/// Round every Date in a `ClockShelfSettings` to whole seconds so the
 /// `secondsSince1970` Codable round-trip is exact. JSON's `Double`
 /// representation cannot preserve sub-microsecond precision, but
 /// production settings.json never carries sub-second precision (writes
 /// go through `.iso8601`), so this normalization is faithful.
-private func roundTripSafe(_ settings: WorldClockSettings) -> WorldClockSettings {
+private func roundTripSafe(_ settings: ClockShelfSettings) -> ClockShelfSettings {
     var copy = settings
     copy.clocks = copy.clocks.map { clock in
         var c = clock
@@ -209,7 +209,7 @@ func property31MissingPresentationMode() throws {
     // Build a JSON blob explicitly missing the `presentationMode` key.
     let json = """
     {
-      "enableWorldClock": true,
+      "enableClockShelf": true,
       "clocks": [],
       "use24HourTime": false,
       "popoverTextSize": 13,
@@ -218,7 +218,7 @@ func property31MissingPresentationMode() throws {
     """
     let data = Data(json.utf8)
     let decoder = JSONDecoder()
-    let decoded = try decoder.decode(WorldClockSettings.self, from: data)
+    let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
 
     #expect(decoded.presentationMode == nil)
     #expect(decoded.resolvedPresentationMode == .popover)
@@ -226,38 +226,38 @@ func property31MissingPresentationMode() throws {
 
 @Test("Property 31: explicit nil presentationMode round-trips as nil")
 func property31ExplicitNilRoundTrip() throws {
-    var settings = WorldClockSettings.defaults
+    var settings = ClockShelfSettings.defaults
     settings.presentationMode = nil
 
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
 
     let data = try encoder.encode(settings)
-    let decoded = try decoder.decode(WorldClockSettings.self, from: data)
+    let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
 
     #expect(decoded.presentationMode == nil)
     #expect(decoded.resolvedPresentationMode == .popover)
 }
 
-@Test("Property 31: each WorldClockPresentationMode case round-trips through JSON")
+@Test("Property 31: each ClockShelfPresentationMode case round-trips through JSON")
 func property31EveryCaseRoundTrips() throws {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
-    for mode in WorldClockPresentationMode.allCases {
-        var settings = WorldClockSettings.defaults
+    for mode in ClockShelfPresentationMode.allCases {
+        var settings = ClockShelfSettings.defaults
         settings.presentationMode = mode
         let data = try encoder.encode(settings)
-        let decoded = try decoder.decode(WorldClockSettings.self, from: data)
+        let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
         #expect(decoded.presentationMode == mode)
         #expect(decoded.resolvedPresentationMode == mode)
     }
 }
 
-@Test("Property 31: AppSettings with WorldClockSettings JSON round-trips")
+@Test("Property 31: AppSettings with ClockShelfSettings JSON round-trips")
 func property31AppSettingsRoundTrip() throws {
-    forAll(arbitraryWorldClockSettings, iterations: 30) { wc in
+    forAll(arbitraryClockShelfSettings, iterations: 30) { wc in
         var settings = AppSettings.defaults
-        settings.worldClock = roundTripSafe(wc)
+        settings.clockShelf = roundTripSafe(wc)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
@@ -267,8 +267,8 @@ func property31AppSettingsRoundTrip() throws {
         do {
             let data = try encoder.encode(settings)
             let decoded = try decoder.decode(AppSettings.self, from: data)
-            #expect(decoded.worldClock == settings.worldClock)
-            #expect(decoded.resolvedWorldClock == settings.worldClock)
+            #expect(decoded.clockShelf == settings.clockShelf)
+            #expect(decoded.resolvedClockShelf == settings.clockShelf)
         } catch {
             Issue.record("AppSettings round-trip failed: \(error)")
         }

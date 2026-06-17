@@ -1,14 +1,14 @@
 //
-//  WorldClockPanel.swift
+//  ClockShelfPanel.swift
 //  MenuShelf
 //
-//  Floating panel that hosts the World Clock popover SwiftUI tree.
+//  Floating panel that hosts the Clock Shelf popover SwiftUI tree.
 //  Modelled after `Sources/MenuShelf/ClipboardShelf/Vendor/FloatingPanel.swift`
 //  but built as a peer (not a subclass) because the vendored panel's
 //  delegate methods are riddled with `ClipboardShelfState.shared.preview`
-//  calls that are irrelevant to World Clock. Subclassing and overriding
+//  calls that are irrelevant to Clock Shelf. Subclassing and overriding
 //  every preview-dependent delegate method would be brittle; a peer
-//  class with only the bits World Clock needs is much cleaner.
+//  class with only the bits Clock Shelf needs is much cleaner.
 //
 //  The panel:
 //
@@ -24,10 +24,10 @@
 import AppKit
 import SwiftUI
 
-/// Floating popover hosting `WorldClockPopoverView`. The panel is
+/// Floating popover hosting `ClockShelfPopoverView`. The panel is
 /// non-generic because it only ever hosts one view tree.
 @MainActor
-final class WorldClockPanel: NSPanel, NSWindowDelegate {
+final class ClockShelfPanel: NSPanel, NSWindowDelegate {
     /// Tracks whether the panel is currently shown. Mirrors
     /// `FloatingPanel.isPresented` so the controller can decide
     /// toggle direction without going through `isVisible`, which is
@@ -52,7 +52,7 @@ final class WorldClockPanel: NSPanel, NSWindowDelegate {
     static let defaultContentSize = NSSize(width: 320, height: 280)
 
     init(
-        popoverState: WorldClockPopoverState,
+        popoverState: ClockShelfPopoverState,
         onClose: @escaping () -> Void
     ) {
         self.onClose = onClose
@@ -86,7 +86,7 @@ final class WorldClockPanel: NSPanel, NSWindowDelegate {
         standardWindowButton(.zoomButton)?.isHidden = true
 
         contentView = NSHostingView(
-            rootView: WorldClockPopoverView(state: popoverState)
+            rootView: ClockShelfPopoverView(state: popoverState)
                 .ignoresSafeArea()
         )
     }

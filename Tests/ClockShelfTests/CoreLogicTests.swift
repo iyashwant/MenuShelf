@@ -1,6 +1,6 @@
 //
 //  CoreLogicTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Unit tests for core, non-UI logic that previously had no direct
 //  coverage: the settings migration ladder, FileAccessService directory

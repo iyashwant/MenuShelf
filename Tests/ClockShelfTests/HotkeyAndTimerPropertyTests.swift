@@ -1,6 +1,6 @@
 //
 //  HotkeyAndTimerPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property-based tests for the hotkey-driven popover toggle, the
 //  hotkey conflict detection logic, and the minute-timer pause/resume
@@ -46,7 +46,7 @@ import Testing
 
 /// Test-side mirror of the anchor resolution outcome. Production code
 /// passes either an `NSStatusBarButton` or `nil` to
-/// `WorldClockController.showPopover(anchor:)` after consulting three
+/// `ClockShelfController.showPopover(anchor:)` after consulting three
 /// candidate sources in priority order. We project the candidate
 /// selection into a structural enum so the property test can assert
 /// the choice without owning real `NSStatusBarButton` instances.
@@ -54,9 +54,9 @@ private enum AnchorResolution: Equatable {
     /// Step 1: the leftmost pinned status item button.
     case pinnedFirst(UUID)
     /// Step 2: the status button for the first menu view in
-    /// `resolvedMenuViews` whose `worldClockItem != nil`.
+    /// `resolvedMenuViews` whose `clockShelfItem != nil`.
     case menuView(UUID)
-    /// Step 3: nil — `WorldClockPanel.open(at:)` centers on the
+    /// Step 3: nil — `ClockShelfPanel.open(at:)` centers on the
     /// active screen.
     case none
 }
@@ -71,24 +71,24 @@ private enum HotkeyToggleAction: Equatable {
     case show(AnchorResolution)
 }
 
-/// Pure reproduction of `WorldClockController.handleHotkeyToggle()`.
+/// Pure reproduction of `ClockShelfController.handleHotkeyToggle()`.
 /// Mirrors the production body line-for-line:
 ///
 /// 1. If the popover is already visible, hide it (no anchor resolved).
 /// 2. Otherwise, walk the priority chain:
 ///    - first button in `pinnedOrder` (from `pinnedItems`);
 ///    - status button for the first menu view in `resolvedMenuViews`
-///      whose `worldClockItem != nil`;
+///      whose `clockShelfItem != nil`;
 ///    - else `nil`, which delegates to FloatingPanel's center fallback.
 ///
 /// The two helper inputs project the production state into pure-data
 /// values:
 ///   `pinnedOrder` — the controller's `[UUID]` of pinned clock ids;
-///   `menuViewsWithWorldClock` — the resolved menu view ids, paired
-///     with a Bool for whether each carries a `worldClockItem`.
+///   `menuViewsWithClockShelf` — the resolved menu view ids, paired
+///     with a Bool for whether each carries a `clockShelfItem`.
 private func resolveHotkeyAnchor(
     pinnedOrder: [UUID],
-    menuViewsWithWorldClockItem: [(id: UUID, hasItem: Bool)],
+    menuViewsWithClockShelfItem: [(id: UUID, hasItem: Bool)],
     popoverVisible: Bool
 ) -> HotkeyToggleAction {
     if popoverVisible {
@@ -97,7 +97,7 @@ private func resolveHotkeyAnchor(
     if let firstPinned = pinnedOrder.first {
         return .show(.pinnedFirst(firstPinned))
     }
-    if let firstMenuView = menuViewsWithWorldClockItem
+    if let firstMenuView = menuViewsWithClockShelfItem
         .first(where: { $0.hasItem })?.id {
         return .show(.menuView(firstMenuView))
     }
@@ -113,14 +113,14 @@ func property24VisibleHides() {
     #expect(
         resolveHotkeyAnchor(
             pinnedOrder: pinned,
-            menuViewsWithWorldClockItem: menuViews,
+            menuViewsWithClockShelfItem: menuViews,
             popoverVisible: true
         ) == .hide
     )
     #expect(
         resolveHotkeyAnchor(
             pinnedOrder: [],
-            menuViewsWithWorldClockItem: [],
+            menuViewsWithClockShelfItem: [],
             popoverVisible: true
         ) == .hide
     )
@@ -132,7 +132,7 @@ func property24PinnedWinsOverMenuView() {
     let menuViewID = UUID()
     let result = resolveHotkeyAnchor(
         pinnedOrder: [pinnedID],
-        menuViewsWithWorldClockItem: [(menuViewID, true)],
+        menuViewsWithClockShelfItem: [(menuViewID, true)],
         popoverVisible: false
     )
     #expect(result == .show(.pinnedFirst(pinnedID)))
@@ -143,7 +143,7 @@ func property24MenuViewSecondPriority() {
     let menuViewID = UUID()
     let result = resolveHotkeyAnchor(
         pinnedOrder: [],
-        menuViewsWithWorldClockItem: [(menuViewID, true)],
+        menuViewsWithClockShelfItem: [(menuViewID, true)],
         popoverVisible: false
     )
     #expect(result == .show(.menuView(menuViewID)))
@@ -153,7 +153,7 @@ func property24MenuViewSecondPriority() {
 func property24NoCandidatesCenter() {
     let result = resolveHotkeyAnchor(
         pinnedOrder: [],
-        menuViewsWithWorldClockItem: [],
+        menuViewsWithClockShelfItem: [],
         popoverVisible: false
     )
     #expect(result == .show(.none))
@@ -166,19 +166,19 @@ func property24PinnedTakesFirst() {
     let thirdID = UUID()
     let result = resolveHotkeyAnchor(
         pinnedOrder: [firstID, secondID, thirdID],
-        menuViewsWithWorldClockItem: [],
+        menuViewsWithClockShelfItem: [],
         popoverVisible: false
     )
     #expect(result == .show(.pinnedFirst(firstID)))
 }
 
-@Test("Property 24: menu view fallback skips views without a worldClockItem")
+@Test("Property 24: menu view fallback skips views without a clockShelfItem")
 func property24MenuViewSkipsViewsWithoutItem() {
     let withoutItem = UUID()
     let withItem = UUID()
     let result = resolveHotkeyAnchor(
         pinnedOrder: [],
-        menuViewsWithWorldClockItem: [
+        menuViewsWithClockShelfItem: [
             (withoutItem, false),
             (withItem, true),
         ],
@@ -187,11 +187,11 @@ func property24MenuViewSkipsViewsWithoutItem() {
     #expect(result == .show(.menuView(withItem)))
 }
 
-@Test("Property 24: menu view fallback returns none if no menu view has a worldClockItem")
+@Test("Property 24: menu view fallback returns none if no menu view has a clockShelfItem")
 func property24MenuViewNoneIfAllMissingItem() {
     let result = resolveHotkeyAnchor(
         pinnedOrder: [],
-        menuViewsWithWorldClockItem: [
+        menuViewsWithClockShelfItem: [
             (UUID(), false),
             (UUID(), false),
         ],
@@ -203,7 +203,7 @@ func property24MenuViewNoneIfAllMissingItem() {
 // MARK: - Property 25: hotkey conflict detection
 
 /// Test-side mirror of the production "shortcut signature" used to
-/// compare the recorded World Clock hotkey against the menu view
+/// compare the recorded Clock Shelf hotkey against the menu view
 /// shortcut catalog and the Clipboard Shelf popup. Production code
 /// reads `KeyboardShortcuts.Shortcut` and compares
 /// `(key.rawValue, modifiers.deviceIndependentFlagsMask.rawValue)`
@@ -224,7 +224,7 @@ private enum ConflictOwner: Equatable {
 }
 
 /// Pure reproduction of the conflict detection in
-/// `WorldClockSettingsView.currentConflict`. Mirrors:
+/// `ClockShelfSettingsView.currentConflict`. Mirrors:
 ///
 /// 1. Walk `resolvedMenuViews.compactMap(\.shortcut)`. For each
 ///    shortcut with `isEnabled == true` and a `keyCode` set, compare
@@ -363,7 +363,7 @@ func property25FirstMatchWins() {
 // MARK: - Property 26: minute timer lifecycle
 
 /// Pure reproduction of
-/// `WorldClockController.evaluateTimerLifecycle()`'s `shouldRun`
+/// `ClockShelfController.evaluateTimerLifecycle()`'s `shouldRun`
 /// decision. Mirrors:
 ///
 /// ```

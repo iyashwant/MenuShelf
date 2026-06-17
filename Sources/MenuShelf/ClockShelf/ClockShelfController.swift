@@ -1,11 +1,11 @@
 //
-//  WorldClockController.swift
+//  ClockShelfController.swift
 //  MenuShelf
 //
-//  Single integration seam between MenuShelf and the World Clock module.
+//  Single integration seam between MenuShelf and the Clock Shelf module.
 //  Owns the floating popover panel, the per-clock pinned `NSStatusItem`s,
 //  the minute-aligned refresh tick, and the global popup hotkey
-//  registration. Everything outside `Sources/MenuShelf/WorldClock/`
+//  registration. Everything outside `Sources/MenuShelf/ClockShelf/`
 //  talks to this controller and nothing else from the module.
 //
 
@@ -15,8 +15,8 @@ import Foundation
 import KeyboardShortcuts
 
 @MainActor
-final class WorldClockController {
-    static let shared = WorldClockController()
+final class ClockShelfController {
+    static let shared = ClockShelfController()
 
     private init() {}
 
@@ -26,13 +26,13 @@ final class WorldClockController {
     /// first `showPopover(anchor:)` and reused for every subsequent
     /// open/close cycle so the SwiftUI tree (and its `@Observable`
     /// state subscriptions) survives across dismissals.
-    private var panel: WorldClockPanel?
+    private var panel: ClockShelfPanel?
 
     /// `@Observable` backing for the popover SwiftUI tree. The
     /// controller owns one instance for its lifetime; SwiftUI rows
     /// observe `tickToken` and `timeTravelOffset` so a single shared
     /// state object drives every redraw.
-    private let popoverState = WorldClockPopoverState()
+    private let popoverState = ClockShelfPopoverState()
 
     /// One entry per `ClockConfig.pinToMenuBar == true`. Ordering lives
     /// in `pinnedOrder` so the controller can recreate items
@@ -53,7 +53,7 @@ final class WorldClockController {
 
     /// Snapshot of the last settings passed through `apply(settings:)`,
     /// used as the diff base for the next reconcile pass.
-    private var lastAppliedSettings: WorldClockSettings?
+    private var lastAppliedSettings: ClockShelfSettings?
 
     /// Token returned by `KeyboardShortcuts.onKeyDown(for:)` so the
     /// hotkey can be detached on `stop()`.
@@ -75,7 +75,7 @@ final class WorldClockController {
     /// the minute-aligned timer, and registers the popup hotkey when
     /// called for the first time. Subsequent calls forward to
     /// `apply(settings:)`.
-    func start(with settings: WorldClockSettings) {
+    func start(with settings: ClockShelfSettings) {
         // Register the global popup hotkey before the diff-based
         // reconcile so a hotkey press immediately after `start(with:)`
         // returns finds a wired callback (Requirement 9.1). The
@@ -84,12 +84,12 @@ final class WorldClockController {
         // the closure (`KeyboardShortcuts.onKeyDown` returns `Void`,
         // so the "token" is a sentinel marking that the registration
         // exists; the actual detach happens through
-        // `KeyboardShortcuts.disable(.worldClockPopup)`).
+        // `KeyboardShortcuts.disable(.clockShelfPopup)`).
         if lastSubscriptionToken == nil {
-            KeyboardShortcuts.onKeyDown(for: .worldClockPopup) { [weak self] in
+            KeyboardShortcuts.onKeyDown(for: .clockShelfPopup) { [weak self] in
                 self?.handleHotkeyToggle()
             }
-            lastSubscriptionToken = KeyboardShortcuts.Name.worldClockPopup
+            lastSubscriptionToken = KeyboardShortcuts.Name.clockShelfPopup
         }
 
         // Forward to `apply(settings:)` so the very first call also
@@ -120,7 +120,7 @@ final class WorldClockController {
 
         // Remove every pinned `NSStatusItem` from the menu bar within
         // 1s of the controller stopping, satisfying Requirement 4.12
-        // (no pinned items survive while `enableWorldClock == false`)
+        // (no pinned items survive while `enableClockShelf == false`)
         // and Requirement 4.10 (a removed clock's status item is
         // released within 1s when the feature is disabled).
         for ctx in pinnedItems.values {
@@ -128,7 +128,7 @@ final class WorldClockController {
             // Verbose-only structural log — UUID only, never the
             // clock's label, emoji, time zone identifier, or any
             // formatted time (Requirements 11.3, 11.4).
-            logIfVerbose("WorldClock pinned remove id=\(ctx.clockID.uuidString)")
+            logIfVerbose("ClockShelf pinned remove id=\(ctx.clockID.uuidString)")
         }
         pinnedItems.removeAll()
         pinnedOrder.removeAll()
@@ -146,20 +146,20 @@ final class WorldClockController {
         // sentinel token afterwards keeps `lastSubscriptionToken` in
         // sync with the registration state so a follow-up
         // `start(with:)` re-registers cleanly.
-        KeyboardShortcuts.disable(.worldClockPopup)
+        KeyboardShortcuts.disable(.clockShelfPopup)
         lastSubscriptionToken = nil
     }
 
-    /// Push a new settings snapshot through. When `enableWorldClock`
+    /// Push a new settings snapshot through. When `enableClockShelf`
     /// is `false` this collapses to `stop()`. Otherwise the call
     /// reconciles `pinnedItems` against the new desired set, refreshes
     /// every surviving title in place, and recomputes the timer
     /// pause/resume decision.
-    func apply(settings: WorldClockSettings) {
-        guard settings.enableWorldClock else {
+    func apply(settings: ClockShelfSettings) {
+        guard settings.enableClockShelf else {
             // Tear down every pinned item and pause the timer. We
             // still record the snapshot so a subsequent `apply(...)`
-            // call with `enableWorldClock == true` rebuilds from a
+            // call with `enableClockShelf == true` rebuilds from a
             // known baseline (Requirement 4.12).
             stop()
             lastAppliedSettings = settings
@@ -193,7 +193,7 @@ final class WorldClockController {
             // Verbose-only structural log — UUID only, never the
             // clock's label, emoji, time zone identifier, or any
             // formatted time (Requirements 11.3, 11.4).
-            logIfVerbose("WorldClock pinned remove id=\(clockID.uuidString)")
+            logIfVerbose("ClockShelf pinned remove id=\(clockID.uuidString)")
         }
 
         // Step 3: allocate `NSStatusItem(withLength:
@@ -220,7 +220,7 @@ final class WorldClockController {
             // Verbose-only structural log — UUID only, never the
             // clock's label, emoji, time zone identifier, or any
             // formatted time (Requirements 11.3, 11.4).
-            logIfVerbose("WorldClock pinned create id=\(clock.id.uuidString)")
+            logIfVerbose("ClockShelf pinned create id=\(clock.id.uuidString)")
         }
 
         // Step 4: realign `pinnedOrder` to match the desired
@@ -275,7 +275,7 @@ final class WorldClockController {
     /// Show the popover unconditionally (no toggle). Used by the menu
     /// action when the click should always open the popover.
     func showPopover(anchor: NSStatusBarButton?) {
-        // Lazily allocate the panel on first show so an idle World Clock
+        // Lazily allocate the panel on first show so an idle Clock Shelf
         // pays no panel-allocation cost. The panel and its SwiftUI tree
         // outlive subsequent dismissals so `@Observable` subscriptions
         // are preserved.
@@ -293,7 +293,7 @@ final class WorldClockController {
         // Verbose-only structural log — counts only, never any
         // user-supplied label, emoji, time string, or timeZone
         // identifier (Requirements 11.3, 11.4).
-        logIfVerbose("WorldClock popover open")
+        logIfVerbose("ClockShelf popover open")
     }
 
     /// Hide the popover within 200ms and reset `Time_Travel_Offset`
@@ -317,9 +317,9 @@ final class WorldClockController {
     /// 1. The first button in `pinnedOrder` (the leftmost pinned
     ///    `NSStatusItem` matching `ClockConfig.sortOrder`).
     /// 2. The status button for the first menu view in
-    ///    `resolvedMenuViews` whose `worldClockItem != nil`, resolved
+    ///    `resolvedMenuViews` whose `clockShelfItem != nil`, resolved
     ///    via `AppContainer.shared.statusItemManager.statusBarButton(for:)`.
-    /// 3. `nil`, which lets `WorldClockPanel.open(at:)` fall back to
+    /// 3. `nil`, which lets `ClockShelfPanel.open(at:)` fall back to
     ///    centering on the active screen.
     ///
     /// When the popover is already visible, the press hides it
@@ -340,19 +340,19 @@ final class WorldClockController {
         }
 
         // Step 2: first menu view in `resolvedMenuViews` order whose
-        // `worldClockItem != nil`. Reaching directly into
+        // `clockShelfItem != nil`. Reaching directly into
         // `AppContainer.shared` keeps the controller's API
         // unchanged; the dependency on `AppContainer` already exists
         // in `openSettingsForClock(_:)` above.
         let resolvedViews = AppContainer.shared.store.settings.resolvedMenuViews
-        if let menuView = resolvedViews.first(where: { $0.worldClockItem != nil }),
+        if let menuView = resolvedViews.first(where: { $0.clockShelfItem != nil }),
            let button = AppContainer.shared.statusItemManager
                .statusBarButton(for: menuView.id) {
             showPopover(anchor: button)
             return
         }
 
-        // Step 3: no anchor — `WorldClockPanel.open(at:)` centers the
+        // Step 3: no anchor — `ClockShelfPanel.open(at:)` centers the
         // panel on the active screen.
         showPopover(anchor: nil)
     }
@@ -362,9 +362,9 @@ final class WorldClockController {
     /// so dismissals from any path (outside click, Esc, programmatic
     /// `close()`) all drop back to live time within 200ms (Requirement
     /// 5.6).
-    private func ensurePanel() -> WorldClockPanel {
+    private func ensurePanel() -> ClockShelfPanel {
         if let panel { return panel }
-        let panel = WorldClockPanel(
+        let panel = ClockShelfPanel(
             popoverState: popoverState,
             onClose: { [weak self] in
                 Task { @MainActor [weak self] in
@@ -375,7 +375,7 @@ final class WorldClockController {
                     // Esc) since AppKit drives this callback for
                     // every dismissal path. Counts only (Requirements
                     // 11.3, 11.4).
-                    self?.logIfVerbose("WorldClock popover close")
+                    self?.logIfVerbose("ClockShelf popover close")
                 }
             }
         )
@@ -395,7 +395,7 @@ final class WorldClockController {
             .filter { $0.showInPopover }
             .sorted { $0.sortOrder < $1.sortOrder }
         popoverState.rows = visible.map { clock in
-            WorldClockRowModel(
+            ClockShelfRowModel(
                 id: clock.id,
                 displayLabel: clock.displayLabel,
                 emoji: clock.emoji,
@@ -565,12 +565,12 @@ final class WorldClockController {
         }
     }
 
-    /// Open the settings window focused on the World Clock pane and
+    /// Open the settings window focused on the Clock Shelf pane and
     /// scrolled to the row for `clockID`. Wraps the deep-link call so
     /// the click handler stays focused on dispatch.
     private func openSettingsForClock(_ clockID: UUID) {
         AppContainer.shared.settingsWindowController.show(
-            focusWorldClock: true,
+            focusClockShelf: true,
             scrollToClockID: clockID
         )
     }
@@ -580,7 +580,7 @@ final class WorldClockController {
     /// Forward `message` to `DiagnosticsLogger.shared.log(_:)` when (and
     /// only when) the user has flipped on `enableVerboseDiagnostics` in
     /// settings. Mirrors `ClipboardShelfController.logPopupActivation
-    /// (action:source:)` so the World Clock module logs at the same
+    /// (action:source:)` so the Clock Shelf module logs at the same
     /// verbosity level the rest of MenuShelf uses (Requirements 11.3,
     /// 11.4).
     ///
@@ -601,16 +601,16 @@ final class WorldClockController {
     /// Recompute the minute-timer pause/resume decision from the three
     /// boolean inputs documented in the design's state diagram:
     ///
-    /// - `enabled`        = `lastAppliedSettings?.enableWorldClock`
+    /// - `enabled`        = `lastAppliedSettings?.enableClockShelf`
     /// - `anyPinned`      = `!pinnedItems.isEmpty`
     /// - `popoverVisible` = `panel?.isVisible == true`
     ///
     /// The timer is alive iff `enabled && (anyPinned || popoverVisible)`;
     /// otherwise it is invalidated and set to `nil` so an idle, disabled,
-    /// or unobserved World Clock costs nothing at runtime
+    /// or unobserved Clock Shelf costs nothing at runtime
     /// (Requirements 10.1, 10.2, 10.3, 10.5).
     private func evaluateTimerLifecycle() {
-        let enabled = lastAppliedSettings?.enableWorldClock ?? false
+        let enabled = lastAppliedSettings?.enableClockShelf ?? false
         let anyPinned = !pinnedItems.isEmpty
         let popoverVisible = panel?.isVisible == true
         let shouldRun = enabled && (anyPinned || popoverVisible)
@@ -670,14 +670,14 @@ final class WorldClockController {
         // time zone identifier, or formatted time (Requirements 11.3,
         // 11.4).
         logIfVerbose(
-            "WorldClock minute tick clocks=\(pinnedItems.count) "
+            "ClockShelf minute tick clocks=\(pinnedItems.count) "
             + "popover=\(panel?.isPresented == true)"
         )
     }
 
     /// Compose a pinned status item title from `clock` and `date`.
     /// Delegates the time formatting to the file-scope
-    /// `formatWorldClockTime(date:timeZone:use24HourTime:)` helper so
+    /// `formatClockShelfTime(date:timeZone:use24HourTime:)` helper so
     /// the pinned item path, the popover row pipeline, and the submenu
     /// populator (Task 7.3) all share a single formatter implementation
     /// (Requirements 4.3, 6.5).
@@ -686,7 +686,7 @@ final class WorldClockController {
         date: Date,
         use24HourTime: Bool
     ) -> String {
-        let timeString = formatWorldClockTime(
+        let timeString = formatClockShelfTime(
             date: date,
             timeZone: clock.resolvedTimeZone,
             use24HourTime: use24HourTime
@@ -701,10 +701,10 @@ final class WorldClockController {
 
 // MARK: - Shared time formatter
 
-/// Format `date` for display in the user's preferred World Clock time
+/// Format `date` for display in the user's preferred Clock Shelf time
 /// representation. Reused from the pinned status item title path
 /// (Task 5.4), the popover row pipeline (Task 6.3), and the submenu
-/// populator (Task 7.3) so every World Clock surface renders identical
+/// populator (Task 7.3) so every Clock Shelf surface renders identical
 /// time strings.
 ///
 /// - Parameters:
@@ -720,9 +720,9 @@ final class WorldClockController {
 /// submenu populator can call it from their own files in the same
 /// module without crossing actor boundaries. `DateFormatter` and
 /// `Date.FormatStyle` are both safe to construct per-call here; the
-/// World Clock formats at most a few dozen rows at minute boundaries
+/// Clock Shelf formats at most a few dozen rows at minute boundaries
 /// or during slider drags, so the allocation cost is irrelevant.
-func formatWorldClockTime(
+func formatClockShelfTime(
     date: Date,
     timeZone: TimeZone,
     use24HourTime: Bool

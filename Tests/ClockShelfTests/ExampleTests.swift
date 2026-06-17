@@ -1,9 +1,9 @@
 //
 //  ExampleTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Example-based tests for the EXAMPLE-classified acceptance criteria
-//  from the World Clock spec. Each `@Test` covers one criterion that can
+//  from the Clock Shelf spec. Each `@Test` covers one criterion that can
 //  be exercised directly from the `MenuShelf` module without spinning up
 //  AppKit, NSStatusBar, KeyboardShortcuts, or any UI-bearing
 //  infrastructure. Criteria that require running views (overflow menu
@@ -18,41 +18,41 @@ import Testing
 
 // MARK: - MenuViewConfig.make
 
-@Test("MenuViewConfig.make().worldClockItem == nil")
-func freshMenuViewHasNoWorldClockItem() {
+@Test("MenuViewConfig.make().clockShelfItem == nil")
+func freshMenuViewHasNoClockShelfItem() {
     let view = MenuViewConfig.make()
-    #expect(view.worldClockItem == nil)
+    #expect(view.clockShelfItem == nil)
 }
 
-// MARK: - WorldClockMenuItemConfig fallback
+// MARK: - ClockShelfMenuItemConfig fallback
 
-@Test("WorldClockMenuItemConfig.displayTitle falls back to \"World Clock\"")
+@Test("ClockShelfMenuItemConfig.displayTitle falls back to \"Clock Shelf\"")
 func menuItemDisplayTitleFallback() {
-    let item = WorldClockMenuItemConfig.make()
+    let item = ClockShelfMenuItemConfig.make()
     #expect(item.titleOverride == nil)
-    #expect(item.displayTitle == "World Clock")
+    #expect(item.displayTitle == "Clock Shelf")
 }
 
-@Test("WorldClockMenuItemConfig.displayTitle falls back when whitespace-only override")
+@Test("ClockShelfMenuItemConfig.displayTitle falls back when whitespace-only override")
 func menuItemDisplayTitleFallbackWhitespace() {
-    var item = WorldClockMenuItemConfig.make()
+    var item = ClockShelfMenuItemConfig.make()
     item.titleOverride = "   "
-    #expect(item.displayTitle == "World Clock")
+    #expect(item.displayTitle == "Clock Shelf")
 }
 
-@Test("WorldClockMenuItemConfig.displayTitle returns trimmed override when set")
+@Test("ClockShelfMenuItemConfig.displayTitle returns trimmed override when set")
 func menuItemDisplayTitleTrimmed() {
-    var item = WorldClockMenuItemConfig.make()
+    var item = ClockShelfMenuItemConfig.make()
     item.titleOverride = "  My Clocks  "
     #expect(item.displayTitle == "My Clocks")
 }
 
-// MARK: - WorldClockSettings.defaults
+// MARK: - ClockShelfSettings.defaults
 
-@Test("WorldClockSettings.defaults exact field values")
-func worldClockDefaultsFieldValues() {
-    let defaults = WorldClockSettings.defaults
-    #expect(defaults.enableWorldClock == false)
+@Test("ClockShelfSettings.defaults exact field values")
+func clockShelfDefaultsFieldValues() {
+    let defaults = ClockShelfSettings.defaults
+    #expect(defaults.enableClockShelf == false)
     #expect(defaults.clocks.isEmpty)
     #expect(defaults.use24HourTime == false)
     #expect(defaults.popoverTextSize == 13)
@@ -69,25 +69,25 @@ func appSettingsDefaultsSchemaVersion() {
     #expect(AppSettings.defaults.schemaVersion == 14)
 }
 
-@Test("AppSettings.defaults.worldClock matches WorldClockSettings.defaults")
-func appSettingsDefaultsWorldClock() {
-    #expect(AppSettings.defaults.worldClock == WorldClockSettings.defaults)
-    #expect(AppSettings.defaults.resolvedWorldClock == WorldClockSettings.defaults)
+@Test("AppSettings.defaults.clockShelf matches ClockShelfSettings.defaults")
+func appSettingsDefaultsClockShelf() {
+    #expect(AppSettings.defaults.clockShelf == ClockShelfSettings.defaults)
+    #expect(AppSettings.defaults.resolvedClockShelf == ClockShelfSettings.defaults)
 }
 
-// MARK: - WorldClockPresentationMode
+// MARK: - ClockShelfPresentationMode
 
-@Test("WorldClockPresentationMode.allCases.count == 2")
+@Test("ClockShelfPresentationMode.allCases.count == 2")
 func presentationModeCaseCount() {
-    #expect(WorldClockPresentationMode.allCases.count == 2)
-    #expect(WorldClockPresentationMode.allCases.contains(.popover))
-    #expect(WorldClockPresentationMode.allCases.contains(.submenu))
+    #expect(ClockShelfPresentationMode.allCases.count == 2)
+    #expect(ClockShelfPresentationMode.allCases.contains(.popover))
+    #expect(ClockShelfPresentationMode.allCases.contains(.submenu))
 }
 
-@Test("WorldClockPresentationMode rendered labels")
+@Test("ClockShelfPresentationMode rendered labels")
 func presentationModeLabels() {
-    #expect(WorldClockPresentationMode.popover.label == "Popover")
-    #expect(WorldClockPresentationMode.submenu.label == "Submenu")
+    #expect(ClockShelfPresentationMode.popover.label == "Popover")
+    #expect(ClockShelfPresentationMode.submenu.label == "Submenu")
 }
 
 // MARK: - timeTravelReadout

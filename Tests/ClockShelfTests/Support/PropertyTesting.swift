@@ -1,8 +1,8 @@
 //
 //  PropertyTesting.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
-//  Minimal in-tree property-based testing harness for the World Clock
+//  Minimal in-tree property-based testing harness for the Clock Shelf
 //  module. Mirrors the shape pinned by the design's *Testing Strategy*:
 //  swift-testing's `@Test` for example-based assertions plus a tiny
 //  `forAll` helper backed by `SystemRandomNumberGenerator` for
@@ -177,13 +177,13 @@ let arbitraryClockConfig: AnyGenerator<ClockConfig> = AnyGenerator { rng in
     )
 }
 
-// MARK: - arbitraryWorldClockSettings
+// MARK: - arbitraryClockShelfSettings
 
-/// Generates a `WorldClockSettings` drawn from
+/// Generates a `ClockShelfSettings` drawn from
 /// `Bool × [arbitraryClockConfig] (≤32) × Bool × Int (11..22) × Bool`.
 /// The 32-clock cap is enforced at construction so generators never
 /// violate cardinality.
-let arbitraryWorldClockSettings: AnyGenerator<WorldClockSettings> = AnyGenerator { rng in
+let arbitraryClockShelfSettings: AnyGenerator<ClockShelfSettings> = AnyGenerator { rng in
     let count = randomInt(in: 0...32, using: &rng)
     var clocks: [ClockConfig] = []
     clocks.reserveCapacity(count)
@@ -194,15 +194,15 @@ let arbitraryWorldClockSettings: AnyGenerator<WorldClockSettings> = AnyGenerator
     }
     // ~10% of the time emit `nil` for `presentationMode` so Property 31's
     // forward-decode branch gets exercised.
-    let presentationMode: WorldClockPresentationMode?
+    let presentationMode: ClockShelfPresentationMode?
     let drop = randomInt(in: 0...9, using: &rng) == 0
     if drop {
         presentationMode = nil
     } else {
         presentationMode = randomBool(using: &rng) ? .popover : .submenu
     }
-    return WorldClockSettings(
-        enableWorldClock: randomBool(using: &rng),
+    return ClockShelfSettings(
+        enableClockShelf: randomBool(using: &rng),
         clocks: clocks,
         use24HourTime: randomBool(using: &rng),
         popoverTextSize: randomInt(in: 11...22, using: &rng),
@@ -234,7 +234,7 @@ let arbitraryAppSettingsPreV14: AnyGenerator<AppSettings> = AnyGenerator { rng i
     if randomBool(using: &rng) { settings.appleScripts = nil }
     if randomBool(using: &rng) { settings.browserFlip = nil }
     if randomBool(using: &rng) { settings.clipboardShelf = nil }
-    if randomBool(using: &rng) { settings.worldClock = nil }
+    if randomBool(using: &rng) { settings.clockShelf = nil }
     if randomBool(using: &rng) { settings.showRootFolderManagementItems = nil }
 
     return settings

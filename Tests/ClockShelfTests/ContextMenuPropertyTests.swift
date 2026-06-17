@@ -1,9 +1,9 @@
 //
 //  ContextMenuPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property-based tests for the row-context-menu actions exposed by
-//  the World Clock popover:
+//  the Clock Shelf popover:
 //
 //  - Property 22: Copy Time and Copy Time Zone Identifier write the
 //    expected single-payload string after clearing the pasteboard.
@@ -23,7 +23,7 @@
 //    one in `ClockRowContextMenu.body` — the per-action production
 //    bodies are short two-line clauses that we replicate exactly.
 //
-//  - Property 23 mirrors `PreferencesStore.updateWorldClock(_:)`'s
+//  - Property 23 mirrors `PreferencesStore.updateClockShelf(_:)`'s
 //    pin-toggle path: produce a `ClockConfig` with `pinToMenuBar`
 //    flipped, pass it through, and assert that exactly one field
 //    flipped on the targeted row, every other clock is byte-equal,
@@ -39,7 +39,7 @@ import Testing
 
 /// Algorithm under test for the "Copy Time" / "Copy Time Zone
 /// Identifier" context menu items. Mirrors `ClockRowContextMenu.body`
-/// in `WorldClockPopoverView.swift` clause-for-clause:
+/// in `ClockShelfPopoverView.swift` clause-for-clause:
 ///
 ///     let pasteboard = NSPasteboard.general
 ///     pasteboard.clearContents()
@@ -64,12 +64,12 @@ private func performCopy(
 /// 2. does not retain pre-existing strings from prior writes.
 @Test("Property 22: Copy Time writes the displayed time string to the pasteboard")
 func property22CopyTimeWritesDisplayedTime() {
-    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "WorldClockTestPB-Time"))
+    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "ClockShelfTestPB-Time"))
     let referenceDate = Date(timeIntervalSinceReferenceDate: 700_000_000)
 
     forAll(arbitraryClockConfig, iterations: 50) { clock in
         for use24HourTime in [false, true] {
-            let displayedTime = formatWorldClockTime(
+            let displayedTime = formatClockShelfTime(
                 date: referenceDate,
                 timeZone: clock.resolvedTimeZone,
                 use24HourTime: use24HourTime
@@ -83,7 +83,7 @@ func property22CopyTimeWritesDisplayedTime() {
 
 @Test("Property 22: Copy Time Zone Identifier writes the IANA identifier")
 func property22CopyTimeZoneIdentifierWritesIdentifier() {
-    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "WorldClockTestPB-ID"))
+    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "ClockShelfTestPB-ID"))
 
     forAll(arbitraryClockConfig, iterations: 100) { clock in
         let identifier = clock.timeZoneIdentifier
@@ -95,7 +95,7 @@ func property22CopyTimeZoneIdentifierWritesIdentifier() {
 
 @Test("Property 22: clearContents drops the prior string before the new write")
 func property22ClearContentsDropsPriorString() {
-    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "WorldClockTestPB-Clear"))
+    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "ClockShelfTestPB-Clear"))
 
     // Write a sentinel value first.
     performCopy("PRIOR-VALUE", to: pasteboard)
@@ -110,7 +110,7 @@ func property22ClearContentsDropsPriorString() {
 
 @Test("Property 22: round trip — string written equals string read for any UTF-8 payload")
 func property22RoundTripUTF8Payload() {
-    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "WorldClockTestPB-UTF8"))
+    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "ClockShelfTestPB-UTF8"))
     let payloads = [
         "Plain ASCII",
         "12:34 PM",
@@ -130,7 +130,7 @@ func property22RoundTripUTF8Payload() {
 
 @Test("Property 22: a single setString call writes exactly one payload, not concatenated history")
 func property22SinglePayloadOnly() {
-    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "WorldClockTestPB-Single"))
+    let pasteboard = NSPasteboard(name: NSPasteboard.Name(rawValue: "ClockShelfTestPB-Single"))
     performCopy("first", to: pasteboard)
     performCopy("second", to: pasteboard)
     performCopy("third", to: pasteboard)
@@ -148,13 +148,13 @@ func property22SinglePayloadOnly() {
 ///
 ///     var updated = liveClock
 ///     updated.pinToMenuBar.toggle()
-///     store.updateWorldClock(updated)
+///     store.updateClockShelf(updated)
 ///
-/// where `updateWorldClock(_:)` preserves `createdAt` and `sortOrder`
+/// where `updateClockShelf(_:)` preserves `createdAt` and `sortOrder`
 /// from the pre-state, bumps `updatedAt`, and writes the result back
-/// (matching `WorldClockPreferencesStore.updateWorldClock(_:)`).
+/// (matching `ClockShelfPreferencesStore.updateClockShelf(_:)`).
 private func applyPinToggle(
-    _ wc: inout WorldClockSettings,
+    _ wc: inout ClockShelfSettings,
     id: UUID
 ) {
     guard let liveClock = wc.clocks.first(where: { $0.id == id }) else {
@@ -163,7 +163,7 @@ private func applyPinToggle(
     var updated = liveClock
     updated.pinToMenuBar.toggle()
 
-    // Now apply through the documented updateWorldClock semantics:
+    // Now apply through the documented updateClockShelf semantics:
     // preserve createdAt and sortOrder; bump updatedAt.
     guard let index = wc.clocks.firstIndex(where: { $0.id == id }) else {
         return
@@ -272,10 +272,10 @@ func property23PinToggleOnVariousIndices() {
 
 // MARK: - Helpers
 
-private func makeMultiClockSettings() -> WorldClockSettings {
+private func makeMultiClockSettings() -> ClockShelfSettings {
     let now = Date(timeIntervalSinceReferenceDate: 0)
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = true
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = true
     settings.clocks = [
         ClockConfig(
             id: UUID(),

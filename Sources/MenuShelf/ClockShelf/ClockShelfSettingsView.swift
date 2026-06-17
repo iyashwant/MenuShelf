@@ -1,11 +1,11 @@
 //
-//  WorldClockSettingsView.swift
+//  ClockShelfSettingsView.swift
 //  MenuShelf
 //
-//  Settings pane for the World Clock feature. Mirrors the structure of
+//  Settings pane for the Clock Shelf feature. Mirrors the structure of
 //  `ClipboardShelfSettingsView`: a single scrolling pane built from
 //  `SettingsCard`/`SettingsToggle`/`SettingsRow`. All bindings flow
-//  through `store.updateWorldClockSettings { ... }` except the popup
+//  through `store.updateClockShelfSettings { ... }` except the popup
 //  hotkey, which is owned by `KeyboardShortcuts` and bound by
 //  `KeyboardShortcuts.Recorder`.
 //
@@ -14,7 +14,7 @@ import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
-struct WorldClockSettingsView: View {
+struct ClockShelfSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
 
     /// Drives the time-zone picker sheet. Holds either `.add` (the
@@ -24,12 +24,12 @@ struct WorldClockSettingsView: View {
 
     var body: some View {
         SettingsPane(
-            "World Clock",
+            "Clock Shelf",
             subtitle: "Multi-time-zone clocks in your menu bar."
         ) {
             enableCard
 
-            if store.settings.resolvedWorldClock.enableWorldClock {
+            if store.settings.resolvedClockShelf.enableClockShelf {
                 clocksCard
                 appearanceCard
                 hotkeyCard
@@ -39,12 +39,12 @@ struct WorldClockSettingsView: View {
             TimeZonePickerSheet(mode: mode) { identifier in
                 switch mode {
                 case .add:
-                    store.addWorldClock(timeZoneIdentifier: identifier)
+                    store.addClockShelf(timeZoneIdentifier: identifier)
                 case .change(let id):
-                    if var clock = store.settings.resolvedWorldClock
+                    if var clock = store.settings.resolvedClockShelf
                         .clocks.first(where: { $0.id == id }) {
                         clock.timeZoneIdentifier = identifier
-                        store.updateWorldClock(clock)
+                        store.updateClockShelf(clock)
                     }
                 }
                 sheetMode = nil
@@ -57,13 +57,13 @@ struct WorldClockSettingsView: View {
     // MARK: - Cards
 
     private var enableCard: some View {
-        SettingsCard("World Clock") {
+        SettingsCard("Clock Shelf") {
             SettingsToggle(
-                "Enable World Clock",
-                helper: "Show the World Clock popover, populate menu views that have a World Clock entry, and pin status items for any pinned clocks.",
+                "Enable Clock Shelf",
+                helper: "Show the Clock Shelf popover, populate menu views that have a Clock Shelf entry, and pin status items for any pinned clocks.",
                 isOn: Binding(
-                    get: { store.settings.resolvedWorldClock.enableWorldClock },
-                    set: { store.setEnableWorldClock($0) }
+                    get: { store.settings.resolvedClockShelf.enableClockShelf },
+                    set: { store.setEnableClockShelf($0) }
                 )
             )
         }
@@ -87,20 +87,20 @@ struct WorldClockSettingsView: View {
                                 ClockRow(
                                     clock: clock,
                                     onChangeTimeZone: { sheetMode = .change(clock.id) },
-                                    onRemove: { store.removeWorldClock(id: clock.id) },
-                                    onUpdate: { store.updateWorldClock($0) }
+                                    onRemove: { store.removeClockShelf(id: clock.id) },
+                                    onUpdate: { store.updateClockShelf($0) }
                                 )
                                 .id(clock.id)
                             }
                             .onMove { source, destination in
-                                store.moveWorldClock(from: source, to: destination)
+                                store.moveClockShelf(from: source, to: destination)
                             }
                         }
                         .listStyle(.inset)
                         .frame(minHeight: 220, maxHeight: 380)
                         .onReceive(
                             NotificationCenter.default.publisher(
-                                for: .menuShelfScrollToWorldClock
+                                for: .menuShelfScrollToClockShelf
                             )
                         ) { notification in
                             // Triggered by
@@ -144,15 +144,15 @@ struct WorldClockSettingsView: View {
         SettingsCard("Appearance") {
             SettingsRow(
                 "Menu Surface",
-                helper: "Where the World Clock surfaces inside menu views. Popover shows a single click target; Submenu lists clocks inline."
+                helper: "Where the Clock Shelf surfaces inside menu views. Popover shows a single click target; Submenu lists clocks inline."
             ) {
                 Picker("", selection: Binding(
-                    get: { store.settings.resolvedWorldClock.resolvedPresentationMode },
+                    get: { store.settings.resolvedClockShelf.resolvedPresentationMode },
                     set: { value in
-                        store.updateWorldClockSettings { $0.presentationMode = value }
+                        store.updateClockShelfSettings { $0.presentationMode = value }
                     }
                 )) {
-                    ForEach(WorldClockPresentationMode.allCases) { mode in
+                    ForEach(ClockShelfPresentationMode.allCases) { mode in
                         Text(mode.label).tag(mode)
                     }
                 }
@@ -165,22 +165,22 @@ struct WorldClockSettingsView: View {
                 "Use 24-hour time",
                 helper: "Format pinned status item titles, popover rows, and submenu rows in 24-hour time regardless of the system locale.",
                 isOn: Binding(
-                    get: { store.settings.resolvedWorldClock.use24HourTime },
+                    get: { store.settings.resolvedClockShelf.use24HourTime },
                     set: { value in
-                        store.updateWorldClockSettings { $0.use24HourTime = value }
+                        store.updateClockShelfSettings { $0.use24HourTime = value }
                     }
                 )
             )
 
             SettingsRow(
                 "Popover text size",
-                helper: "Point size of clock rows in the World Clock popover (11-22 pt)."
+                helper: "Point size of clock rows in the Clock Shelf popover (11-22 pt)."
             ) {
                 Stepper(
                     value: popoverTextSizeBinding,
                     in: 11...22
                 ) {
-                    Text("\(store.settings.resolvedWorldClock.resolvedPopoverTextSize)")
+                    Text("\(store.settings.resolvedClockShelf.resolvedPopoverTextSize)")
                 }
             }
         }
@@ -190,9 +190,9 @@ struct WorldClockSettingsView: View {
         SettingsCard("Hotkey") {
             SettingsRow(
                 "Open popover hotkey",
-                helper: "Press to toggle the World Clock popover from anywhere."
+                helper: "Press to toggle the Clock Shelf popover from anywhere."
             ) {
-                KeyboardShortcuts.Recorder(for: .worldClockPopup)
+                KeyboardShortcuts.Recorder(for: .clockShelfPopup)
             }
 
             if let conflict = currentConflict {
@@ -218,30 +218,30 @@ struct WorldClockSettingsView: View {
     // MARK: - Helpers
 
     private var sortedClocks: [ClockConfig] {
-        store.settings.resolvedWorldClock.clocks
+        store.settings.resolvedClockShelf.clocks
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var popoverTextSizeBinding: Binding<Int> {
         Binding(
-            get: { store.settings.resolvedWorldClock.resolvedPopoverTextSize },
+            get: { store.settings.resolvedClockShelf.resolvedPopoverTextSize },
             set: { value in
                 let clamped = min(max(value, 11), 22)
-                store.updateWorldClockSettings { $0.popoverTextSize = clamped }
+                store.updateClockShelfSettings { $0.popoverTextSize = clamped }
             }
         )
     }
 
     /// Detect a `(keyCode, modifierFlags)` collision between the recorded
-    /// World Clock popover hotkey and any menu view, standalone module, or
+    /// Clock Shelf popover hotkey and any menu view, standalone module, or
     /// the Clipboard Shelf popup hotkey. Delegates to the shared
     /// `StandaloneModuleHotkeyConflict.scan(...)` helper so the world-clock
     /// banner and the standalone-modules banner stay in lockstep.
     ///
-    /// The World Clock popup itself is excluded from `knownPopupHotkeys` so
+    /// The Clock Shelf popup itself is excluded from `knownPopupHotkeys` so
     /// it does not report itself (Requirement 8.5).
     private var currentConflict: StandaloneModuleHotkeyConflict? {
-        guard let recorded = KeyboardShortcuts.getShortcut(for: .worldClockPopup),
+        guard let recorded = KeyboardShortcuts.getShortcut(for: .clockShelfPopup),
               let recordedKey = recorded.key?.rawValue else {
             return nil
         }
@@ -397,7 +397,7 @@ private struct ClockRow: View {
 
 // MARK: - Time zone picker sheet
 
-/// Sheet hosted by `WorldClockSettingsView` that lets the user pick a
+/// Sheet hosted by `ClockShelfSettingsView` that lets the user pick a
 /// time zone identifier from `TimeZone.knownTimeZoneIdentifiers`. Reused
 /// for both "Add Clock" (footer button) and "Change time zone" (per-row
 /// button). The list is populated lazily inside `.task` so the 600+

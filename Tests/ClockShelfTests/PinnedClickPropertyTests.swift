@@ -1,18 +1,18 @@
 //
 //  PinnedClickPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property-based tests for the click dispatch logic on pinned status
 //  items:
 //
 //  - Property 16: pinned click dispatch (no modifiers → `togglePopover`;
 //    any of `[option, control, shift, command]` → settings with
-//    `focusWorldClock: true, scrollToClockID:`).
+//    `focusClockShelf: true, scrollToClockID:`).
 //  - Property 17: right-click on a pinned status item is a no-op.
 //
 //  Why this is a pure-function test:
 //
-//  The production code lives in `WorldClockController.handlePinnedClick(_:)`
+//  The production code lives in `ClockShelfController.handlePinnedClick(_:)`
 //  and reads `NSApp.currentEvent` to determine the event type and
 //  modifier flags. Driving that path from `swift test` requires
 //  fabricating an `NSEvent` and posting it through the AppKit run loop,
@@ -25,7 +25,7 @@
 //
 //  This file re-implements that decision as
 //  `pinnedClickDispatch(eventType:modifierFlags:)` matching the
-//  production body in `WorldClockController.handlePinnedClick(_:)`
+//  production body in `ClockShelfController.handlePinnedClick(_:)`
 //  clause-for-clause and asserts the documented dispatch table over
 //  the entire `(eventType, modifier)` cross-product. The reproduction
 //  is direct enough that a drift in the production decision logic
@@ -40,9 +40,9 @@ import Testing
 // MARK: - Dispatch action enum (test-side mirror)
 
 /// Three branches the production click handler may take. Mirrors the
-/// switch in `WorldClockController.handlePinnedClick(_:)`:
+/// switch in `ClockShelfController.handlePinnedClick(_:)`:
 /// - `.toggle`: invokes `togglePopover(anchor: clickedButton)`;
-/// - `.settings`: invokes `SettingsWindowController.show(focusWorldClock: true, scrollToClockID: clockID)`;
+/// - `.settings`: invokes `SettingsWindowController.show(focusClockShelf: true, scrollToClockID: clockID)`;
 /// - `.none`: returns without dispatching (right-click → no-op).
 private enum DispatchAction: Equatable {
     case toggle
@@ -51,7 +51,7 @@ private enum DispatchAction: Equatable {
 }
 
 /// Pure reproduction of the production dispatch logic in
-/// `WorldClockController.handlePinnedClick(_:)`. The production body
+/// `ClockShelfController.handlePinnedClick(_:)`. The production body
 /// reads `NSApp.currentEvent` for `event?.type` and
 /// `event?.modifierFlags`; both are passed in here so the test can
 /// drive the function deterministically.

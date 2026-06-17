@@ -1,12 +1,12 @@
 //
 //  DiagnosticsPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property test for the diagnostics PII boundary. Validates Property
 //  28: for any `(label, emoji)` configuration and any sequence of
 //  operations, the strings emitted by `DiagnosticsLogger.shared.log(_:)`
 //  never contain `clock.label` or `clock.emoji` as a substring at any
-//  verbosity level. Formatted times produced by the World Clock
+//  verbosity level. Formatted times produced by the Clock Shelf
 //  subsystem are also never logged.
 //
 //  Strategy:
@@ -23,13 +23,13 @@
 //
 //  The pragmatic alternative documented in the spec's testing-strategy
 //  fallback is a *meta-test*: read the source file
-//  `Sources/MenuShelf/WorldClock/WorldClockController.swift` at test
+//  `Sources/MenuShelf/ClockShelf/ClockShelfController.swift` at test
 //  time and assert that no `logIfVerbose(...)` call site interpolates
 //  any of the privacy-sensitive expressions:
 //
 //   - `clock.label` / `\(clock.label)` / `clock?.label`
 //   - `clock.emoji` / `\(clock.emoji)` / `clock?.emoji`
-//   - `formatWorldClockTime(...)` invocations (formatted time strings)
+//   - `formatClockShelfTime(...)` invocations (formatted time strings)
 //
 //  This is a static check, but it gives high-confidence enforcement of
 //  Property 28's runtime claim — the production logging infrastructure
@@ -46,25 +46,25 @@ import Testing
 
 // MARK: - Source file resolution
 
-/// Returns the absolute path to the World Clock source directory. The
+/// Returns the absolute path to the Clock Shelf source directory. The
 /// test file lives at
-/// `<repo>/Tests/WorldClockTests/DiagnosticsPropertyTests.swift`; we
-/// navigate up two levels and then into `Sources/MenuShelf/WorldClock`.
-private func worldClockSourceDirectory(file: StaticString = #filePath) -> URL {
+/// `<repo>/Tests/ClockShelfTests/DiagnosticsPropertyTests.swift`; we
+/// navigate up two levels and then into `Sources/MenuShelf/ClockShelf`.
+private func clockShelfSourceDirectory(file: StaticString = #filePath) -> URL {
     let testFileURL = URL(fileURLWithPath: "\(file)")
-    let testsDir = testFileURL.deletingLastPathComponent()  // .../Tests/WorldClockTests
+    let testsDir = testFileURL.deletingLastPathComponent()  // .../Tests/ClockShelfTests
     let testsRoot = testsDir.deletingLastPathComponent()    // .../Tests
     let workspaceRoot = testsRoot.deletingLastPathComponent()  // .../<repo>
     return workspaceRoot
         .appendingPathComponent("Sources")
         .appendingPathComponent("MenuShelf")
-        .appendingPathComponent("WorldClock")
+        .appendingPathComponent("ClockShelf")
 }
 
-/// Read every `.swift` file under the World Clock source directory and
+/// Read every `.swift` file under the Clock Shelf source directory and
 /// return them as `(filename, contents)` pairs.
-private func loadWorldClockSources() throws -> [(name: String, contents: String)] {
-    let directory = worldClockSourceDirectory()
+private func loadClockShelfSources() throws -> [(name: String, contents: String)] {
+    let directory = clockShelfSourceDirectory()
     let fileManager = FileManager.default
     let contents = try fileManager.contentsOfDirectory(
         at: directory,
@@ -83,15 +83,15 @@ private func loadWorldClockSources() throws -> [(name: String, contents: String)
 /// **Validates: Requirements 11.3, 11.4**
 ///
 /// Every `logIfVerbose(...)` and `DiagnosticsLogger.shared.log(...)`
-/// call site inside `Sources/MenuShelf/WorldClock/` interpolates only
+/// call site inside `Sources/MenuShelf/ClockShelf/` interpolates only
 /// structural information — clock counts, popover-visible booleans,
 /// schema versions, and UUIDs. None of the calls reference the
 /// privacy-sensitive expressions `clock.label`, `clock.emoji`, or any
 /// formatted-time helper output.
-@Test("Property 28: no logIfVerbose / DiagnosticsLogger.log call site interpolates clock.label, clock.emoji, or formatWorldClockTime")
+@Test("Property 28: no logIfVerbose / DiagnosticsLogger.log call site interpolates clock.label, clock.emoji, or formatClockShelfTime")
 func property28NoPIIInLogCallSites() throws {
-    let sources = try loadWorldClockSources()
-    #expect(!sources.isEmpty, "Expected to find at least one WorldClock source file")
+    let sources = try loadClockShelfSources()
+    #expect(!sources.isEmpty, "Expected to find at least one ClockShelf source file")
 
     // Patterns that would indicate a privacy-rail violation. Each
     // pattern is searched against the entire log-call line range —
@@ -105,7 +105,7 @@ func property28NoPIIInLogCallSites() throws {
         "clock?.label",
         "clock.emoji",
         "clock?.emoji",
-        "formatWorldClockTime(",
+        "formatClockShelfTime(",
         "formatPinnedTitle(",
         ".displayLabel",
         "displayedTimeString",
@@ -127,14 +127,14 @@ func property28NoPIIInLogCallSites() throws {
 
 @Test("Property 28: every logIfVerbose call uses structural-only message format")
 func property28LogCallsAreStructuralOnly() throws {
-    let sources = try loadWorldClockSources()
+    let sources = try loadClockShelfSources()
 
-    // The documented log call sites in WorldClockController.swift are:
-    //   1. "WorldClock pinned remove id=<UUID>"
-    //   2. "WorldClock pinned create id=<UUID>"
-    //   3. "WorldClock popover open"
-    //   4. "WorldClock popover close"
-    //   5. "WorldClock minute tick clocks=<Int> popover=<Bool>"
+    // The documented log call sites in ClockShelfController.swift are:
+    //   1. "ClockShelf pinned remove id=<UUID>"
+    //   2. "ClockShelf pinned create id=<UUID>"
+    //   3. "ClockShelf popover open"
+    //   4. "ClockShelf popover close"
+    //   5. "ClockShelf minute tick clocks=<Int> popover=<Bool>"
     //
     // Each of these is structural — UUIDs, counts, booleans only.
     // Verify by enumerating the logIfVerbose call sites and checking
@@ -147,23 +147,23 @@ func property28LogCallsAreStructuralOnly() throws {
     // This is a softer check (we don't enumerate every safe pattern),
     // so we just spot-check the controller file for the documented
     // log strings.
-    let controllerSource = sources.first { $0.name == "WorldClockController.swift" }
-    #expect(controllerSource != nil, "Expected to find WorldClockController.swift")
+    let controllerSource = sources.first { $0.name == "ClockShelfController.swift" }
+    #expect(controllerSource != nil, "Expected to find ClockShelfController.swift")
 
     if let controller = controllerSource {
         // Each documented log line should appear as a substring of
         // the source file (modulo Swift string interpolation syntax).
         let expectedFragments = [
-            "WorldClock pinned remove id=",
-            "WorldClock pinned create id=",
-            "WorldClock popover open",
-            "WorldClock popover close",
-            "WorldClock minute tick clocks=",
+            "ClockShelf pinned remove id=",
+            "ClockShelf pinned create id=",
+            "ClockShelf popover open",
+            "ClockShelf popover close",
+            "ClockShelf minute tick clocks=",
         ]
         for fragment in expectedFragments {
             #expect(
                 controller.contents.contains(fragment),
-                "Expected documented log fragment '\(fragment)' in WorldClockController.swift"
+                "Expected documented log fragment '\(fragment)' in ClockShelfController.swift"
             )
         }
     }
@@ -171,10 +171,10 @@ func property28LogCallsAreStructuralOnly() throws {
 
 @Test("Property 28: no DiagnosticsLogger.shared.log call site outside logIfVerbose interpolates user-controlled fields")
 func property28NoDirectLogPII() throws {
-    let sources = try loadWorldClockSources()
+    let sources = try loadClockShelfSources()
     for (name, contents) in sources {
         // Find direct `DiagnosticsLogger.shared.log(...)` calls.
-        // Production code in WorldClock/ should only call the helper
+        // Production code in ClockShelf/ should only call the helper
         // `logIfVerbose(...)` defined inside the controller — direct
         // calls would bypass the verbose-diagnostics gate. The only
         // exception is the controller's own helper definition; that
@@ -184,7 +184,7 @@ func property28NoDirectLogPII() throws {
             let snippet = String(contents[range])
             // Skip the helper definition site (it's the body of
             // `logIfVerbose(_:)`).
-            if name == "WorldClockController.swift",
+            if name == "ClockShelfController.swift",
                snippet.contains("DiagnosticsLogger.shared.log(message)") {
                 continue
             }
@@ -196,7 +196,7 @@ func property28NoDirectLogPII() throws {
                 "clock?.label",
                 "clock.emoji",
                 "clock?.emoji",
-                "formatWorldClockTime(",
+                "formatClockShelfTime(",
                 "formatPinnedTitle(",
             ]
             for forbidden in forbiddenSubstrings {
@@ -219,7 +219,7 @@ func property28NoDirectLogPII() throws {
 /// multi-line form
 ///
 ///     logIfVerbose(
-///         "WorldClock minute tick clocks=\(pinnedItems.count) "
+///         "ClockShelf minute tick clocks=\(pinnedItems.count) "
 ///         + "popover=\(panel?.isPresented == true)"
 ///     )
 ///
@@ -262,7 +262,7 @@ private func locateBalancedCallRanges(
             }
 
             // Skip occurrences inside multi-line block comments. This
-            // is approximate but sufficient for the WorldClock module
+            // is approximate but sufficient for the ClockShelf module
             // (no `/* ... */` blocks contain `logIfVerbose(` today).
             // We don't bother detecting them.
 

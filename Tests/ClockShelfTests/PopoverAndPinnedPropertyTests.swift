@@ -1,13 +1,13 @@
 //
 //  PopoverAndPinnedPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
-//  Property-based tests covering the World Clock popover row pipeline
+//  Property-based tests covering the Clock Shelf popover row pipeline
 //  and the pinned status item lifecycle:
 //
-//  - Property 13: `WorldClockPopoverState.rows` composition — given a
-//    `WorldClockSettings`, the row snapshot equals
-//    `clocks.filter(\.showInPopover).sorted(by: \.sortOrder).map(WorldClockRowModel.init)`.
+//  - Property 13: `ClockShelfPopoverState.rows` composition — given a
+//    `ClockShelfSettings`, the row snapshot equals
+//    `clocks.filter(\.showInPopover).sorted(by: \.sortOrder).map(ClockShelfRowModel.init)`.
 //  - Property 14: pinned status item set after `apply(settings:)` —
 //    `Set(pinnedItems.keys) == Set(settings.clocks.filter(\.pinToMenuBar).map(\.id))`
 //    and `pinnedOrder == ...sorted(by: \.sortOrder).map(\.id)`.
@@ -16,7 +16,7 @@
 //
 //  Why these tests are pure-data:
 //
-//  `WorldClockController.shared` cannot be exercised in this test
+//  `ClockShelfController.shared` cannot be exercised in this test
 //  process — it manipulates `NSStatusBar.system`, registers
 //  `KeyboardShortcuts.onKeyDown` callbacks, and reads from
 //  `AppContainer.shared.store`. Driving it from `swift test` would
@@ -25,7 +25,7 @@
 //  and `apply(settings:)` reconciler — both can be re-implemented as
 //  free functions over the input settings, and the resulting outputs
 //  asserted directly. The reproductions match the production bodies in
-//  `WorldClockController.swift` clause-for-clause.
+//  `ClockShelfController.swift` clause-for-clause.
 //
 
 import Foundation
@@ -34,15 +34,15 @@ import Testing
 
 // MARK: - Property 13: row composition
 
-/// Pure reproduction of `WorldClockController.rebuildRowSnapshot()`
+/// Pure reproduction of `ClockShelfController.rebuildRowSnapshot()`
 /// (without the side effect of writing to the controller's
 /// `popoverState.rows` field).
-private func composeRows(_ settings: WorldClockSettings) -> [WorldClockRowModel] {
+private func composeRows(_ settings: ClockShelfSettings) -> [ClockShelfRowModel] {
     let visible = settings.clocks
         .filter { $0.showInPopover }
         .sorted { $0.sortOrder < $1.sortOrder }
     return visible.map { clock in
-        WorldClockRowModel(
+        ClockShelfRowModel(
             id: clock.id,
             displayLabel: clock.displayLabel,
             emoji: clock.emoji,
@@ -55,12 +55,12 @@ private func composeRows(_ settings: WorldClockSettings) -> [WorldClockRowModel]
 /// **Validates: Requirements 3.4, 3.5, 3.6, 3.7**
 ///
 /// The row snapshot is exactly `clocks.filter(\.showInPopover).sorted(by:
-/// \.sortOrder).map(WorldClockRowModel.init)`. We verify the cardinality,
+/// \.sortOrder).map(ClockShelfRowModel.init)`. We verify the cardinality,
 /// the ordering, the per-row field mapping, and the `showInPopover`
 /// filter.
 @Test("Property 13: rows composition matches filter + sort + map of clocks")
 func property13RowComposition() {
-    forAll(arbitraryWorldClockSettings, iterations: 100) { settings in
+    forAll(arbitraryClockShelfSettings, iterations: 100) { settings in
         let rows = composeRows(settings)
 
         let expected = settings.clocks
@@ -94,8 +94,8 @@ func property13RowComposition() {
 
 @Test("Property 13: rows are sorted ascending by sortOrder")
 func property13RowsAscendingSortOrder() {
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = true
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = true
     let now = Date()
     settings.clocks = [
         ClockConfig(
@@ -139,8 +139,8 @@ func property13RowsAscendingSortOrder() {
 
 @Test("Property 13: empty clocks → empty rows")
 func property13EmptyClocks() {
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = true
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = true
     settings.clocks = []
     #expect(composeRows(settings).isEmpty)
 }
@@ -150,8 +150,8 @@ func property13EmptyClocks() {
 /// Pure reproduction of the controller's "desired pinned set" after
 /// `apply(settings:)`. Returns `(orderedIDs, idSet)` so tests can
 /// assert both the set membership and the deterministic order.
-private func composePinnedSet(_ settings: WorldClockSettings) -> (order: [UUID], ids: Set<UUID>) {
-    guard settings.enableWorldClock else {
+private func composePinnedSet(_ settings: ClockShelfSettings) -> (order: [UUID], ids: Set<UUID>) {
+    guard settings.enableClockShelf else {
         return ([], [])
     }
     let desired = settings.clocks
@@ -164,10 +164,10 @@ private func composePinnedSet(_ settings: WorldClockSettings) -> (order: [UUID],
 /// **Validates: Requirements 4.2, 4.11, 4.12**
 @Test("Property 14: pinned set matches clocks where pinToMenuBar == true")
 func property14PinnedSetMatchesFilter() {
-    forAll(arbitraryWorldClockSettings, iterations: 100) { settings in
+    forAll(arbitraryClockShelfSettings, iterations: 100) { settings in
         let (order, ids) = composePinnedSet(settings)
 
-        if settings.enableWorldClock == false {
+        if settings.enableClockShelf == false {
             // When the feature is disabled, every pinned item is torn
             // down and the order is empty.
             #expect(order.isEmpty)
@@ -205,8 +205,8 @@ func property14DisabledForcesEmptyPinned() {
         createdAt: now,
         updatedAt: now
     )
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = false
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = false
     settings.clocks = [pinnedClock]
 
     let (order, ids) = composePinnedSet(settings)
@@ -217,8 +217,8 @@ func property14DisabledForcesEmptyPinned() {
 @Test("Property 14: pinned order is stable across permutations of pinned clocks")
 func property14PinnedOrderTracksSortOrder() {
     let now = Date()
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = true
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = true
 
     // Three pinned clocks at sortOrder 2, 0, 1 — pinned order must be
     // emitted as the second, third, first slot in the input array.
@@ -234,8 +234,8 @@ func property14PinnedOrderTracksSortOrder() {
 @Test("Property 14: clocks where pinToMenuBar == false are excluded from pinned set")
 func property14UnpinnedExcluded() {
     let now = Date()
-    var settings = WorldClockSettings.defaults
-    settings.enableWorldClock = true
+    var settings = ClockShelfSettings.defaults
+    settings.enableClockShelf = true
 
     let pinned = ClockConfig(id: UUID(), timeZoneIdentifier: "UTC", label: nil, emoji: nil, pinToMenuBar: true, showInPopover: true, sortOrder: 0, createdAt: now, updatedAt: now)
     let unpinned = ClockConfig(id: UUID(), timeZoneIdentifier: "UTC", label: nil, emoji: nil, pinToMenuBar: false, showInPopover: true, sortOrder: 1, createdAt: now, updatedAt: now)
@@ -249,14 +249,14 @@ func property14UnpinnedExcluded() {
 
 // MARK: - Property 15: pinned title format never includes day-offset suffix
 
-/// Pure reproduction of `WorldClockController.formatPinnedTitle(...)`.
+/// Pure reproduction of `ClockShelfController.formatPinnedTitle(...)`.
 /// Used by the property test to assert the title shape directly.
 private func formatPinnedTitleFreeFunction(
     clock: ClockConfig,
     date: Date,
     use24HourTime: Bool
 ) -> String {
-    let timeString = formatWorldClockTime(
+    let timeString = formatClockShelfTime(
         date: date,
         timeZone: clock.resolvedTimeZone,
         use24HourTime: use24HourTime
@@ -286,7 +286,7 @@ func property15PinnedTitleShape() {
                 date: referenceDate,
                 use24HourTime: use24HourTime
             )
-            let timeString = formatWorldClockTime(
+            let timeString = formatClockShelfTime(
                 date: referenceDate,
                 timeZone: clock.resolvedTimeZone,
                 use24HourTime: use24HourTime
@@ -350,7 +350,7 @@ func property15EmptyEmojiTreatedAsAbsent() {
             date: referenceDate,
             use24HourTime: true
         )
-        let timeOnly = formatWorldClockTime(
+        let timeOnly = formatClockShelfTime(
             date: referenceDate,
             timeZone: TimeZone(identifier: "UTC")!,
             use24HourTime: true
@@ -380,7 +380,7 @@ func property15EmojiSpaceSeparator() {
     )
     #expect(title.hasPrefix("🌍 "))
     // Exactly one space between emoji and time.
-    let timeOnly = formatWorldClockTime(
+    let timeOnly = formatClockShelfTime(
         date: referenceDate,
         timeZone: TimeZone(identifier: "UTC")!,
         use24HourTime: true

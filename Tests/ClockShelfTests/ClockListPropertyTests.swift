@@ -1,16 +1,16 @@
 //
 //  ClockListPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Property-based tests covering the clock-list operations exposed by
 //  `PreferencesStore`:
 //
 //  - Property 7: `displayLabel` resolution.
 //  - Property 8: sort-order invariant under random sequences of
-//    `addWorldClock`, `removeWorldClock`, `moveWorldClock`,
-//    `updateWorldClock`.
+//    `addClockShelf`, `removeClockShelf`, `moveClockShelf`,
+//    `updateClockShelf`.
 //  - Property 9: Codable round-trip for `ClockConfig` and
-//    `WorldClockSettings`.
+//    `ClockShelfSettings`.
 //  - Property 10: invalid time zone identifiers always rejected
 //    (including empty/whitespace-only strings).
 //  - Property 11: 32-clock cap enforcement.
@@ -19,7 +19,7 @@
 //  is impractical to instantiate from a test target (it loads user
 //  settings from disk and may surface NSAlert on errors). The pure
 //  algorithmic body of each operation is reproduced here as a free
-//  function; the reproductions match `WorldClockPreferencesStore.swift`
+//  function; the reproductions match `ClockShelfPreferencesStore.swift`
 //  clause-for-clause.
 //
 
@@ -37,10 +37,10 @@ private enum ClockListRejection: Error, Equatable {
     case clockCapExceeded
 }
 
-/// Reproduce `PreferencesStore.addWorldClock(timeZoneIdentifier:)`.
+/// Reproduce `PreferencesStore.addClockShelf(timeZoneIdentifier:)`.
 /// Returns the appended clock on success or a rejection on failure.
-private func applyAddWorldClock(
-    _ wc: inout WorldClockSettings,
+private func applyAddClockShelf(
+    _ wc: inout ClockShelfSettings,
     timeZoneIdentifier: String
 ) -> Result<ClockConfig, ClockListRejection> {
     let trimmed = timeZoneIdentifier
@@ -67,17 +67,17 @@ private func applyAddWorldClock(
     return .success(clock)
 }
 
-/// Reproduce `PreferencesStore.removeWorldClock(id:)`.
-private func applyRemoveWorldClock(_ wc: inout WorldClockSettings, id: UUID) {
+/// Reproduce `PreferencesStore.removeClockShelf(id:)`.
+private func applyRemoveClockShelf(_ wc: inout ClockShelfSettings, id: UUID) {
     wc.clocks.removeAll { $0.id == id }
     for newIndex in wc.clocks.indices {
         wc.clocks[newIndex].sortOrder = newIndex
     }
 }
 
-/// Reproduce `PreferencesStore.moveWorldClock(from:to:)`.
-private func applyMoveWorldClock(
-    _ wc: inout WorldClockSettings,
+/// Reproduce `PreferencesStore.moveClockShelf(from:to:)`.
+private func applyMoveClockShelf(
+    _ wc: inout ClockShelfSettings,
     from source: IndexSet,
     to destination: Int
 ) {
@@ -88,8 +88,8 @@ private func applyMoveWorldClock(
     }
 }
 
-/// Reproduce `PreferencesStore.updateWorldClock(_:)`.
-private func applyUpdateWorldClock(_ wc: inout WorldClockSettings, _ clock: ClockConfig) {
+/// Reproduce `PreferencesStore.updateClockShelf(_:)`.
+private func applyUpdateClockShelf(_ wc: inout ClockShelfSettings, _ clock: ClockConfig) {
     guard let index = wc.clocks.firstIndex(where: { $0.id == clock.id }) else {
         return
     }
@@ -102,16 +102,16 @@ private func applyUpdateWorldClock(_ wc: inout WorldClockSettings, _ clock: Cloc
 
 /// Apply an arbitrary `ClockOperation` value to a settings snapshot.
 /// Operations whose targets do not exist in the current state degrade
-/// gracefully (matching production behaviour where `removeWorldClock`
-/// and `updateWorldClock` are no-ops for unknown ids and
-/// `moveWorldClock` clamps via SwiftUI's IndexSet semantics).
+/// gracefully (matching production behaviour where `removeClockShelf`
+/// and `updateClockShelf` are no-ops for unknown ids and
+/// `moveClockShelf` clamps via SwiftUI's IndexSet semantics).
 private func applyOperation(
-    _ wc: inout WorldClockSettings,
+    _ wc: inout ClockShelfSettings,
     _ op: ClockOperation
 ) {
     switch op {
     case .add(let tz):
-        _ = applyAddWorldClock(&wc, timeZoneIdentifier: tz)
+        _ = applyAddClockShelf(&wc, timeZoneIdentifier: tz)
     case .remove(let id):
         // Test harness operations carry randomly-minted UUIDs; the
         // realistic case is that they sometimes hit and sometimes
@@ -119,16 +119,16 @@ private func applyOperation(
         // mapping to an existing id with 50% probability.
         if !wc.clocks.isEmpty,
            let target = wc.clocks.randomElement()?.id {
-            applyRemoveWorldClock(&wc, id: id == UUID() ? target : id)
+            applyRemoveClockShelf(&wc, id: id == UUID() ? target : id)
             // Be safe: if the random id didn't match, still remove
             // a real one so the test exercises the sort renumber path.
             if !wc.clocks.contains(where: { $0.id == target }) {
                 // already removed above
             } else {
-                applyRemoveWorldClock(&wc, id: target)
+                applyRemoveClockShelf(&wc, id: target)
             }
         } else {
-            applyRemoveWorldClock(&wc, id: id)
+            applyRemoveClockShelf(&wc, id: id)
         }
     case .move(let from, let to):
         // Clamp source and destination to valid ranges so the move
@@ -140,7 +140,7 @@ private func applyOperation(
         })
         guard !safeFrom.isEmpty else { return }
         let safeTo = max(0, min(to, n))
-        applyMoveWorldClock(&wc, from: safeFrom, to: safeTo)
+        applyMoveClockShelf(&wc, from: safeFrom, to: safeTo)
     case .update(let template):
         // The harness emits arbitrary clock configs; only apply the
         // update when the id matches an existing clock so the test
@@ -150,7 +150,7 @@ private func applyOperation(
             let targetID = wc.clocks.randomElement()!.id
             var rebound = template
             rebound.id = targetID
-            applyUpdateWorldClock(&wc, rebound)
+            applyUpdateClockShelf(&wc, rebound)
         }
     }
 }
@@ -223,11 +223,11 @@ func property7DisplayLabelTotal() {
 @Test("Property 8: sortOrder remains contiguous and zero-based after any operation sequence")
 func property8SortOrderInvariant() {
     forAll(arbitraryOperationSequence, iterations: 100) { ops in
-        var wc = WorldClockSettings.defaults
+        var wc = ClockShelfSettings.defaults
         // Seed the list with a few clocks so remove/move have something to
         // operate on from the start.
         for tz in ["America/Los_Angeles", "Europe/Berlin", "Asia/Tokyo"] {
-            _ = applyAddWorldClock(&wc, timeZoneIdentifier: tz)
+            _ = applyAddClockShelf(&wc, timeZoneIdentifier: tz)
         }
         for op in ops {
             applyOperation(&wc, op)
@@ -245,7 +245,7 @@ func property8SortOrderInvariant() {
 @Test("Property 8: clocks count never exceeds 32 across operation sequences")
 func property8CountNeverExceedsCap() {
     forAll(arbitraryOperationSequence, iterations: 50) { ops in
-        var wc = WorldClockSettings.defaults
+        var wc = ClockShelfSettings.defaults
         for op in ops {
             applyOperation(&wc, op)
             #expect(wc.clocks.count <= 32)
@@ -289,9 +289,9 @@ func property9ClockConfigRoundTrip() throws {
     }
 }
 
-@Test("Property 9: WorldClockSettings round-trips through Codable")
-func property9WorldClockSettingsRoundTrip() throws {
-    forAll(arbitraryWorldClockSettings, iterations: 100) { wc in
+@Test("Property 9: ClockShelfSettings round-trips through Codable")
+func property9ClockShelfSettingsRoundTrip() throws {
+    forAll(arbitraryClockShelfSettings, iterations: 100) { wc in
         let normalized = roundTripSafeSettings(wc)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
@@ -299,7 +299,7 @@ func property9WorldClockSettingsRoundTrip() throws {
         decoder.dateDecodingStrategy = .secondsSince1970
         do {
             let data = try encoder.encode(normalized)
-            let decoded = try decoder.decode(WorldClockSettings.self, from: data)
+            let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
             #expect(decoded == normalized)
         } catch {
             Issue.record("Round-trip failed: \(error)")
@@ -314,7 +314,7 @@ private func roundTripSafeClock(_ clock: ClockConfig) -> ClockConfig {
     return c
 }
 
-private func roundTripSafeSettings(_ wc: WorldClockSettings) -> WorldClockSettings {
+private func roundTripSafeSettings(_ wc: ClockShelfSettings) -> ClockShelfSettings {
     var copy = wc
     copy.clocks = copy.clocks.map(roundTripSafeClock)
     return copy
@@ -327,8 +327,8 @@ private func roundTripSafeSettings(_ wc: WorldClockSettings) -> WorldClockSettin
 func property10EmptyAndWhitespaceRejected() {
     let cases: [String] = ["", " ", "    ", "\t", "\n", "\t\n  "]
     for tz in cases {
-        var wc = WorldClockSettings.defaults
-        let result = applyAddWorldClock(&wc, timeZoneIdentifier: tz)
+        var wc = ClockShelfSettings.defaults
+        let result = applyAddClockShelf(&wc, timeZoneIdentifier: tz)
         switch result {
         case .failure(.unknownTimeZoneIdentifier):
             // Expected.
@@ -351,8 +351,8 @@ func property10GarbageRejected() {
         "GMT-30",
     ]
     for tz in cases {
-        var wc = WorldClockSettings.defaults
-        let result = applyAddWorldClock(&wc, timeZoneIdentifier: tz)
+        var wc = ClockShelfSettings.defaults
+        let result = applyAddClockShelf(&wc, timeZoneIdentifier: tz)
         if case .success = result {
             Issue.record("Expected rejection for identifier '\(tz)'")
         }
@@ -363,8 +363,8 @@ func property10GarbageRejected() {
 @Test("Property 10: any identifier outside knownTimeZoneIdentifiers is rejected")
 func property10ArbitraryGarbageRejected() {
     forAll(arbitraryGarbageIdentifier, iterations: 100) { tz in
-        var wc = WorldClockSettings.defaults
-        let result = applyAddWorldClock(&wc, timeZoneIdentifier: tz)
+        var wc = ClockShelfSettings.defaults
+        let result = applyAddClockShelf(&wc, timeZoneIdentifier: tz)
         if case .success = result {
             // Be defensive: only fail if the trimmed input is not in
             // the known set; the generator can occasionally collide
@@ -401,8 +401,8 @@ private let arbitraryGarbageIdentifier: AnyGenerator<String> = AnyGenerator { rn
 
 @Test("Property 10: trimming applies before validation — leading/trailing whitespace is acceptable on real ids")
 func property10TrimsBeforeValidation() {
-    var wc = WorldClockSettings.defaults
-    let result = applyAddWorldClock(&wc, timeZoneIdentifier: "  America/Los_Angeles  ")
+    var wc = ClockShelfSettings.defaults
+    let result = applyAddClockShelf(&wc, timeZoneIdentifier: "  America/Los_Angeles  ")
     if case .success(let clock) = result {
         #expect(clock.timeZoneIdentifier == "America/Los_Angeles")
         #expect(wc.clocks.count == 1)
@@ -416,17 +416,17 @@ func property10TrimsBeforeValidation() {
 /// **Validates: Requirement 2.8**
 @Test("Property 11: adding a 33rd clock is rejected")
 func property11CapEnforcement() {
-    var wc = WorldClockSettings.defaults
+    var wc = ClockShelfSettings.defaults
     // Fill to capacity.
     for _ in 0..<32 {
-        let result = applyAddWorldClock(&wc, timeZoneIdentifier: "Asia/Tokyo")
+        let result = applyAddClockShelf(&wc, timeZoneIdentifier: "Asia/Tokyo")
         if case .failure = result {
             Issue.record("Expected first 32 additions to succeed")
         }
     }
     #expect(wc.clocks.count == 32)
     // 33rd is rejected.
-    let result = applyAddWorldClock(&wc, timeZoneIdentifier: "Europe/London")
+    let result = applyAddClockShelf(&wc, timeZoneIdentifier: "Europe/London")
     if case .failure(.clockCapExceeded) = result {
         // Expected.
     } else {
@@ -437,22 +437,22 @@ func property11CapEnforcement() {
 
 @Test("Property 11: cap holds across removals and re-adds")
 func property11CapAfterChurn() {
-    var wc = WorldClockSettings.defaults
+    var wc = ClockShelfSettings.defaults
     for _ in 0..<32 {
-        _ = applyAddWorldClock(&wc, timeZoneIdentifier: "America/New_York")
+        _ = applyAddClockShelf(&wc, timeZoneIdentifier: "America/New_York")
     }
     #expect(wc.clocks.count == 32)
 
     // Remove 5 clocks.
     let toRemove = Array(wc.clocks.prefix(5)).map(\.id)
     for id in toRemove {
-        applyRemoveWorldClock(&wc, id: id)
+        applyRemoveClockShelf(&wc, id: id)
     }
     #expect(wc.clocks.count == 27)
 
     // Add 5 back — should succeed.
     for _ in 0..<5 {
-        let result = applyAddWorldClock(&wc, timeZoneIdentifier: "Pacific/Honolulu")
+        let result = applyAddClockShelf(&wc, timeZoneIdentifier: "Pacific/Honolulu")
         if case .failure = result {
             Issue.record("Add after removal should succeed when count < 32")
         }
@@ -460,7 +460,7 @@ func property11CapAfterChurn() {
     #expect(wc.clocks.count == 32)
 
     // 33rd is still rejected.
-    let result = applyAddWorldClock(&wc, timeZoneIdentifier: "GMT")
+    let result = applyAddClockShelf(&wc, timeZoneIdentifier: "GMT")
     if case .failure(.clockCapExceeded) = result {
         // Expected.
     } else {
@@ -472,10 +472,10 @@ func property11CapAfterChurn() {
 
 @Test("Requirement 2.10: same time zone identifier may appear multiple times")
 func req210SameTimezoneAllowedMultipleTimes() {
-    var wc = WorldClockSettings.defaults
-    _ = applyAddWorldClock(&wc, timeZoneIdentifier: "America/New_York")
-    _ = applyAddWorldClock(&wc, timeZoneIdentifier: "America/New_York")
-    _ = applyAddWorldClock(&wc, timeZoneIdentifier: "America/New_York")
+    var wc = ClockShelfSettings.defaults
+    _ = applyAddClockShelf(&wc, timeZoneIdentifier: "America/New_York")
+    _ = applyAddClockShelf(&wc, timeZoneIdentifier: "America/New_York")
+    _ = applyAddClockShelf(&wc, timeZoneIdentifier: "America/New_York")
     #expect(wc.clocks.count == 3)
     // ids are distinct.
     let ids = Set(wc.clocks.map(\.id))

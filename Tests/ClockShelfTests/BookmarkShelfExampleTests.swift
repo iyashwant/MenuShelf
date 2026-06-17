@@ -1,6 +1,6 @@
 //
 //  BookmarkShelfExampleTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
 //  Example-based tests for deterministic configuration and UI/wiring
 //  facts in the Bookmark Shelf spec. Each `@Test` covers one criterion
@@ -17,9 +17,9 @@ import Testing
 
 // MARK: - ModuleKind
 
-@Test("ModuleKind.allCases declared in order [.browserFlip, .clipboardShelf, .worldClock, .bookmarkShelf]")
+@Test("ModuleKind.allCases declared in order [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf]")
 func moduleKindAllCasesOrder() {
-    #expect(ModuleKind.allCases == [.browserFlip, .clipboardShelf, .worldClock, .bookmarkShelf])
+    #expect(ModuleKind.allCases == [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf])
 }
 
 @Test("ModuleKind.bookmarkShelf default symbol/title/bondLabel")

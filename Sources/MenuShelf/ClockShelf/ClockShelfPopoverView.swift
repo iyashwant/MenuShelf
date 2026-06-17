@@ -1,8 +1,8 @@
 //
-//  WorldClockPopoverView.swift
+//  ClockShelfPopoverView.swift
 //  MenuShelf
 //
-//  SwiftUI tree for the World Clock popover. Composed of:
+//  SwiftUI tree for the Clock Shelf popover. Composed of:
 //
 //  - `ClockListSection`: vertical list of `ClockRowView`s, one per
 //    clock with `showInPopover == true`.
@@ -10,7 +10,7 @@
 //  - `OverflowMenuButton`: trailing "…" menu hosting Add Time Zone…,
 //    Open Settings…, and Quit MenuShelf.
 //
-//  The view is driven by a `WorldClockPopoverState` instance that the
+//  The view is driven by a `ClockShelfPopoverState` instance that the
 //  controller owns for the lifetime of the panel. State propagates
 //  through `@Observable`'s implicit dependency tracking, so a row
 //  redraws whenever `state.timeTravelOffset` or `state.tickToken`
@@ -24,17 +24,17 @@ import SwiftUI
 
 /// Root popover view. Owns the layout of the four-part popover surface
 /// (list, divider, time-travel section, overflow menu).
-struct WorldClockPopoverView: View {
+struct ClockShelfPopoverView: View {
     /// Observed `@Observable` state so SwiftUI redraws when
     /// `timeTravelOffset` (slider drag), `tickToken` (minute tick), or
     /// `rows` (settings change) flip.
-    @Bindable var state: WorldClockPopoverState
+    @Bindable var state: ClockShelfPopoverState
 
-    /// Use24HourTime is read from the resolved `WorldClockSettings` on
+    /// Use24HourTime is read from the resolved `ClockShelfSettings` on
     /// every render so toggling the appearance picker takes effect on
     /// the next minute tick without a popover restart.
     private var use24HourTime: Bool {
-        AppContainer.shared.store.settings.resolvedWorldClock.use24HourTime
+        AppContainer.shared.store.settings.resolvedClockShelf.use24HourTime
     }
 
     var body: some View {
@@ -67,7 +67,7 @@ struct WorldClockPopoverView: View {
 /// snapshot is empty so an "empty" popover collapses to just the
 /// time-travel and overflow controls.
 private struct ClockListSection: View {
-    @Bindable var state: WorldClockPopoverState
+    @Bindable var state: ClockShelfPopoverState
     let use24HourTime: Bool
 
     var body: some View {
@@ -106,8 +106,8 @@ private struct ClockListSection: View {
 /// and observes `state.timeTravelOffset` and `state.tickToken` so the
 /// time string redraws on slider moves and minute ticks.
 private struct ClockRowView: View {
-    let row: WorldClockRowModel
-    @Bindable var state: WorldClockPopoverState
+    let row: ClockShelfRowModel
+    @Bindable var state: ClockShelfPopoverState
     let use24HourTime: Bool
 
     var body: some View {
@@ -147,7 +147,7 @@ private struct ClockRowView: View {
         // observer registration.
         _ = state.tickToken
         let projected = Date().addingTimeInterval(state.timeTravelOffset)
-        return formatWorldClockTime(
+        return formatClockShelfTime(
             date: projected,
             timeZone: row.timeZone,
             use24HourTime: use24HourTime
@@ -191,7 +191,7 @@ private struct ClockRowView: View {
 /// order: Copy Time, Copy Time Zone Identifier, Edit…, Pin/Unpin,
 /// Remove.
 private struct ClockRowContextMenu: View {
-    let row: WorldClockRowModel
+    let row: ClockShelfRowModel
     let displayedTimeString: String
 
     private var store: PreferencesStore { AppContainer.shared.store }
@@ -201,7 +201,7 @@ private struct ClockRowContextMenu: View {
     /// captures `id` but not the live pin state, which can change while
     /// the context menu is open (e.g. via the settings pane).
     private var liveClock: ClockConfig? {
-        store.settings.resolvedWorldClock.clocks.first { $0.id == row.id }
+        store.settings.resolvedClockShelf.clocks.first { $0.id == row.id }
     }
 
     var body: some View {
@@ -218,16 +218,16 @@ private struct ClockRowContextMenu: View {
         }
 
         Button("Edit…") {
-            // Open the settings window focused on the World Clock pane
+            // Open the settings window focused on the Clock Shelf pane
             // and scroll the Clocks list to this row. The
             // `scrollToClockID` parameter on
             // `SettingsWindowController.show(...)` posts the
-            // `.menuShelfScrollToWorldClock` notification carrying the
-            // target UUID; `WorldClockSettingsView` observes that
+            // `.menuShelfScrollToClockShelf` notification carrying the
+            // target UUID; `ClockShelfSettingsView` observes that
             // notification and drives a `ScrollViewReader` to the
             // matching row.
             AppContainer.shared.settingsWindowController.show(
-                focusWorldClock: true,
+                focusClockShelf: true,
                 scrollToClockID: row.id
             )
         }
@@ -236,14 +236,14 @@ private struct ClockRowContextMenu: View {
             Button(live.pinToMenuBar ? "Unpin from Menu Bar" : "Pin to Menu Bar") {
                 var updated = live
                 updated.pinToMenuBar.toggle()
-                store.updateWorldClock(updated)
+                store.updateClockShelf(updated)
             }
         }
 
         Divider()
 
         Button("Remove Clock", role: .destructive) {
-            store.removeWorldClock(id: row.id)
+            store.removeClockShelf(id: row.id)
         }
     }
 }
@@ -252,17 +252,17 @@ private struct ClockRowContextMenu: View {
 
 /// Slider (-24h…+24h, 15-minute steps), readout, and Reset button.
 /// The slider's `offsetBinding` flows through
-/// `WorldClockController.shared.setTimeTravelOffset(_:)` so the
+/// `ClockShelfController.shared.setTimeTravelOffset(_:)` so the
 /// controller's 100ms coalescer governs redraw cadence (Requirements
 /// 5.1, 5.2, 5.3, 5.4, 5.5).
 private struct TimeTravelSection: View {
-    @Bindable var state: WorldClockPopoverState
+    @Bindable var state: ClockShelfPopoverState
 
     private var offsetBinding: Binding<Double> {
         Binding(
             get: { state.timeTravelOffset },
             set: { newValue in
-                WorldClockController.shared.setTimeTravelOffset(newValue)
+                ClockShelfController.shared.setTimeTravelOffset(newValue)
             }
         )
     }
@@ -295,7 +295,7 @@ private struct TimeTravelSection: View {
                 .accessibilityLabel("Time Travel")
 
                 Button("Reset") {
-                    WorldClockController.shared.resetTimeTravelOffset()
+                    ClockShelfController.shared.resetTimeTravelOffset()
                 }
                 .buttonStyle(.borderless)
                 .disabled(state.timeTravelOffset == 0)
@@ -338,7 +338,7 @@ private struct OverflowMenuButton: View {
             .keyboardShortcut("+", modifiers: .command)
 
             Button("Open Settings…") {
-                AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
+                AppContainer.shared.settingsWindowController.show(focusClockShelf: true)
             }
 
             Divider()
@@ -361,6 +361,6 @@ private struct OverflowMenuButton: View {
     /// minimal. A future revision could surface a dedicated sheet
     /// directly inside the popover.
     private func openAddTimeZone() {
-        AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
+        AppContainer.shared.settingsWindowController.show(focusClockShelf: true)
     }
 }

@@ -1,39 +1,39 @@
 //
-//  WorldClockModels.swift
+//  ClockShelfModels.swift
 //  MenuShelf
 //
-//  Standalone World Clock data models. The fields that hook them into the
-//  broader settings tree (`AppSettings.worldClock` and
-//  `MenuViewConfig.worldClockItem`) stay inline in `AppModels.swift` since
+//  Standalone Clock Shelf data models. The fields that hook them into the
+//  broader settings tree (`AppSettings.clockShelf` and
+//  `MenuViewConfig.clockShelfItem`) stay inline in `AppModels.swift` since
 //  they are properties of those host structs.
 //
 
 import Foundation
 
-// MARK: - WorldClockMenuItemConfig
+// MARK: - ClockShelfMenuItemConfig
 
-/// A single World Clock entry inside a `MenuViewConfig`. Mirrors
+/// A single Clock Shelf entry inside a `MenuViewConfig`. Mirrors
 /// `BrowserFlipMenuItemConfig` and `ClipboardShelfMenuItemConfig`
 /// field-for-field so the existing menu/render patterns transplant cleanly.
-struct WorldClockMenuItemConfig: Codable, Identifiable, Equatable {
+struct ClockShelfMenuItemConfig: Codable, Identifiable, Equatable {
     var id: UUID
     var titleOverride: String?
     var sectionName: String?
     var createdAt: Date
     var updatedAt: Date
 
-    /// Returns the trimmed override when non-empty, or "World Clock".
+    /// Returns the trimmed override when non-empty, or "Clock Shelf".
     var displayTitle: String {
         if let trimmed = titleOverride?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !trimmed.isEmpty {
             return trimmed
         }
-        return "World Clock"
+        return "Clock Shelf"
     }
 
-    static func make() -> WorldClockMenuItemConfig {
-        WorldClockMenuItemConfig(
+    static func make() -> ClockShelfMenuItemConfig {
+        ClockShelfMenuItemConfig(
             id: UUID(),
             titleOverride: nil,
             sectionName: nil,
@@ -43,12 +43,12 @@ struct WorldClockMenuItemConfig: Codable, Identifiable, Equatable {
     }
 }
 
-// MARK: - WorldClockPresentationMode
+// MARK: - ClockShelfPresentationMode
 
-/// Selector controlling whether a `WorldClockMenuItemConfig` renders as a
+/// Selector controlling whether a `ClockShelfMenuItemConfig` renders as a
 /// single click target opening the popover, or as a parent `NSMenuItem`
 /// whose `submenu` lists the configured clocks inline.
-enum WorldClockPresentationMode: String, Codable, CaseIterable, Identifiable {
+enum ClockShelfPresentationMode: String, Codable, CaseIterable, Identifiable {
     case popover
     case submenu
 
@@ -101,12 +101,12 @@ struct ClockConfig: Codable, Identifiable, Equatable {
     }
 }
 
-// MARK: - WorldClockSettings
+// MARK: - ClockShelfSettings
 
-/// Top-level World Clock settings persisted to MenuShelf's `settings.json`
-/// under `AppSettings.worldClock`.
-struct WorldClockSettings: Codable, Equatable {
-    var enableWorldClock: Bool
+/// Top-level Clock Shelf settings persisted to MenuShelf's `settings.json`
+/// under `AppSettings.clockShelf`.
+struct ClockShelfSettings: Codable, Equatable {
+    var enableClockShelf: Bool
     var clocks: [ClockConfig]
     var use24HourTime: Bool
     var popoverTextSize: Int
@@ -114,10 +114,10 @@ struct WorldClockSettings: Codable, Equatable {
     /// Optional so older settings.json (pre-Requirement 3.5) decodes
     /// cleanly via Swift's synthesized `Codable`. UI code reads through
     /// `resolvedPresentationMode` to get the non-optional default.
-    var presentationMode: WorldClockPresentationMode?
+    var presentationMode: ClockShelfPresentationMode?
 
-    static let defaults = WorldClockSettings(
-        enableWorldClock: false,
+    static let defaults = ClockShelfSettings(
+        enableClockShelf: false,
         clocks: [],
         use24HourTime: false,
         popoverTextSize: 13,
@@ -133,7 +133,7 @@ struct WorldClockSettings: Codable, Equatable {
     /// Resolves the presentation mode, falling back to `.popover` for
     /// settings.json predating Requirement 3.5 (where the field is
     /// missing) and for any future writes that explicitly nil the field.
-    var resolvedPresentationMode: WorldClockPresentationMode {
+    var resolvedPresentationMode: ClockShelfPresentationMode {
         presentationMode ?? .popover
     }
 }

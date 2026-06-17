@@ -1,8 +1,8 @@
 //
-//  WorldClockMenuBuilder.swift
+//  ClockShelfMenuBuilder.swift
 //  MenuShelf
 //
-//  Inline menu view item that surfaces the World Clock popover (or an
+//  Inline menu view item that surfaces the Clock Shelf popover (or an
 //  inline submenu of clocks, depending on `presentationMode`) directly
 //  from a MenuShelf menu view. Mirrors `ClipboardShelfMenuBuilder` so the
 //  rest of the menu code stays free of world-clock-specific concerns.
@@ -11,15 +11,15 @@
 import AppKit
 import Foundation
 
-// MARK: - WorldClockMenuDelegate
+// MARK: - ClockShelfMenuDelegate
 
-/// Lazy-populates a World Clock submenu when it is about to open so the
+/// Lazy-populates a Clock Shelf submenu when it is about to open so the
 /// inline clock list reflects the latest minute, the current pinned /
 /// visible flags, and the current sort order without needing a status
 /// item rebuild. Co-located with the builder extension so the rendering
 /// logic and the lazy-populate logic stay in one place, mirroring the
 /// `BrowserFlipMenuDelegate` / `BrowserFlipMenuBuilder` pairing.
-final class WorldClockMenuDelegate: NSObject, NSMenuDelegate {
+final class ClockShelfMenuDelegate: NSObject, NSMenuDelegate {
     weak var builder: MenuBuilder?
     let menuViewID: UUID
 
@@ -29,20 +29,20 @@ final class WorldClockMenuDelegate: NSObject, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        builder?.populateWorldClockSubmenu(menu, menuViewID: menuViewID)
+        builder?.populateClockShelfSubmenu(menu, menuViewID: menuViewID)
     }
 }
 
 // MARK: - MenuBuilder extension
 
 extension MenuBuilder {
-    /// Append a World Clock entry to `menu`. In `.popover` mode the
-    /// entry is a single click target dispatching `.openWorldClock`. In
+    /// Append a Clock Shelf entry to `menu`. In `.popover` mode the
+    /// entry is a single click target dispatching `.openClockShelf`. In
     /// `.submenu` mode the entry is a parent `NSMenuItem` whose
-    /// `submenu` is populated lazily by `WorldClockMenuDelegate`
+    /// `submenu` is populated lazily by `ClockShelfMenuDelegate`
     /// (Requirements 1.6, 1.7, 1.12, 1.13, 1.14, 3.5.3, 3.5.4).
-    func addWorldClockMenuItem(
-        _ config: WorldClockMenuItemConfig,
+    func addClockShelfMenuItem(
+        _ config: ClockShelfMenuItemConfig,
         to menu: NSMenu,
         currentSection: inout String?,
         menuViewID: UUID,
@@ -64,7 +64,7 @@ extension MenuBuilder {
         }
 
         let presentationMode = store.settings
-            .resolvedWorldClock.resolvedPresentationMode
+            .resolvedClockShelf.resolvedPresentationMode
 
         // SF Symbol `clock` is the documented icon, with a fallback to
         // `clock.fill` per Requirements 1.6 / 1.7 in case the primary
@@ -75,17 +75,17 @@ extension MenuBuilder {
         switch presentationMode {
         case .popover:
             // Requirement 1.6 — single click target dispatching
-            // `.openWorldClock`. Requirement 1.13 — when the feature is
+            // `.openClockShelf`. Requirement 1.13 — when the feature is
             // disabled, render the item but mark its tooltip so the
             // click flow lands in settings rather than the popover.
             let item = actionItem(
                 config.displayTitle,
-                kind: .openWorldClock,
+                kind: .openClockShelf,
                 menuViewID: menuViewID
             )
             item.image = icon
             if !enabled {
-                item.toolTip = "World Clock is disabled in MenuShelf settings."
+                item.toolTip = "Clock Shelf is disabled in MenuShelf settings."
             }
             menu.addItem(item)
 
@@ -95,8 +95,8 @@ extension MenuBuilder {
             // delegate so the clock list is rebuilt every time the
             // submenu opens. The parent item itself does not dispatch
             // an action — clicks open the submenu, the trailing items
-            // dispatch the actual `.openWorldClock` and
-            // `.openWorldClockSettings` actions.
+            // dispatch the actual `.openClockShelf` and
+            // `.openClockShelfSettings` actions.
             let parent = NSMenuItem(
                 title: config.displayTitle,
                 action: nil,
@@ -108,7 +108,7 @@ extension MenuBuilder {
             let submenu = NSMenu(title: config.displayTitle)
             submenu.autoenablesItems = false
 
-            let delegate = WorldClockMenuDelegate(
+            let delegate = ClockShelfMenuDelegate(
                 builder: self,
                 menuViewID: menuViewID
             )
@@ -122,26 +122,26 @@ extension MenuBuilder {
         }
     }
 
-    /// Lazy populate path used by `WorldClockMenuDelegate`. Re-reads
-    /// the latest `WorldClockSettings` on every open so the inline
+    /// Lazy populate path used by `ClockShelfMenuDelegate`. Re-reads
+    /// the latest `ClockShelfSettings` on every open so the inline
     /// times reflect the current minute, the current pinned/visible
     /// flags, and the current sort order without needing a status item
     /// rebuild (Requirements 1.8, 1.9, 1.10, 1.11, 3.5.4, 3.5.5).
-    func populateWorldClockSubmenu(_ menu: NSMenu, menuViewID: UUID) {
+    func populateClockShelfSubmenu(_ menu: NSMenu, menuViewID: UUID) {
         menu.removeAllItems()
         menu.autoenablesItems = false
 
-        let settings = store.settings.resolvedWorldClock
+        let settings = store.settings.resolvedClockShelf
 
-        if !settings.enableWorldClock {
+        if !settings.enableClockShelf {
             // Requirement 1.10 — feature-disabled fallback: a single
-            // disabled "World Clock is disabled" item, a separator,
+            // disabled "Clock Shelf is disabled" item, a separator,
             // and the trailing enabled "Open Settings…" action.
-            addDisabled("World Clock is disabled", to: menu)
+            addDisabled("Clock Shelf is disabled", to: menu)
             menu.addItem(.separator())
             menu.addItem(actionItem(
                 "Open Settings…",
-                kind: .openWorldClockSettings
+                kind: .openClockShelfSettings
             ))
             return
         }
@@ -157,7 +157,7 @@ extension MenuBuilder {
         // travelled time).
         let now = Date()
         for clock in visible {
-            let timeString = formatWorldClockTime(
+            let timeString = formatClockShelfTime(
                 date: now,
                 timeZone: clock.resolvedTimeZone,
                 use24HourTime: settings.use24HourTime
@@ -184,18 +184,18 @@ extension MenuBuilder {
         }
 
         // Requirement 1.9 — trailing actions: separator, then
-        // "Open World Clock…" (`.openWorldClock`) carrying the
+        // "Open Clock Shelf…" (`.openClockShelf`) carrying the
         // originating `menuViewID` so the controller can resolve the
-        // anchor, then "Open Settings…" (`.openWorldClockSettings`).
+        // anchor, then "Open Settings…" (`.openClockShelfSettings`).
         menu.addItem(.separator())
         menu.addItem(actionItem(
-            "Open World Clock…",
-            kind: .openWorldClock,
+            "Open Clock Shelf…",
+            kind: .openClockShelf,
             menuViewID: menuViewID
         ))
         menu.addItem(actionItem(
             "Open Settings…",
-            kind: .openWorldClockSettings
+            kind: .openClockShelfSettings
         ))
     }
 }

@@ -1,8 +1,8 @@
 //
 //  TimeTravelPropertyTests.swift
-//  WorldClockTests
+//  ClockShelfTests
 //
-//  Property-based tests covering the World Clock time-travel feature:
+//  Property-based tests covering the Clock Shelf time-travel feature:
 //  offset quantization and clamping, reset/dismiss zeroing, the
 //  "Now"/"+H:MM"/"-H:MM" readout shape, and the per-row day-offset
 //  indicator.
@@ -80,13 +80,13 @@ func property18BoundaryCases() {
 /// **Validates: Requirements 5.5, 5.6, 5.7**
 ///
 /// Property 19 has three components:
-/// 1. A fresh `WorldClockPopoverState` starts with `timeTravelOffset == 0`.
+/// 1. A fresh `ClockShelfPopoverState` starts with `timeTravelOffset == 0`.
 /// 2. Resetting the offset to `0` always lands at `0` regardless of the
 ///    pre-state.
 /// 3. After quantization, the readout for offset `0` is `"Now"`.
 @Test("Property 19: fresh popover state starts at offset 0")
 func property19FreshControllerStartsAtZero() {
-    let state = WorldClockPopoverState()
+    let state = ClockShelfPopoverState()
     #expect(state.timeTravelOffset == 0)
     #expect(state.tickToken == 0)
     #expect(state.rows.isEmpty)
@@ -96,7 +96,7 @@ func property19FreshControllerStartsAtZero() {
 @Test("Property 19: assigning zero to any pre-state lands at zero")
 func property19ResetLandsAtZero() {
     forAll(arbitraryOffset) { preState in
-        let state = WorldClockPopoverState()
+        let state = ClockShelfPopoverState()
         state.timeTravelOffset = quantizeAndClampOffset(preState)
         // Simulate `resetTimeTravelOffset()`.
         state.timeTravelOffset = 0

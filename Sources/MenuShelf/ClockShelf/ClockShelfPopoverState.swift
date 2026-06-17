@@ -1,8 +1,8 @@
 //
-//  WorldClockPopoverState.swift
+//  ClockShelfPopoverState.swift
 //  MenuShelf
 //
-//  In-memory `@Observable` backing for the World Clock popover SwiftUI
+//  In-memory `@Observable` backing for the Clock Shelf popover SwiftUI
 //  tree. Holds the quantized `Time_Travel_Offset`, the row snapshot, and
 //  the minute-tick token. Reset on popover dismissal so closing always
 //  drops back to live time.
@@ -11,18 +11,18 @@
 import Foundation
 import Observation
 
-// MARK: - WorldClockRowModel
+// MARK: - ClockShelfRowModel
 
 /// Render-ready snapshot of a single clock row in the popover. Built from
-/// `ClockConfig` by `WorldClockController` whenever the visible row set
+/// `ClockConfig` by `ClockShelfController` whenever the visible row set
 /// changes; the SwiftUI tree only ever reads these resolved values so
 /// formatter work stays out of view bodies.
 ///
 /// `id` matches the originating `ClockConfig.id` so the SwiftUI `ForEach`
 /// keeps stable identity across reorders, and so context-menu actions
 /// (Edit…, Pin/Unpin, Remove) can resolve the source `ClockConfig`
-/// through `store.settings.resolvedWorldClock.clocks.first(where:)`.
-struct WorldClockRowModel: Identifiable, Equatable {
+/// through `store.settings.resolvedClockShelf.clocks.first(where:)`.
+struct ClockShelfRowModel: Identifiable, Equatable {
     let id: UUID
     let displayLabel: String
     let emoji: String?
@@ -30,17 +30,17 @@ struct WorldClockRowModel: Identifiable, Equatable {
     let showInPopover: Bool
 }
 
-// MARK: - WorldClockPopoverState
+// MARK: - ClockShelfPopoverState
 
-/// Observable state container driving `WorldClockPopoverView`. The
+/// Observable state container driving `ClockShelfPopoverView`. The
 /// controller owns one instance for the lifetime of the popover panel
 /// and resets `timeTravelOffset` on `hidePopover()`/`onClose` so the
 /// popover always reopens at live time (Requirements 5.6, 5.7).
 @Observable
-final class WorldClockPopoverState {
+final class ClockShelfPopoverState {
     /// Shared time-travel offset applied to every visible row. Quantized
     /// to multiples of 900 seconds and clamped to `[-86400, +86400]` by
-    /// `WorldClockController.setTimeTravelOffset(_:)` before assignment,
+    /// `ClockShelfController.setTimeTravelOffset(_:)` before assignment,
     /// so SwiftUI bindings always observe an in-spec value.
     var timeTravelOffset: TimeInterval = 0
 
@@ -50,12 +50,12 @@ final class WorldClockPopoverState {
     var tickToken: Int = 0
 
     /// Snapshot of the rows the popover should render this frame. Built
-    /// by `WorldClockController` from the resolved `ClockConfig` list
+    /// by `ClockShelfController` from the resolved `ClockConfig` list
     /// filtered by `showInPopover` and sorted ascending by `sortOrder`.
-    var rows: [WorldClockRowModel] = []
+    var rows: [ClockShelfRowModel] = []
 
     /// Identifier the settings flow may pass through
-    /// `SettingsWindowController.show(focusWorldClock:scrollToClockID:)`
+    /// `SettingsWindowController.show(focusClockShelf:scrollToClockID:)`
     /// when "Edit…" is invoked from a row context menu. `nil` when no
     /// row-targeted settings deep-link is pending.
     var focusedClockID: UUID?
