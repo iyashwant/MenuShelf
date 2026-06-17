@@ -556,7 +556,7 @@ struct AppSpecificShortcutGroup: Codable, Identifiable, Equatable {
 }
 
 /// A single Bookmark Shelf entry inside a `MenuViewConfig`. Mirrors
-/// `ClipboardShelfMenuItemConfig` and `WorldClockMenuItemConfig`
+/// `ClipboardShelfMenuItemConfig` and `ClockShelfMenuItemConfig`
 /// field-for-field so the existing menu/render patterns transplant cleanly.
 struct BookmarkShelfMenuItemConfig: Codable, Identifiable, Equatable {
     var id: UUID
@@ -690,7 +690,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var appleScriptItems: [AppleScriptMenuItemConfig]?
     var browserFlipItem: BrowserFlipMenuItemConfig?
     var clipboardShelfItem: ClipboardShelfMenuItemConfig?
-    var worldClockItem: WorldClockMenuItemConfig?
+    var clockShelfItem: ClockShelfMenuItemConfig?
     var bookmarkShelfItem: BookmarkShelfMenuItemConfig?
     var bookmarkContentItems: [BookmarkContentItemConfig]?
     var createdAt: Date
@@ -725,7 +725,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             appleScriptItems: [],
             browserFlipItem: nil,
             clipboardShelfItem: nil,
-            worldClockItem: nil,
+            clockShelfItem: nil,
             bookmarkShelfItem: nil,
             bookmarkContentItems: nil,
             createdAt: Date(),
@@ -737,8 +737,9 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
 enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
     case browserFlip
     case clipboardShelf
-    case worldClock
+    case clockShelf
     case bookmarkShelf
+    case caffeineShelf
 
     var id: String { rawValue }
 
@@ -747,8 +748,9 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
         switch self {
         case .browserFlip: "globe"
         case .clipboardShelf: "clipboard"
-        case .worldClock: "clock"
+        case .clockShelf: "clock"
         case .bookmarkShelf: "bookmark"
+        case .caffeineShelf: "cup.and.saucer"
         }
     }
 
@@ -757,8 +759,9 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
         switch self {
         case .browserFlip: "Browser Flip"
         case .clipboardShelf: "Clipboard Shelf"
-        case .worldClock: "World Clock"
+        case .clockShelf: "Clock Shelf"
         case .bookmarkShelf: "Bookmark Shelf"
+        case .caffeineShelf: "CaffeineShelf"
         }
     }
 
@@ -824,9 +827,10 @@ struct AppSettings: Codable, Equatable {
     var appleScripts: [AppleScriptConfig]?
     var browserFlip: BrowserFlipSettings?
     var clipboardShelf: ClipboardShelfSettings?
-    var worldClock: WorldClockSettings?
+    var clockShelf: ClockShelfSettings?
     var standaloneModules: [StandaloneModuleConfig]?
     var bookmarkShelf: BookmarkShelfSettings?
+    var caffeineShelf: CaffeineShelfSettings?
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
@@ -849,7 +853,7 @@ struct AppSettings: Codable, Equatable {
         appleScripts: [],
         browserFlip: .defaults,
         clipboardShelf: .defaults,
-        worldClock: .defaults,
+        clockShelf: .defaults,
         standaloneModules: [],
         bookmarkShelf: .defaults,
         showRootFolderManagementItems: true
@@ -867,9 +871,10 @@ struct AppSettings: Codable, Equatable {
     var resolvedAppleScripts: [AppleScriptConfig] { appleScripts ?? [] }
     var resolvedBrowserFlip: BrowserFlipSettings { browserFlip ?? .defaults }
     var resolvedClipboardShelf: ClipboardShelfSettings { clipboardShelf ?? .defaults }
-    var resolvedWorldClock: WorldClockSettings { worldClock ?? .defaults }
+    var resolvedClockShelf: ClockShelfSettings { clockShelf ?? .defaults }
     var resolvedStandaloneModules: [StandaloneModuleConfig] { standaloneModules ?? [] }
     var resolvedBookmarkShelf: BookmarkShelfSettings { bookmarkShelf ?? .defaults }
+    var resolvedCaffeineShelf: CaffeineShelfSettings { caffeineShelf ?? .defaults }
     var resolvedShowRootFolderManagementItems: Bool { showRootFolderManagementItems ?? true }
 
     /// True when a module of `kind` has an entry point in the UI: a visible
@@ -883,9 +888,12 @@ struct AppSettings: Codable, Equatable {
         let views = resolvedMenuViews
         switch kind {
         case .clipboardShelf: return views.contains { $0.clipboardShelfItem != nil }
-        case .worldClock: return views.contains { $0.worldClockItem != nil }
+        case .clockShelf: return views.contains { $0.clockShelfItem != nil }
         case .bookmarkShelf: return views.contains { $0.bookmarkShelfItem != nil || !$0.resolvedBookmarkContentItems.isEmpty }
         case .browserFlip: return views.contains { $0.browserFlipItem != nil }
+        // CaffeineShelf is standalone-only; the visible-standalone check above
+        // is its only presence signal.
+        case .caffeineShelf: return false
         }
     }
 }

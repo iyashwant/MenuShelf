@@ -55,8 +55,8 @@ final class PreferencesStore: ObservableObject {
         decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        if let data = try? Data(contentsOf: settingsURL),
-           let decoded = try? decoder.decode(AppSettings.self, from: data) {
+        if let rawData = try? Data(contentsOf: settingsURL),
+           let decoded = try? decoder.decode(AppSettings.self, from: Self.rewritingLegacyClockShelfKeys(in: rawData)) {
             let migrated = Self.migratedSettings(decoded)
             settings = migrated
             if migrated != decoded {
@@ -1002,6 +1002,59 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
+    /// Upgrades settings.json written by builds that named this module
+    /// "World Clock" so it decodes into the renamed `ClockShelf` types.
+    /// The on-disk schema (`AppSettings.clockShelf`,
+    /// `MenuViewConfig.clockShelfItem`, the `ClockShelf*` field names, and
+    /// the `ModuleKind.clockShelf` raw value) used to be spelled with a
+    /// `worldClock` prefix; this rewrites those legacy keys in place before
+    /// `Codable` runs. Idempotent: files already in the new format (or any
+    /// payload that fails to parse as a JSON object) pass through untouched,
+    /// so it is safe to run on every load.
+    static func rewritingLegacyClockShelfKeys(in data: Data) -> Data {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return data
+        }
+
+        var changed = false
+
+        // Top-level `worldClock` blob → `clockShelf`, plus its inner
+        // `enableWorldClock` flag → `enableClockShelf`.
+        if root["clockShelf"] == nil, var blob = root.removeValue(forKey: "worldClock") as? [String: Any] {
+            if let enabled = blob.removeValue(forKey: "enableWorldClock") {
+                blob["enableClockShelf"] = enabled
+            }
+            root["clockShelf"] = blob
+            changed = true
+        }
+
+        // Per-menu-view `worldClockItem` → `clockShelfItem`.
+        if var views = root["menuViews"] as? [[String: Any]] {
+            for index in views.indices where views[index]["clockShelfItem"] == nil {
+                if let item = views[index].removeValue(forKey: "worldClockItem") {
+                    views[index]["clockShelfItem"] = item
+                    changed = true
+                }
+            }
+            if changed { root["menuViews"] = views }
+        }
+
+        // Standalone-module `kind` raw value `worldClock` → `clockShelf`.
+        if var modules = root["standaloneModules"] as? [[String: Any]] {
+            for index in modules.indices where (modules[index]["kind"] as? String) == "worldClock" {
+                modules[index]["kind"] = "clockShelf"
+                changed = true
+            }
+            if changed { root["standaloneModules"] = modules }
+        }
+
+        guard changed,
+              let rewritten = try? JSONSerialization.data(withJSONObject: root) else {
+            return data
+        }
+        return rewritten
+    }
+
     // Internal (not private) so the migration ladder can be unit-tested via
     // `@testable import MenuShelf`. Still only called from `init`.
     static func migratedSettings(_ decoded: AppSettings) -> AppSettings {
@@ -1082,8 +1135,8 @@ final class PreferencesStore: ObservableObject {
 
         if settings.schemaVersion < 14 {
             settings.schemaVersion = 14
-            settings.worldClock = settings.worldClock ?? .defaults
-            // worldClockItem is added per-menu-view as an optional field.
+            settings.clockShelf = settings.clockShelf ?? .defaults
+            // clockShelfItem is added per-menu-view as an optional field.
             // Default is nil for existing menu views, so no per-view backfill is needed.
         }
 
@@ -1108,7 +1161,7 @@ final class PreferencesStore: ObservableObject {
         settings.moreMenuBehavior = settings.moreMenuBehavior ?? .visibleAtBottom
         settings.appleScripts = settings.appleScripts ?? []
         settings.clipboardShelf = settings.clipboardShelf ?? .defaults
-        settings.worldClock = settings.worldClock ?? .defaults
+        settings.clockShelf = settings.clockShelf ?? .defaults
         settings.standaloneModules = settings.standaloneModules ?? []
         settings.bookmarkShelf = settings.bookmarkShelf ?? BookmarkShelfSettings.defaults
         // Standalone modules: decode-time title fixup (Requirement 1.4).

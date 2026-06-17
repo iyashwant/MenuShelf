@@ -45,9 +45,9 @@ enum MenuActionKind {
     case runAppleScript
     case switchBrowser
     case openClipboardShelf
-    case openWorldClock
+    case openClockShelf
     case openClipboardShelfSettings
-    case openWorldClockSettings
+    case openClockShelfSettings
     case openBrowserFlipSettings
     case openBookmark
     case openBookmarkIn
@@ -446,32 +446,32 @@ final class MenuAction: NSObject {
                 ClipboardShelfController.shared.togglePopup(anchor: anchor)
             }
 
-        case .openWorldClock:
-            let resolvedWorldClock = store.settings.resolvedWorldClock
-            if !resolvedWorldClock.enableWorldClock {
+        case .openClockShelf:
+            let resolvedClockShelf = store.settings.resolvedClockShelf
+            if !resolvedClockShelf.enableClockShelf {
                 // Surface settings so the user can flip the enable toggle.
-                AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
+                AppContainer.shared.settingsWindowController.show(focusClockShelf: true)
                 return
             }
             // The 50ms deferral inside handleMenuAction(_:) covers the
             // dispatch hop, but the compiler can't see that — hop through
             // a Task to satisfy the MainActor-isolated togglePopover
             // contract.
-            let worldClockMenuViewID = action.menuViewID
+            let clockShelfMenuViewID = action.menuViewID
             Task { @MainActor in
-                let anchor = worldClockMenuViewID.flatMap {
+                let anchor = clockShelfMenuViewID.flatMap {
                     AppContainer.shared.statusItemManager.statusBarButton(for: $0)
                 }
-                WorldClockController.shared.togglePopover(anchor: anchor)
+                ClockShelfController.shared.togglePopover(anchor: anchor)
             }
 
         case .openClipboardShelfSettings:
             AppContainer.shared.settingsWindowController.show(focusClipboardShelf: true)
             DiagnosticsLogger.shared.log("Requested settings window focused on Clipboard Shelf")
 
-        case .openWorldClockSettings:
-            AppContainer.shared.settingsWindowController.show(focusWorldClock: true)
-            DiagnosticsLogger.shared.log("Requested settings window focused on World Clock")
+        case .openClockShelfSettings:
+            AppContainer.shared.settingsWindowController.show(focusClockShelf: true)
+            DiagnosticsLogger.shared.log("Requested settings window focused on Clock Shelf")
 
         case .openBrowserFlipSettings:
             AppContainer.shared.settingsWindowController.show(focusBrowserFlip: true)

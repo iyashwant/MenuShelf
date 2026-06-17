@@ -34,9 +34,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "WorldClockTests",
+            name: "ClockShelfTests",
             dependencies: ["MenuShelf"],
-            path: "Tests/WorldClockTests",
+            path: "Tests/ClockShelfTests",
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]

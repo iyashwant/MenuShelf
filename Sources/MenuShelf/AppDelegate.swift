@@ -27,16 +27,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DiagnosticsLogger.shared.log("Application will terminate")
-        // Stop World Clock first so its pinned status items are removed
+        // Stop Clock Shelf first so its pinned status items are removed
         // and the minute-aligned timer is invalidated before the
         // Clipboard Shelf controller releases its container. Both stops
         // run before the settings flush so any future quit-time logic
         // inside either controller has a chance to run.
-        WorldClockController.shared.stop()
+        ClockShelfController.shared.stop()
         // Stop Clipboard Shelf monitor and release its container before
         // settings flush so any clearOnQuit/clearPinnedOnQuit logic that
         // future tasks add inside the controller has a chance to run.
         ClipboardShelfController.shared.stop()
+        // Synchronously clear the lid-closed `disablesleep` system flag (if we
+        // set it) BEFORE stopping — an async reset might not finish before the
+        // process exits, which would leave the Mac unable to sleep.
+        CaffeineShelfController.shared.flushLidStateForQuit()
+        // Stop CaffeineShelf so its IOKit power assertion is always released
+        // before the process exits — a leaked assertion would keep the Mac
+        // awake after MenuShelf quits.
+        CaffeineShelfController.shared.stop()
         // Flush any debounced settings save so user changes don't get lost on quit.
         container.store.flushPendingSave()
         DiagnosticsLogger.shared.endSession()

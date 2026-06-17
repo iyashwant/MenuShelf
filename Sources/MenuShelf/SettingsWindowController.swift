@@ -18,12 +18,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         selectedMenuViewID: UUID? = nil,
         selectedAppleScriptID: UUID? = nil,
         focusClipboardShelf: Bool = false,
-        focusWorldClock: Bool = false,
+        focusClockShelf: Bool = false,
         scrollToClockID: UUID? = nil,
         focusStandaloneModules: Bool = false,
         scrollToStandaloneModuleID: UUID? = nil,
         focusBrowserFlip: Bool = false,
-        focusBookmarkShelf: Bool = false
+        focusBookmarkShelf: Bool = false,
+        focusCaffeineShelf: Bool = false
     ) {
         if let selectedMenuViewID {
             store.selectedMenuViewID = selectedMenuViewID
@@ -42,8 +43,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             NotificationCenter.default.post(name: .menuShelfFocusClipboardShelf, object: nil)
         }
 
-        if focusWorldClock {
-            NotificationCenter.default.post(name: .menuShelfFocusWorldClock, object: nil)
+        if focusClockShelf {
+            NotificationCenter.default.post(name: .menuShelfFocusClockShelf, object: nil)
         }
 
         if focusStandaloneModules {
@@ -61,9 +62,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             NotificationCenter.default.post(name: .menuShelfFocusBookmarkShelf, object: nil)
         }
 
+        if focusCaffeineShelf {
+            NotificationCenter.default.post(name: .menuShelfFocusCaffeineShelf, object: nil)
+        }
+
         if let scrollToClockID {
             NotificationCenter.default.post(
-                name: .menuShelfScrollToWorldClock,
+                name: .menuShelfScrollToClockShelf,
                 object: nil,
                 userInfo: ["clockID": scrollToClockID]
             )
@@ -110,6 +115,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window = settingsWindow
         }
 
+        // Promote to a regular app so the Dock icon appears while the settings
+        // window is on screen. MenuShelf otherwise runs as a menu-bar-only
+        // (.accessory) app with no Dock presence.
+        NSApp.setActivationPolicy(.regular)
+
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
@@ -121,6 +131,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     // what they see in the UI.
     func windowWillClose(_ notification: Notification) {
         store.flushPendingSave()
+
+        // Drop the Dock icon again once the settings window is gone, returning
+        // MenuShelf to its menu-bar-only (.accessory) presentation.
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 
@@ -133,12 +147,12 @@ extension Notification.Name {
     /// Posted when the settings window should switch to the Clipboard Shelf pane.
     static let menuShelfFocusClipboardShelf = Notification.Name("menuShelfFocusClipboardShelf")
 
-    /// Posted when the settings window should switch to the World Clock pane.
-    static let menuShelfFocusWorldClock = Notification.Name("menuShelfFocusWorldClock")
+    /// Posted when the settings window should switch to the Clock Shelf pane.
+    static let menuShelfFocusClockShelf = Notification.Name("menuShelfFocusClockShelf")
 
-    /// Posted when the World Clock settings view should scroll to a specific
+    /// Posted when the Clock Shelf settings view should scroll to a specific
     /// clock row. `userInfo["clockID"]` carries the target `UUID`.
-    static let menuShelfScrollToWorldClock = Notification.Name("menuShelfScrollToWorldClock")
+    static let menuShelfScrollToClockShelf = Notification.Name("menuShelfScrollToClockShelf")
 
     /// Posted when the settings window should switch to the Standalone Modules pane.
     static let menuShelfFocusStandaloneModules = Notification.Name("menuShelfFocusStandaloneModules")
@@ -153,4 +167,7 @@ extension Notification.Name {
 
     /// Posted when the settings window should switch to the Bookmark Shelf pane.
     static let menuShelfFocusBookmarkShelf = Notification.Name("menuShelfFocusBookmarkShelf")
+
+    /// Posted when the settings window should switch to the CaffeineShelf pane.
+    static let menuShelfFocusCaffeineShelf = Notification.Name("menuShelfFocusCaffeineShelf")
 }

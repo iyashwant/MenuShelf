@@ -11,7 +11,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case browserFlip
     case clipboardShelf
     case bookmarkShelf
-    case worldClock
+    case clockShelf
+    case caffeineShelf
     case advanced
 
     var id: String { rawValue }
@@ -27,7 +28,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .browserFlip: "Browser Flip"
         case .clipboardShelf: "Clipboard Shelf"
         case .bookmarkShelf: "Bookmark Shelf"
-        case .worldClock: "World Clock"
+        case .clockShelf: "Clock Shelf"
+        case .caffeineShelf: "CaffeineShelf"
         case .advanced: "Advanced"
         }
     }
@@ -47,7 +49,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
         case .bookmarkShelf: return "bookmark"
-        case .worldClock: return "clock"
+        case .clockShelf: return "clock"
+        case .caffeineShelf: return "cup.and.saucer"
         case .advanced: return "wrench.and.screwdriver"
         }
     }
@@ -106,8 +109,10 @@ struct SettingsView: View {
                     ClipboardShelfSettingsView()
                 case .bookmarkShelf:
                     BookmarkShelfSettingsView()
-                case .worldClock:
-                    WorldClockSettingsView()
+                case .clockShelf:
+                    ClockShelfSettingsView()
+                case .caffeineShelf:
+                    CaffeineShelfSettingsView()
                 case .advanced:
                     AdvancedSettingsView()
                 }
@@ -122,8 +127,8 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusClipboardShelf)) { _ in
             section = .clipboardShelf
         }
-        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusWorldClock)) { _ in
-            section = .worldClock
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusClockShelf)) { _ in
+            section = .clockShelf
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusBookmarkShelf)) { _ in
             section = .bookmarkShelf
@@ -133,6 +138,9 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusBrowserFlip)) { _ in
             section = .browserFlip
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuShelfFocusCaffeineShelf)) { _ in
+            section = .caffeineShelf
         }
     }
 }
@@ -297,7 +305,7 @@ private struct MenuViewsSettingsView: View {
                                             + view.resolvedAppleScriptItems.count
                                             + (view.browserFlipItem != nil ? 1 : 0)
                                             + (view.clipboardShelfItem != nil ? 1 : 0)
-                                            + (view.worldClockItem != nil ? 1 : 0)
+                                            + (view.clockShelfItem != nil ? 1 : 0)
                                     )
                                     .tag(Optional(MenuBarItemSelection.menuView(view.id)))
                                     .id(MenuBarItemSelection.menuView(view.id))
@@ -630,7 +638,7 @@ private enum UnifiedContentItem: Identifiable {
     case appleScript(AppleScriptMenuItemConfig)
     case browserFlip(BrowserFlipMenuItemConfig)
     case clipboardShelf(ClipboardShelfMenuItemConfig)
-    case worldClock(WorldClockMenuItemConfig)
+    case clockShelf(ClockShelfMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -641,7 +649,7 @@ private enum UnifiedContentItem: Identifiable {
         case .appleScript(let item): item.id
         case .browserFlip(let item): item.id
         case .clipboardShelf(let item): item.id
-        case .worldClock(let item): item.id
+        case .clockShelf(let item): item.id
         }
     }
 
@@ -658,7 +666,7 @@ private enum UnifiedContentItem: Identifiable {
             return "scroll"
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
-        case .worldClock: return "clock"
+        case .clockShelf: return "clock"
         }
     }
 
@@ -671,7 +679,7 @@ private enum UnifiedContentItem: Identifiable {
         case .appleScript: .purple
         case .browserFlip: .teal
         case .clipboardShelf: .green
-        case .worldClock: .cyan
+        case .clockShelf: .cyan
         }
     }
 }
@@ -762,7 +770,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.worldClockItem != nil ? 1 : 0)
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.clockShelfItem != nil ? 1 : 0)
     }
 }
 
@@ -943,11 +951,11 @@ private struct MenuViewContentsView: View {
                     .disabled(view.clipboardShelfItem != nil)
 
                     Button {
-                        store.addWorldClockItem(toMenuViewID: view.id)
+                        store.addClockShelfItem(toMenuViewID: view.id)
                     } label: {
-                        Label("Add World Clock", systemImage: "clock")
+                        Label("Add Clock Shelf", systemImage: "clock")
                     }
-                    .disabled(view.worldClockItem != nil)
+                    .disabled(view.clockShelfItem != nil)
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -1005,8 +1013,8 @@ private struct MenuViewContentsView: View {
         if let clipboardShelf = view.clipboardShelfItem {
             items.append(.clipboardShelf(clipboardShelf))
         }
-        if let worldClock = view.worldClockItem {
-            items.append(.worldClock(worldClock))
+        if let clockShelf = view.clockShelfItem {
+            items.append(.clockShelf(clockShelf))
         }
         return items
     }
@@ -1046,8 +1054,8 @@ private struct MenuViewContentsView: View {
             view.browserFlipItem = nil
         } else if view.clipboardShelfItem?.id == id {
             view.clipboardShelfItem = nil
-        } else if view.worldClockItem?.id == id {
-            store.removeWorldClockItem(fromMenuViewID: view.id)
+        } else if view.clockShelfItem?.id == id {
+            store.removeClockShelfItem(fromMenuViewID: view.id)
         }
         selectedContentItemID = nil
     }
@@ -1088,8 +1096,8 @@ private struct MenuViewContentsView: View {
         case .clipboardShelf:
             // Clipboard Shelf lives in a single-slot group; reordering is a no-op.
             return
-        case .worldClock:
-            // World Clock lives in a single-slot group; reordering is a no-op.
+        case .clockShelf:
+            // Clock Shelf lives in a single-slot group; reordering is a no-op.
             return
         }
 
@@ -1138,7 +1146,7 @@ private struct MenuViewContentsView: View {
             groupOffset = 0
             _ = sourceGroupOffset
             _ = groupOffset
-        case .worldClock:
+        case .clockShelf:
             // Already handled by the early return above; the values are unused.
             sourceGroupOffset = 0
             groupOffset = 0
@@ -1303,13 +1311,13 @@ private struct MenuViewContentsView: View {
                     }
                 }
             }
-        case .worldClock:
-            if let binding = worldClockItemBinding(for: item.id) {
+        case .clockShelf:
+            if let binding = clockShelfItemBinding(for: item.id) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Edit World Clock")
+                    Text("Edit Clock Shelf")
                         .font(.headline)
 
-                    Text("Opens the World Clock with your configured clocks.")
+                    Text("Opens the Clock Shelf with your configured clocks.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -1323,8 +1331,8 @@ private struct MenuViewContentsView: View {
                         set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
                     ))
 
-                    if !store.settings.resolvedWorldClock.enableWorldClock {
-                        Text("World Clock is disabled. Enable it in Settings → World Clock for the popover to populate.")
+                    if !store.settings.resolvedClockShelf.enableClockShelf {
+                        Text("Clock Shelf is disabled. Enable it in Settings → Clock Shelf for the popover to populate.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -1429,15 +1437,15 @@ private struct MenuViewContentsView: View {
         )
     }
 
-    private func worldClockItemBinding(for id: UUID) -> Binding<WorldClockMenuItemConfig>? {
-        guard let current = view.worldClockItem, current.id == id else { return nil }
+    private func clockShelfItemBinding(for id: UUID) -> Binding<ClockShelfMenuItemConfig>? {
+        guard let current = view.clockShelfItem, current.id == id else { return nil }
 
         return Binding(
-            get: { view.worldClockItem ?? current },
+            get: { view.clockShelfItem ?? current },
             set: { updated in
                 var copy = updated
                 copy.updatedAt = Date()
-                view.worldClockItem = copy
+                view.clockShelfItem = copy
             }
         )
     }
@@ -1511,7 +1519,7 @@ private struct UnifiedContentItemRow: View {
             return config.displayTitle
         case .clipboardShelf(let config):
             return config.displayTitle
-        case .worldClock(let config):
+        case .clockShelf(let config):
             return config.displayTitle
         }
     }
@@ -1550,11 +1558,11 @@ private struct UnifiedContentItemRow: View {
                 return "Section: \(section)"
             }
             return "Clipboard Shelf"
-        case .worldClock(let config):
+        case .clockShelf(let config):
             if let section = config.sectionName, !section.isEmpty {
                 return "Section: \(section)"
             }
-            return "World Clock"
+            return "Clock Shelf"
         }
     }
 }

@@ -20,8 +20,9 @@ final class AppContainer {
     let settingsWindowController: SettingsWindowController
 
     private var clipboardShelfSettingsSubscription: AnyCancellable?
-    private var worldClockSettingsSubscription: AnyCancellable?
+    private var clockShelfSettingsSubscription: AnyCancellable?
     private var bookmarkShelfSettingsSubscription: AnyCancellable?
+    private var caffeineShelfSettingsSubscription: AnyCancellable?
 
     private init() {
         shortcutsService = ShortcutsService()
@@ -97,28 +98,28 @@ final class AppContainer {
                 }
             }
 
-        // Bring up World Clock if enabled. The controller is idempotent
+        // Bring up Clock Shelf if enabled. The controller is idempotent
         // and will no-op if it's already running. We also subscribe to
         // settings changes so the controller picks up enable/disable
         // toggles, clock list edits, and appearance changes without an
         // app restart (Requirement 13.5).
-        if menuShelfModuleShouldRun(.worldClock, in: store.settings) {
-            let initialWorldClock = store.settings.resolvedWorldClock
+        if menuShelfModuleShouldRun(.clockShelf, in: store.settings) {
+            let initialClockShelf = store.settings.resolvedClockShelf
             Task { @MainActor in
-                WorldClockController.shared.start(with: initialWorldClock)
+                ClockShelfController.shared.start(with: initialClockShelf)
             }
         }
-        worldClockSettingsSubscription = store.$settings
-            .map { ModuleRunState(settings: $0.resolvedWorldClock,
-                                  run: menuShelfModuleShouldRun(.worldClock, in: $0)) }
+        clockShelfSettingsSubscription = store.$settings
+            .map { ModuleRunState(settings: $0.resolvedClockShelf,
+                                  run: menuShelfModuleShouldRun(.clockShelf, in: $0)) }
             .removeDuplicates()
             .dropFirst()
             .sink { state in
                 Task { @MainActor in
                     if state.run {
-                        WorldClockController.shared.start(with: state.settings)
+                        ClockShelfController.shared.start(with: state.settings)
                     } else {
-                        WorldClockController.shared.stop()
+                        ClockShelfController.shared.stop()
                     }
                 }
             }
@@ -149,6 +150,40 @@ final class AppContainer {
                 }
             }
 
+        // Bring up CaffeineShelf if enabled. The controller is idempotent and
+        // records its settings without keeping the Mac awake on its own —
+        // activation is an explicit user action. Subscribe to settings changes
+        // so enable/disable toggles, the assertion type, and the auto-off
+        // thresholds apply without an app restart.
+        if menuShelfModuleShouldRun(.caffeineShelf, in: store.settings) {
+            let initialCaffeineShelf = store.settings.resolvedCaffeineShelf
+            Task { @MainActor in
+                CaffeineShelfController.shared.start(with: initialCaffeineShelf)
+            }
+        }
+        caffeineShelfSettingsSubscription = store.$settings
+            .map { ModuleRunState(settings: $0.resolvedCaffeineShelf,
+                                  run: menuShelfModuleShouldRun(.caffeineShelf, in: $0)) }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { state in
+                Task { @MainActor in
+                    if state.run {
+                        CaffeineShelfController.shared.start(with: state.settings)
+                    } else {
+                        CaffeineShelfController.shared.stop()
+                    }
+                }
+            }
+
+        // Crash recovery: if a previous run left the lid-closed `disablesleep`
+        // flag set, clear it now (no-op when our grant isn't installed or the
+        // flag isn't set). CaffeineShelf always starts inactive, so the flag
+        // should never legitimately be on at launch.
+        Task { @MainActor in
+            CaffeineShelfController.shared.healLidStateAtLaunch()
+        }
+
         statusItemManager.rebuildStatusItems()
     }
 }
@@ -165,18 +200,20 @@ private struct ModuleRunState<S: Equatable>: Equatable {
 private func menuShelfPopupHotkeyName(for kind: ModuleKind) -> KeyboardShortcuts.Name? {
     switch kind {
     case .clipboardShelf: .popup
-    case .worldClock: .worldClockPopup
+    case .clockShelf: .clockShelfPopup
     case .bookmarkShelf: .bookmarkShelfPopup
     case .browserFlip: nil
+    case .caffeineShelf: nil
     }
 }
 
 private func menuShelfModuleEnabled(_ kind: ModuleKind, in s: AppSettings) -> Bool {
     switch kind {
     case .clipboardShelf: s.resolvedClipboardShelf.enableClipboardShelf
-    case .worldClock: s.resolvedWorldClock.enableWorldClock
+    case .clockShelf: s.resolvedClockShelf.enableClockShelf
     case .bookmarkShelf: s.resolvedBookmarkShelf.enableBookmarkShelf
     case .browserFlip: s.resolvedBrowserFlip.enableBrowserFlip
+    case .caffeineShelf: s.resolvedCaffeineShelf.enableCaffeineShelf
     }
 }
 

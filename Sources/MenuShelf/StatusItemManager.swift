@@ -357,6 +357,19 @@ final class StatusItemManager: NSObject {
         }
     }
 
+    /// Tint every visible standalone status item of `kind` with the system
+    /// accent color while `isActive`, clearing the tint otherwise. Used by
+    /// CaffeineShelf to reflect its keep-awake state on the menu-bar icon. A
+    /// module kind can have more than one standalone item, so all matches are
+    /// updated rather than returning on the first.
+    func setStandaloneModuleActiveIndicator(kind: ModuleKind, isActive: Bool) {
+        for context in statusItems {
+            if case .standaloneModule(let item, let module) = context, module.kind == kind {
+                item.button?.contentTintColor = isActive ? NSColor.controlAccentColor : nil
+            }
+        }
+    }
+
     private func publishStatusItems() {
         var menuViews: [UUID: NSStatusItem] = [:]
         var fallback: NSStatusItem?
