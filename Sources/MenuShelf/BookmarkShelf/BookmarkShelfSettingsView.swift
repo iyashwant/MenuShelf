@@ -3,7 +3,7 @@
 //  MenuShelf
 //
 //  Settings pane for the Bookmark Shelf feature. Mirrors the structure of
-//  `WorldClockSettingsView` and `ClipboardShelfSettingsView`: a single
+//  `ClockShelfSettingsView` and `ClipboardShelfSettingsView`: a single
 //  scrolling pane built from `SettingsCard`/`SettingsToggle`/`SettingsRow`.
 //  All bindings flow through `store.updateBookmarkShelfSettings { ... }`
 //  except the popup hotkey, which is owned by the vendored
@@ -374,13 +374,13 @@ struct BookmarkShelfSettingsView: View {
             }
         }
 
-        // Priority 4: World Clock popup.
-        if let world = KeyboardShortcuts.getShortcut(for: .worldClockPopup),
+        // Priority 4: Clock Shelf popup.
+        if let world = KeyboardShortcuts.getShortcut(for: .clockShelfPopup),
            let worldKey = world.key?.rawValue {
             let worldFlags = world.modifiers
                 .intersection(.deviceIndependentFlagsMask).rawValue
             if UInt16(worldKey) == recordedKeyCode && worldFlags == recordedFlags {
-                return BookmarkShelfHotkeyConflict(ownerName: "World Clock popup")
+                return BookmarkShelfHotkeyConflict(ownerName: "Clock Shelf popup")
             }
         }
 

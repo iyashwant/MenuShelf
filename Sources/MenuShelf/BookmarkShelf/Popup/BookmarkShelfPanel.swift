@@ -3,7 +3,7 @@
 //  MenuShelf
 //
 //  Floating `NSPanel` hosting the Bookmark Shelf popup SwiftUI tree.
-//  Modelled after `Sources/MenuShelf/WorldClock/WorldClockPanel.swift`
+//  Modelled after `Sources/MenuShelf/ClockShelf/ClockShelfPanel.swift`
 //  (a peer of the Clipboard Shelf vendored `FloatingPanel`, not a
 //  subclass) because the Bookmark Shelf popup has no preview pane,
 //  no auto-open machinery, and no clipboard-specific delegate hooks.
@@ -177,7 +177,7 @@ final class BookmarkShelfPanel: NSPanel, NSWindowDelegate {
     // MARK: - Anchor positioning
 
     /// Compute the origin that places the panel just below the menu-
-    /// bar status button. Mirrors `WorldClockPanel.anchorOrigin(for:
+    /// bar status button. Mirrors `ClockShelfPanel.anchorOrigin(for:
     /// size:)` field-for-field: align the panel's top-left with the
     /// button's bottom-left, then nudge left when the panel would
     /// otherwise spill past the screen's right edge.

@@ -34,6 +34,22 @@ extension View {
     }
 }
 
+// MARK: - Focus effect suppression
+
+extension View {
+    /// Disables the system focus ring on a `.focusable()` view. Without this,
+    /// the picker's scroll view draws a blue key-focus border. Ported from
+    /// Browserino's `focusEffectDisabledCompat()`.
+    @ViewBuilder
+    func msFocusEffectDisabled() -> some View {
+        if #available(macOS 14.0, *) {
+            self.focusEffectDisabled()
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Button styles
 
 struct MSBackgroundOnHover: ViewModifier {

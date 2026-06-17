@@ -7,7 +7,7 @@
 //  `BookmarkShelfStorage` handle (which in turn owns
 //  `bookmarks.json`), and the global popup hotkey registration via
 //  `KeyboardShortcuts.Name.bookmarkShelfPopup`. Mirrors the shape of
-//  `ClipboardShelfController` and `WorldClockController` field-for-
+//  `ClipboardShelfController` and `ClockShelfController` field-for-
 //  field so the three modules behave the same way to the rest of the
 //  app.
 //

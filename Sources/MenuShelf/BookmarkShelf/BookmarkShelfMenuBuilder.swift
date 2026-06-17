@@ -3,7 +3,7 @@
 //  MenuShelf
 //
 //  Inline menu rendering for the Bookmark Shelf module. Mirrors
-//  `ClipboardShelfMenuBuilder` and `WorldClockMenuBuilder`: the
+//  `ClipboardShelfMenuBuilder` and `ClockShelfMenuBuilder`: the
 //  whole-shelf submenu hangs off `MenuViewConfig.bookmarkShelfItem` and
 //  per-node rows hang off `MenuViewConfig.bookmarkContentItems`. Every
 //  submenu populated here is lazy: an `NSMenuDelegate` instance retained
@@ -23,7 +23,7 @@ import Foundation
 /// the inline tree always reflects the latest `BookmarkShelfStorage`
 /// snapshot. Co-located with the builder extension so the rendering
 /// logic and the lazy-populate logic stay in one place, mirroring the
-/// `WorldClockMenuDelegate` / `ClipboardShelfMenuBuilder` pairing.
+/// `ClockShelfMenuDelegate` / `ClipboardShelfMenuBuilder` pairing.
 final class BookmarkShelfMenuDelegate: NSObject, NSMenuDelegate {
     weak var builder: MenuBuilder?
     /// `nil` means "root" — used by the inline whole-shelf submenu and
@@ -63,7 +63,7 @@ extension MenuBuilder {
         enabled: Bool
     ) {
         // Section header logic — identical to
-        // `addClipboardShelfMenuItem` / `addWorldClockMenuItem`.
+        // `addClipboardShelfMenuItem` / `addClockShelfMenuItem`.
         let trimmedSection = config.sectionName?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let section = trimmedSection, !section.isEmpty,

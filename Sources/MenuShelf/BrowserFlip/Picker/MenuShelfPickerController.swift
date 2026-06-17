@@ -16,8 +16,6 @@ final class MenuShelfPickerController: NSObject, NSWindowDelegate {
 
     private var pickerWindow: MenuShelfPickerWindow?
 
-    @AppStorage("menushelf_ask_browsers") private var browsers: [URL] = []
-
     func handle(urls incoming: [URL]) {
         var processedUrls = incoming
 
@@ -39,16 +37,31 @@ final class MenuShelfPickerController: NSObject, NSWindowDelegate {
             }
         }
 
-        if browsers.isEmpty {
-            browsers = MenuShelfPickerOpener.loadBrowsers(oldBrowsers: browsers)
-        } else {
-            MenuShelfPickerOpener.ensureShortcutsAssigned(for: browsers)
-        }
-
-        showPicker(for: processedUrls)
+        showPicker(for: processedUrls, browsers: resolvedBrowsers())
     }
 
-    private func showPicker(for urls: [URL]) {
+    /// The browser list the picker should show, mirroring the Browser Flip
+    /// settings page exactly: only visible browsers, in the user's configured
+    /// order, with MenuShelf's own "Ask Everytime" entry excluded. Falls back
+    /// to live discovery when Browser Flip was never configured so the picker
+    /// still works if MenuShelf was made default by other means.
+    private func resolvedBrowsers() -> [URL] {
+        let saved = AppContainer.shared.store.settings.resolvedBrowserFlip.savedBrowsers
+        let ordered = saved
+            .filter { $0.isVisible }
+            .filter { !MenuBuilder.isAskEverytime($0) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { $0.appURL }
+
+        if !ordered.isEmpty {
+            MenuShelfPickerOpener.ensureShortcutsAssigned(for: ordered)
+            return ordered
+        }
+
+        return MenuShelfPickerOpener.loadBrowsers(oldBrowsers: [])
+    }
+
+    private func showPicker(for urls: [URL], browsers: [URL]) {
         if pickerWindow == nil {
             pickerWindow = MenuShelfPickerWindow()
         }
@@ -75,7 +88,7 @@ final class MenuShelfPickerController: NSObject, NSWindowDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         window.deactivateDelay()
 
-        window.contentView = NSHostingView(rootView: MenuShelfPickerView(urls: urls))
+        window.contentView = NSHostingView(rootView: MenuShelfPickerView(urls: urls, browsers: browsers))
 
         window.makeKeyAndOrderFront(nil)
         window.isReleasedWhenClosed = false

@@ -86,19 +86,19 @@ struct MenuShelfPickerItem: View {
 }
 
 struct MenuShelfPickerView: View {
-    @AppStorage("menushelf_ask_browsers") private var browsers: [URL] = []
-    @AppStorage("menushelf_ask_hiddenBrowsers") private var hiddenBrowsers: [URL] = []
     @AppStorage("menushelf_ask_shortcuts") private var shortcuts: [String: String] = [:]
 
     let urls: [URL]
+    /// Resolved by `MenuShelfPickerController` from the Browser Flip settings —
+    /// already filtered to visible browsers and sorted into the user's
+    /// configured order, so the picker matches the settings page 1:1.
+    let browsers: [URL]
 
     @State private var opacityAnimation = 0.0
     @State private var selected = 0
     @FocusState private var focused: Bool
 
-    var visibleBrowsers: [URL] {
-        browsers.filter { !hiddenBrowsers.contains($0) }
-    }
+    var visibleBrowsers: [URL] { browsers }
 
     var body: some View {
         VStack {
@@ -126,6 +126,7 @@ struct MenuShelfPickerView: View {
                     }
                 }
                 .focusable()
+                .msFocusEffectDisabled()
                 .focused($focused)
                 .onMoveCommand { command in
                     if command == .up {
