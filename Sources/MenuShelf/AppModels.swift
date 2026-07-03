@@ -692,6 +692,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var clipboardShelfItem: ClipboardShelfMenuItemConfig?
     var clockShelfItem: ClockShelfMenuItemConfig?
     var bookmarkShelfItem: BookmarkShelfMenuItemConfig?
+    var caffeineShelfItem: CaffeineShelfMenuItemConfig?
     var bookmarkContentItems: [BookmarkContentItemConfig]?
     var createdAt: Date
     var updatedAt: Date
@@ -727,6 +728,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             clipboardShelfItem: nil,
             clockShelfItem: nil,
             bookmarkShelfItem: nil,
+            caffeineShelfItem: nil,
             bookmarkContentItems: nil,
             createdAt: Date(),
             updatedAt: Date()
@@ -834,7 +836,7 @@ struct AppSettings: Codable, Equatable {
     var showRootFolderManagementItems: Bool?
 
     static let defaults = AppSettings(
-        schemaVersion: 16,
+        schemaVersion: 17,
         displayMode: .groupedItem,
         showMenuBarItemWhenEmpty: true,
         launchAtLogin: false,
@@ -891,9 +893,7 @@ struct AppSettings: Codable, Equatable {
         case .clockShelf: return views.contains { $0.clockShelfItem != nil }
         case .bookmarkShelf: return views.contains { $0.bookmarkShelfItem != nil || !$0.resolvedBookmarkContentItems.isEmpty }
         case .browserFlip: return views.contains { $0.browserFlipItem != nil }
-        // CaffeineShelf is standalone-only; the visible-standalone check above
-        // is its only presence signal.
-        case .caffeineShelf: return false
+        case .caffeineShelf: return views.contains { $0.caffeineShelfItem != nil }
         }
     }
 }

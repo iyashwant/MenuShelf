@@ -19,6 +19,51 @@ extension PreferencesStore {
         updateCaffeineShelfSettings { $0.enableCaffeineShelf = enabled }
     }
 
+    /// Set the CaffeineShelf entry on the target menu view (creating one if
+    /// needed). No-ops if the menu view already has the entry. Auto-enables
+    /// CaffeineShelf when adding the first entry so the menu actually
+    /// populates when opened.
+    func addCaffeineShelfItem(toMenuViewID menuViewID: UUID?) {
+        var views = settings.resolvedMenuViews
+        let targetID: UUID
+
+        if let menuViewID, views.contains(where: { $0.id == menuViewID }) {
+            targetID = menuViewID
+        } else {
+            let view = MenuViewConfig.make(title: "MenuShelf", defaults: settings.defaultMenuSettings)
+            views.append(view)
+            targetID = view.id
+            selectedMenuViewID = targetID
+        }
+
+        guard let index = views.firstIndex(where: { $0.id == targetID }) else { return }
+        guard views[index].caffeineShelfItem == nil else {
+            settings.menuViews = views
+            return
+        }
+
+        views[index].caffeineShelfItem = CaffeineShelfMenuItemConfig.make()
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+        selectedMenuViewID = targetID
+
+        if !settings.resolvedCaffeineShelf.enableCaffeineShelf {
+            setEnableCaffeineShelf(true)
+        }
+    }
+
+    /// Clear the CaffeineShelf entry from a menu view. Used by the settings
+    /// UI's content-list remove button.
+    func removeCaffeineShelfItem(fromMenuViewID menuViewID: UUID) {
+        var views = settings.resolvedMenuViews
+        guard let index = views.firstIndex(where: { $0.id == menuViewID }) else { return }
+        guard views[index].caffeineShelfItem != nil else { return }
+
+        views[index].caffeineShelfItem = nil
+        views[index].updatedAt = Date()
+        settings.menuViews = views
+    }
+
     /// Toggle whether keep-awake also covers the lid being closed. The
     /// controller orchestrates the privileged grant; this only persists the
     /// flag.

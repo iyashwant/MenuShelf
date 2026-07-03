@@ -1152,6 +1152,13 @@ final class PreferencesStore: ObservableObject {
             DiagnosticsLogger.shared.log("Applied schema-16 migration: bookmarkShelf field defaulted to .defaults")
         }
 
+        if settings.schemaVersion < 17 {
+            settings.schemaVersion = 17
+            settings.caffeineShelf = settings.caffeineShelf ?? .defaults
+            // caffeineShelfItem is added per-menu-view as an optional field.
+            // Default is nil for existing menu views, so no per-view backfill is needed.
+        }
+
         settings.showFileAndFolderIcons = settings.showFileAndFolderIcons ?? true
         settings.showFileSubmenus = settings.showFileSubmenus ?? true
         settings.showFolderSubmenus = settings.showFolderSubmenus ?? true
@@ -1164,6 +1171,7 @@ final class PreferencesStore: ObservableObject {
         settings.clockShelf = settings.clockShelf ?? .defaults
         settings.standaloneModules = settings.standaloneModules ?? []
         settings.bookmarkShelf = settings.bookmarkShelf ?? BookmarkShelfSettings.defaults
+        settings.caffeineShelf = settings.caffeineShelf ?? .defaults
         // Standalone modules: decode-time title fixup (Requirement 1.4).
         // An empty / whitespace-only `title` substitutes the kind's default;
         // a `title` longer than 200 characters is clamped. Both fixups land

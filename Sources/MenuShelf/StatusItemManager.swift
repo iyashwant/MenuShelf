@@ -40,6 +40,18 @@ final class StatusItemManager: NSObject {
         return nil
     }
 
+    /// Returns the `NSStatusItem` for the menu view with the given id, when the
+    /// view has a visible status item. Used by CaffeineShelf to present its
+    /// inline popup through the menu-swap presentation path.
+    func statusItem(for menuViewID: UUID) -> NSStatusItem? {
+        for context in statusItems {
+            if case .menuView(let item, let id) = context, id == menuViewID {
+                return item
+            }
+        }
+        return nil
+    }
+
     /// Returns the `NSStatusBarButton` for the standalone module with the
     /// given id, when the module has a visible status item. Used by the
     /// hotkey anchor fallback (Task 8) and the settings deep-link

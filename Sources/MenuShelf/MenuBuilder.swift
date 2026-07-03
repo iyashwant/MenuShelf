@@ -189,6 +189,7 @@ final class MenuBuilder {
             || view.clipboardShelfItem != nil
             || view.clockShelfItem != nil
             || view.bookmarkShelfItem != nil
+            || view.caffeineShelfItem != nil
             || !view.resolvedBookmarkContentItems.isEmpty
 
         if showManagementAtTop {
@@ -216,35 +217,35 @@ final class MenuBuilder {
             }
 
             if !view.items.isEmpty,
-               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil) {
+               (!view.resolvedLinkedMenuViews.isEmpty || !view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil || view.bookmarkShelfItem != nil || view.caffeineShelfItem != nil || !view.resolvedBookmarkContentItems.isEmpty) {
                 menu.addItem(.separator())
                 currentSection = nil
             }
 
             addLinkedMenuViews(view.resolvedLinkedMenuViews, to: menu, currentSection: &currentSection, visitedMenuViewIDs: visitedMenuViewIDs)
             if !view.resolvedLinkedMenuViews.isEmpty,
-               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil),
+               (!view.resolvedShortcutItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || !view.resolvedAppleScriptItems.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil || view.bookmarkShelfItem != nil || view.caffeineShelfItem != nil || !view.resolvedBookmarkContentItems.isEmpty),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addShortcutItems(view.resolvedShortcutItems, to: menu, currentSection: &currentSection)
             if !view.resolvedShortcutItems.isEmpty,
-               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil),
+               (!view.resolvedAppleScriptItems.isEmpty || !view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil || view.bookmarkShelfItem != nil || view.caffeineShelfItem != nil || !view.resolvedBookmarkContentItems.isEmpty),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addAppleScriptItems(view.resolvedAppleScriptItems, to: menu, currentSection: &currentSection, menuViewID: view.id)
             if !view.resolvedAppleScriptItems.isEmpty,
-               (!view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil),
+               (!view.resolvedLinkedShortcutsFolders.isEmpty || view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil || view.bookmarkShelfItem != nil || view.caffeineShelfItem != nil || !view.resolvedBookmarkContentItems.isEmpty),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
             }
             addLinkedShortcutFolders(view.resolvedLinkedShortcutsFolders, to: menu, currentSection: &currentSection)
             if !view.resolvedLinkedShortcutsFolders.isEmpty,
-               (view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil),
+               (view.browserFlipItem != nil || view.clipboardShelfItem != nil || view.clockShelfItem != nil || view.bookmarkShelfItem != nil || view.caffeineShelfItem != nil || !view.resolvedBookmarkContentItems.isEmpty),
                menu.items.last?.isSeparatorItem == false {
                 menu.addItem(.separator())
                 currentSection = nil
@@ -304,6 +305,24 @@ final class MenuBuilder {
                     enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
                 )
             }
+            if let caffeineShelfItem = view.caffeineShelfItem {
+                if (view.browserFlipItem != nil
+                    || view.clipboardShelfItem != nil
+                    || view.clockShelfItem != nil
+                    || view.bookmarkShelfItem != nil
+                    || !view.resolvedBookmarkContentItems.isEmpty),
+                   menu.items.last?.isSeparatorItem == false {
+                    menu.addItem(.separator())
+                    currentSection = nil
+                }
+                addCaffeineShelfMenuItem(
+                    caffeineShelfItem,
+                    to: menu,
+                    currentSection: &currentSection,
+                    menuViewID: view.id,
+                    enabled: store.settings.resolvedCaffeineShelf.enableCaffeineShelf
+                )
+            }
         }
 
         if showManagementAtBottom {
@@ -321,7 +340,10 @@ final class MenuBuilder {
               view.resolvedAppleScriptItems.isEmpty,
               view.browserFlipItem == nil,
               view.clipboardShelfItem == nil,
-              view.clockShelfItem == nil else {
+              view.clockShelfItem == nil,
+              view.bookmarkShelfItem == nil,
+              view.caffeineShelfItem == nil,
+              view.resolvedBookmarkContentItems.isEmpty else {
             return nil
         }
         guard view.items.count == 1,

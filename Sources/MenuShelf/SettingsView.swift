@@ -306,6 +306,8 @@ private struct MenuViewsSettingsView: View {
                                             + (view.browserFlipItem != nil ? 1 : 0)
                                             + (view.clipboardShelfItem != nil ? 1 : 0)
                                             + (view.clockShelfItem != nil ? 1 : 0)
+                                            + (view.bookmarkShelfItem != nil ? 1 : 0)
+                                            + (view.caffeineShelfItem != nil ? 1 : 0)
                                     )
                                     .tag(Optional(MenuBarItemSelection.menuView(view.id)))
                                     .id(MenuBarItemSelection.menuView(view.id))
@@ -639,6 +641,8 @@ private enum UnifiedContentItem: Identifiable {
     case browserFlip(BrowserFlipMenuItemConfig)
     case clipboardShelf(ClipboardShelfMenuItemConfig)
     case clockShelf(ClockShelfMenuItemConfig)
+    case bookmarkShelf(BookmarkShelfMenuItemConfig)
+    case caffeineShelf(CaffeineShelfMenuItemConfig)
 
     var id: UUID {
         switch self {
@@ -650,6 +654,8 @@ private enum UnifiedContentItem: Identifiable {
         case .browserFlip(let item): item.id
         case .clipboardShelf(let item): item.id
         case .clockShelf(let item): item.id
+        case .bookmarkShelf(let item): item.id
+        case .caffeineShelf(let item): item.id
         }
     }
 
@@ -667,6 +673,8 @@ private enum UnifiedContentItem: Identifiable {
         case .browserFlip: return "globe"
         case .clipboardShelf: return "clipboard"
         case .clockShelf: return "clock"
+        case .bookmarkShelf: return "bookmark"
+        case .caffeineShelf: return "cup.and.saucer"
         }
     }
 
@@ -680,6 +688,8 @@ private enum UnifiedContentItem: Identifiable {
         case .browserFlip: .teal
         case .clipboardShelf: .green
         case .clockShelf: .cyan
+        case .bookmarkShelf: .brown
+        case .caffeineShelf: .yellow
         }
     }
 }
@@ -770,7 +780,7 @@ private struct MenuViewDetailView: View {
     }
 
     private var contentCount: Int {
-        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.clockShelfItem != nil ? 1 : 0)
+        view.items.count + view.resolvedLinkedMenuViews.count + view.resolvedShortcutItems.count + view.resolvedLinkedShortcutsFolders.count + view.resolvedAppleScriptItems.count + (view.browserFlipItem != nil ? 1 : 0) + (view.clipboardShelfItem != nil ? 1 : 0) + (view.clockShelfItem != nil ? 1 : 0) + (view.bookmarkShelfItem != nil ? 1 : 0) + (view.caffeineShelfItem != nil ? 1 : 0)
     }
 }
 
@@ -956,6 +966,20 @@ private struct MenuViewContentsView: View {
                         Label("Add Clock Shelf", systemImage: "clock")
                     }
                     .disabled(view.clockShelfItem != nil)
+
+                    Button {
+                        store.addBookmarkShelfItem(toMenuViewID: view.id)
+                    } label: {
+                        Label("Add Bookmark Shelf", systemImage: "bookmark")
+                    }
+                    .disabled(view.bookmarkShelfItem != nil)
+
+                    Button {
+                        store.addCaffeineShelfItem(toMenuViewID: view.id)
+                    } label: {
+                        Label("Add CaffeineShelf", systemImage: "cup.and.saucer")
+                    }
+                    .disabled(view.caffeineShelfItem != nil)
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -1016,6 +1040,12 @@ private struct MenuViewContentsView: View {
         if let clockShelf = view.clockShelfItem {
             items.append(.clockShelf(clockShelf))
         }
+        if let bookmarkShelf = view.bookmarkShelfItem {
+            items.append(.bookmarkShelf(bookmarkShelf))
+        }
+        if let caffeineShelf = view.caffeineShelfItem {
+            items.append(.caffeineShelf(caffeineShelf))
+        }
         return items
     }
 
@@ -1056,6 +1086,10 @@ private struct MenuViewContentsView: View {
             view.clipboardShelfItem = nil
         } else if view.clockShelfItem?.id == id {
             store.removeClockShelfItem(fromMenuViewID: view.id)
+        } else if view.bookmarkShelfItem?.id == id {
+            store.removeBookmarkShelfItem(fromMenuViewID: view.id)
+        } else if view.caffeineShelfItem?.id == id {
+            store.removeCaffeineShelfItem(fromMenuViewID: view.id)
         }
         selectedContentItemID = nil
     }
@@ -1098,6 +1132,12 @@ private struct MenuViewContentsView: View {
             return
         case .clockShelf:
             // Clock Shelf lives in a single-slot group; reordering is a no-op.
+            return
+        case .bookmarkShelf:
+            // Bookmark Shelf lives in a single-slot group; reordering is a no-op.
+            return
+        case .caffeineShelf:
+            // CaffeineShelf lives in a single-slot group; reordering is a no-op.
             return
         }
 
@@ -1147,6 +1187,18 @@ private struct MenuViewContentsView: View {
             _ = sourceGroupOffset
             _ = groupOffset
         case .clockShelf:
+            // Already handled by the early return above; the values are unused.
+            sourceGroupOffset = 0
+            groupOffset = 0
+            _ = sourceGroupOffset
+            _ = groupOffset
+        case .bookmarkShelf:
+            // Already handled by the early return above; the values are unused.
+            sourceGroupOffset = 0
+            groupOffset = 0
+            _ = sourceGroupOffset
+            _ = groupOffset
+        case .caffeineShelf:
             // Already handled by the early return above; the values are unused.
             sourceGroupOffset = 0
             groupOffset = 0
@@ -1348,6 +1400,80 @@ private struct MenuViewContentsView: View {
                     }
                 }
             }
+        case .bookmarkShelf:
+            if let binding = bookmarkShelfItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit Bookmark Shelf")
+                        .font(.headline)
+
+                    Text("Opens your bookmark tree as a submenu in this menu view.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    if !store.settings.resolvedBookmarkShelf.enableBookmarkShelf {
+                        Text("Bookmark Shelf is disabled. Enable it in Settings → Bookmark Shelf for the submenu to populate.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeContentItem(id: item.id)
+                            editingItem = nil
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        case .caffeineShelf:
+            if let binding = caffeineShelfItemBinding(for: item.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Edit CaffeineShelf")
+                        .font(.headline)
+
+                    Text("Opens the CaffeineShelf duration menu to keep your Mac awake.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Title override", text: Binding(
+                        get: { binding.wrappedValue.titleOverride ?? "" },
+                        set: { binding.wrappedValue.titleOverride = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    TextField("Section name", text: Binding(
+                        get: { binding.wrappedValue.sectionName ?? "" },
+                        set: { binding.wrappedValue.sectionName = $0.isEmpty ? nil : $0 }
+                    ))
+
+                    if !store.settings.resolvedCaffeineShelf.enableCaffeineShelf {
+                        Text("CaffeineShelf is disabled. Enable it in Settings → CaffeineShelf for the menu to populate.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeContentItem(id: item.id)
+                            editingItem = nil
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1450,6 +1576,32 @@ private struct MenuViewContentsView: View {
         )
     }
 
+    private func bookmarkShelfItemBinding(for id: UUID) -> Binding<BookmarkShelfMenuItemConfig>? {
+        guard let current = view.bookmarkShelfItem, current.id == id else { return nil }
+
+        return Binding(
+            get: { view.bookmarkShelfItem ?? current },
+            set: { updated in
+                var copy = updated
+                copy.updatedAt = Date()
+                view.bookmarkShelfItem = copy
+            }
+        )
+    }
+
+    private func caffeineShelfItemBinding(for id: UUID) -> Binding<CaffeineShelfMenuItemConfig>? {
+        guard let current = view.caffeineShelfItem, current.id == id else { return nil }
+
+        return Binding(
+            get: { view.caffeineShelfItem ?? current },
+            set: { updated in
+                var copy = updated
+                copy.updatedAt = Date()
+                view.caffeineShelfItem = copy
+            }
+        )
+    }
+
     private func removeShortcutItem(id: UUID) {
         var items = view.resolvedShortcutItems
         items.removeAll { $0.id == id }
@@ -1521,6 +1673,10 @@ private struct UnifiedContentItemRow: View {
             return config.displayTitle
         case .clockShelf(let config):
             return config.displayTitle
+        case .bookmarkShelf(let config):
+            return config.displayTitle
+        case .caffeineShelf(let config):
+            return config.displayTitle
         }
     }
 
@@ -1563,6 +1719,16 @@ private struct UnifiedContentItemRow: View {
                 return "Section: \(section)"
             }
             return "Clock Shelf"
+        case .bookmarkShelf(let config):
+            if let section = config.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "Bookmark Shelf"
+        case .caffeineShelf(let config):
+            if let section = config.sectionName, !section.isEmpty {
+                return "Section: \(section)"
+            }
+            return "CaffeineShelf"
         }
     }
 }

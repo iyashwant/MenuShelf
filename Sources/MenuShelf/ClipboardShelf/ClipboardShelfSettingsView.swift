@@ -24,6 +24,7 @@ struct ClipboardShelfSettingsView: View {
         ) {
             enableCard
             if store.settings.resolvedClipboardShelf.enableClipboardShelf {
+                appearanceCard
                 hotkeyCard
                 behaviorCard
                 captureCard
@@ -35,6 +36,29 @@ struct ClipboardShelfSettingsView: View {
     }
 
     // MARK: - Cards
+
+    private var appearanceCard: some View {
+        SettingsCard("Appearance") {
+            SettingsRow(
+                "Menu Surface",
+                helper: "Where the Clipboard Shelf surfaces inside menu views. Popover shows a single click target; Submenu lists recent items inline."
+            ) {
+                Picker("", selection: Binding(
+                    get: { store.settings.resolvedClipboardShelf.resolvedPresentationMode },
+                    set: { value in
+                        store.updateClipboardShelfSettings { $0.presentationMode = value }
+                    }
+                )) {
+                    ForEach(ClipboardShelfPresentationMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 200)
+            }
+        }
+    }
 
     private var enableCard: some View {
         SettingsCard("Clipboard Shelf") {

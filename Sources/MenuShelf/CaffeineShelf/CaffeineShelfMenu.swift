@@ -27,9 +27,18 @@ final class CaffeineShelfMenu: NSObject {
     /// the module starts inactive — this is the awake-state off switch, which
     /// is distinct from the "Enable CaffeineShelf" feature toggle in Settings.
     func makeMenu() -> NSMenu {
-        let controller = CaffeineShelfController.shared
         let menu = NSMenu(title: "CaffeineShelf")
+        populate(menu)
+        return menu
+    }
+
+    /// Rebuild `menu` in place so a lazy `NSMenuDelegate` can refresh the
+    /// duration list every time the submenu opens.
+    func populate(_ menu: NSMenu) {
+        menu.removeAllItems()
         menu.autoenablesItems = false
+
+        let controller = CaffeineShelfController.shared
 
         // Status line for timed sessions ("Awake until 3:45 PM"). The checkmark
         // already conveys an indefinite session, so this is shown only when a
@@ -117,8 +126,6 @@ final class CaffeineShelfMenu: NSObject {
         )
         settings.target = self
         menu.addItem(settings)
-
-        return menu
     }
 
     /// Build a flat submenu of plain duration rows (e.g. "20 minutes"), each
@@ -162,6 +169,22 @@ final class CaffeineShelfMenu: NSObject {
 
     @objc private func handleOpenSettings(_ sender: NSMenuItem) {
         AppContainer.shared.settingsWindowController.show(focusCaffeineShelf: true)
+    }
+}
+
+// MARK: - CaffeineShelfMenuDelegate
+
+/// Lazy-populates an inline CaffeineShelf submenu when it is about to open so
+/// duration checkmarks and the awake status line reflect the latest state.
+final class CaffeineShelfMenuDelegate: NSObject, NSMenuDelegate {
+    weak var builder: MenuBuilder?
+
+    init(builder: MenuBuilder) {
+        self.builder = builder
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        builder?.populateCaffeineShelfSubmenu(menu)
     }
 }
 

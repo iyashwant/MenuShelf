@@ -77,6 +77,25 @@ enum ClipboardShelfPopupPosition: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - ClipboardShelfPresentationMode
+
+/// Selector controlling whether a `ClipboardShelfMenuItemConfig` renders as a
+/// single click target opening the popup, or as a parent `NSMenuItem` whose
+/// `submenu` lists recent clipboard items inline.
+enum ClipboardShelfPresentationMode: String, Codable, CaseIterable, Identifiable {
+    case popover
+    case submenu
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .popover: "Popover"
+        case .submenu: "Submenu"
+        }
+    }
+}
+
 // MARK: - ClipboardShelfMenuItemConfig
 
 /// A single Clipboard Shelf entry inside a `MenuViewConfig`. Mirrors
@@ -135,6 +154,9 @@ struct ClipboardShelfSettings: Codable, Equatable {
     var ignoredApplicationBundleIDs: [String]
     var ignoredRegularExpressions: [String]
     var reduceAnimations: Bool
+    /// Optional so older settings.json decodes cleanly. UI reads through
+    /// `resolvedPresentationMode`.
+    var presentationMode: ClipboardShelfPresentationMode?
 
     static let defaults = ClipboardShelfSettings(
         enableClipboardShelf: false,
@@ -163,6 +185,13 @@ struct ClipboardShelfSettings: Codable, Equatable {
         ],
         ignoredApplicationBundleIDs: [],
         ignoredRegularExpressions: [],
-        reduceAnimations: false
+        reduceAnimations: false,
+        presentationMode: .popover
     )
+
+    /// Resolves the presentation mode, falling back to `.popover` when the field
+    /// is missing from persisted settings.
+    var resolvedPresentationMode: ClipboardShelfPresentationMode {
+        presentationMode ?? .popover
+    }
 }
