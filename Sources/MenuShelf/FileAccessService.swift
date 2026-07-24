@@ -133,12 +133,28 @@ final class FileAccessService {
         }
 
         var isStale = false
-        let url = try URL(
-            resolvingBookmarkData: config.bookmarkData,
-            options: [.withSecurityScope, .withoutUI],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        )
+        let url: URL
+        do {
+            url = try URL(
+                resolvingBookmarkData: config.bookmarkData,
+                options: [.withSecurityScope, .withoutUI],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        } catch {
+            // A hard resolution failure (commonly NSFileReadCorruptFileError / 259,
+            // "isn't in the correct format") most often means the app's code
+            // signature changed since the bookmark was created — e.g. after an
+            // app update — so the security-scoped access grant no longer matches
+            // and simply needs to be re-established. Route it to the same
+            // "Grant Access" recovery flow as a stale bookmark instead of
+            // surfacing a cryptic Cocoa error the user can't act on.
+            resolvedCacheLock.lock()
+            resolvedCache.removeValue(forKey: config.id)
+            resolvedCacheLock.unlock()
+            DiagnosticsLogger.shared.log("accessItem: bookmark resolve failed for \(config.originalPathHint): \(error.localizedDescription)")
+            throw FileAccessError.staleBookmark(config.originalPathHint)
+        }
 
         if isStale {
             resolvedCacheLock.lock()

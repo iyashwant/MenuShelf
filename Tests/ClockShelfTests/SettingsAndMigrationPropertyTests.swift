@@ -15,7 +15,8 @@
 //  - Property 31: `presentationMode` round-trip and forward-decode.
 //    JSON round-trip preserves the value (including `nil`); a JSON
 //    blob missing the key decodes with `presentationMode == nil` and
-//    `resolvedPresentationMode == .popover`.
+//    `resolvedPresentationMode == .submenu` (the in-menu default —
+//    see `ClockShelfSettings.resolvedPresentationMode`).
 //
 
 import Foundation
@@ -83,9 +84,9 @@ func property29ResolvedClockShelfReturnsStoredValue() {
 /// in the property: post-migration, `clockShelf` resolves correctly and
 /// every other top-level field is byte-equal modulo the existing
 /// tail-block defaulting.
-@Test("Property 30: AppSettings.defaults is at schema version 14")
+@Test("Property 30: AppSettings.defaults is at schema version 17")
 func property30DefaultsAtSchema14() {
-    #expect(AppSettings.defaults.schemaVersion == 14)
+    #expect(AppSettings.defaults.schemaVersion == 17)
     #expect(AppSettings.defaults.clockShelf == ClockShelfSettings.defaults)
 }
 
@@ -204,7 +205,7 @@ private func roundTripSafe(_ settings: ClockShelfSettings) -> ClockShelfSettings
     return copy
 }
 
-@Test("Property 31: missing presentationMode decodes as nil and resolves to .popover")
+@Test("Property 31: missing presentationMode decodes as nil and resolves to .submenu")
 func property31MissingPresentationMode() throws {
     // Build a JSON blob explicitly missing the `presentationMode` key.
     let json = """
@@ -221,7 +222,7 @@ func property31MissingPresentationMode() throws {
     let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
 
     #expect(decoded.presentationMode == nil)
-    #expect(decoded.resolvedPresentationMode == .popover)
+    #expect(decoded.resolvedPresentationMode == .submenu)
 }
 
 @Test("Property 31: explicit nil presentationMode round-trips as nil")
@@ -236,7 +237,7 @@ func property31ExplicitNilRoundTrip() throws {
     let decoded = try decoder.decode(ClockShelfSettings.self, from: data)
 
     #expect(decoded.presentationMode == nil)
-    #expect(decoded.resolvedPresentationMode == .popover)
+    #expect(decoded.resolvedPresentationMode == .submenu)
 }
 
 @Test("Property 31: each ClockShelfPresentationMode case round-trips through JSON")

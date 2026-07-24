@@ -186,12 +186,19 @@ struct ClipboardShelfSettings: Codable, Equatable {
         ignoredApplicationBundleIDs: [],
         ignoredRegularExpressions: [],
         reduceAnimations: false,
-        presentationMode: .popover
+        presentationMode: .submenu
     )
 
-    /// Resolves the presentation mode, falling back to `.popover` when the field
-    /// is missing from persisted settings.
+    /// Resolves the presentation mode, falling back to `.submenu` when the
+    /// field is missing from persisted settings.
+    ///
+    /// `.submenu` is the default so that a Clipboard Shelf item sitting in a
+    /// menu view alongside folders behaves like every other row there: hover
+    /// reveals an inline `NSMenu`, and the trailing "Open Clipboard Shelf…"
+    /// action escalates to the popup. The standalone status item is
+    /// unaffected either way — `StandaloneModuleClickRouter` opens the popup
+    /// directly and never consults this mode.
     var resolvedPresentationMode: ClipboardShelfPresentationMode {
-        presentationMode ?? .popover
+        presentationMode ?? .submenu
     }
 }

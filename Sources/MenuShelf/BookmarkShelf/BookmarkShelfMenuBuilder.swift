@@ -235,6 +235,15 @@ extension MenuBuilder {
         }
         guard let storage else {
             addDisabled("Bookmark Shelf is not running", to: menu)
+            // The popup is backed by the same absent storage, so offer
+            // only the settings deep-link rather than the full footer.
+            if parentNodeID == nil {
+                menu.addItem(.separator())
+                menu.addItem(actionItem(
+                    "Open Settings…",
+                    kind: .openBookmarkShelfSettings
+                ))
+            }
             return
         }
 
@@ -286,17 +295,47 @@ extension MenuBuilder {
 
         if children.isEmpty {
             addDisabled("Empty", to: menu)
-            return
-        }
-
-        for child in children {
-            switch child.kind {
-            case .folder:
-                appendFolderRow(node: child, to: menu, menuViewID: menuViewID)
-            case .bookmark:
-                appendBookmarkRow(node: child, to: menu, menuViewID: menuViewID)
+        } else {
+            for child in children {
+                switch child.kind {
+                case .folder:
+                    appendFolderRow(node: child, to: menu, menuViewID: menuViewID)
+                case .bookmark:
+                    appendBookmarkRow(node: child, to: menu, menuViewID: menuViewID)
+                }
             }
         }
+
+        // Trailing actions, mirroring the Clipboard/Clock submenus:
+        // a route out of the inline tree into the full popup, plus a
+        // settings deep-link. Root-only — this same function drives
+        // every nested folder cascade via
+        // `BookmarkShelfMenuDelegate(parentNodeID:)`, and appending
+        // unconditionally would repeat the footer in each one.
+        // Appended on the empty path too, so an empty tree is still
+        // recoverable from the menu.
+        if parentNodeID == nil {
+            appendBookmarkShelfFooter(to: menu, menuViewID: menuViewID)
+        }
+    }
+
+    /// Separator + "Open Bookmark Shelf…" + "Open Settings…" appended to
+    /// the root inline submenu. The `.openBookmarkShelf` action carries
+    /// the originating `menuViewID` so `MenuActionHandler` can anchor the
+    /// popup under this menu view's own status item.
+    private func appendBookmarkShelfFooter(to menu: NSMenu, menuViewID: UUID) {
+        if menu.items.last?.isSeparatorItem == false {
+            menu.addItem(.separator())
+        }
+        menu.addItem(actionItem(
+            "Open Bookmark Shelf…",
+            kind: .openBookmarkShelf,
+            menuViewID: menuViewID
+        ))
+        menu.addItem(actionItem(
+            "Open Settings…",
+            kind: .openBookmarkShelfSettings
+        ))
     }
 
     /// Append a folder row with a delegate-driven cascade. Defensive

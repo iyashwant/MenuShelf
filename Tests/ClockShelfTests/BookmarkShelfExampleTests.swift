@@ -17,9 +17,9 @@ import Testing
 
 // MARK: - ModuleKind
 
-@Test("ModuleKind.allCases declared in order [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf]")
+@Test("ModuleKind.allCases declared in order [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf, .caffeineShelf]")
 func moduleKindAllCasesOrder() {
-    #expect(ModuleKind.allCases == [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf])
+    #expect(ModuleKind.allCases == [.browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf, .caffeineShelf])
 }
 
 @Test("ModuleKind.bookmarkShelf default symbol/title/bondLabel")
@@ -45,9 +45,9 @@ func bookmarkShelfSettingsDefaults() {
 
 // MARK: - AppSettings.defaults
 
-@Test("AppSettings.defaults.schemaVersion == 16")
+@Test("AppSettings.defaults.schemaVersion == 17")
 func appSettingsSchemaVersion16() {
-    #expect(AppSettings.defaults.schemaVersion == 16)
+    #expect(AppSettings.defaults.schemaVersion == 17)
 }
 
 @Test("AppSettings.defaults.bookmarkShelf == BookmarkShelfSettings.defaults")

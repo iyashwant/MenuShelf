@@ -57,16 +57,19 @@ func clockShelfDefaultsFieldValues() {
     #expect(defaults.use24HourTime == false)
     #expect(defaults.popoverTextSize == 13)
     #expect(defaults.resetOffsetOnClose == true)
-    #expect(defaults.presentationMode == .popover)
-    #expect(defaults.resolvedPresentationMode == .popover)
+    // `.submenu` is the in-menu default so a Clock Shelf item in a menu
+    // view hovers open like the folder rows beside it. The standalone
+    // status item ignores this field entirely.
+    #expect(defaults.presentationMode == .submenu)
+    #expect(defaults.resolvedPresentationMode == .submenu)
     #expect(defaults.resolvedPopoverTextSize == 13)
 }
 
 // MARK: - AppSettings.defaults schema version
 
-@Test("AppSettings.defaults.schemaVersion == 14")
+@Test("AppSettings.defaults.schemaVersion == 17")
 func appSettingsDefaultsSchemaVersion() {
-    #expect(AppSettings.defaults.schemaVersion == 14)
+    #expect(AppSettings.defaults.schemaVersion == 17)
 }
 
 @Test("AppSettings.defaults.clockShelf matches ClockShelfSettings.defaults")

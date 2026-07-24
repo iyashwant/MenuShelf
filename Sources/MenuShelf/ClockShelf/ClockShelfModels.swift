@@ -122,7 +122,7 @@ struct ClockShelfSettings: Codable, Equatable {
         use24HourTime: false,
         popoverTextSize: 13,
         resetOffsetOnClose: true,
-        presentationMode: .popover
+        presentationMode: .submenu
     )
 
     /// Clamped value used by the SwiftUI stepper (range 11...22).
@@ -130,10 +130,17 @@ struct ClockShelfSettings: Codable, Equatable {
         min(max(popoverTextSize, 11), 22)
     }
 
-    /// Resolves the presentation mode, falling back to `.popover` for
+    /// Resolves the presentation mode, falling back to `.submenu` for
     /// settings.json predating Requirement 3.5 (where the field is
     /// missing) and for any future writes that explicitly nil the field.
+    ///
+    /// `.submenu` is the default so that a Clock Shelf item sitting in a
+    /// menu view alongside folders behaves like every other row there:
+    /// hover reveals an inline `NSMenu`, and the trailing "Open Clock
+    /// Shelf…" action escalates to the popover. The standalone status
+    /// item is unaffected either way — `StandaloneModuleClickRouter`
+    /// opens the popover directly and never consults this mode.
     var resolvedPresentationMode: ClockShelfPresentationMode {
-        presentationMode ?? .popover
+        presentationMode ?? .submenu
     }
 }

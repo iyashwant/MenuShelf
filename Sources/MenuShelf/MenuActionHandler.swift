@@ -53,6 +53,7 @@ enum MenuActionKind {
     case openBrowserFlipSettings
     case openBookmark
     case openBookmarkIn
+    case openBookmarkShelf
     case openBookmarkShelfSettings
 }
 
@@ -439,13 +440,17 @@ final class MenuAction: NSObject {
             // The execute path is dispatched onto the main queue via the 50ms
             // deferral in handleMenuAction(_:), but that is not statically
             // visible to the compiler — hop through a Task to satisfy the
-            // MainActor-isolated togglePopup contract.
+            // MainActor-isolated showPopup contract.
             let menuViewID = action.menuViewID
             Task { @MainActor in
                 let anchor = menuViewID.flatMap {
                     AppContainer.shared.statusItemManager.statusBarButton(for: $0)
                 }
-                ClipboardShelfController.shared.togglePopup(anchor: anchor)
+                // `showPopup` rather than `togglePopup`: picking this row is
+                // an explicit "open", so an already-open panel must stay open
+                // (and re-anchor) instead of closing. Status-item clicks and
+                // the global hotkey keep their toggle semantics.
+                ClipboardShelfController.shared.showPopup(anchor: anchor)
             }
 
         case .openClockShelf:
@@ -457,14 +462,18 @@ final class MenuAction: NSObject {
             }
             // The 50ms deferral inside handleMenuAction(_:) covers the
             // dispatch hop, but the compiler can't see that — hop through
-            // a Task to satisfy the MainActor-isolated togglePopover
+            // a Task to satisfy the MainActor-isolated showPopover
             // contract.
             let clockShelfMenuViewID = action.menuViewID
             Task { @MainActor in
                 let anchor = clockShelfMenuViewID.flatMap {
                     AppContainer.shared.statusItemManager.statusBarButton(for: $0)
                 }
-                ClockShelfController.shared.togglePopover(anchor: anchor)
+                // `showPopover` rather than `togglePopover`: picking this row
+                // is an explicit "open", so an already-open panel must stay
+                // open (and re-anchor) instead of closing. Status-item clicks
+                // and the global hotkey keep their toggle semantics.
+                ClockShelfController.shared.showPopover(anchor: anchor)
             }
 
         case .openClipboardShelfSettings:
@@ -555,6 +564,27 @@ final class MenuAction: NSObject {
                     completionHandler: nil
                 )
                 storage.recordOpened(id: nodeID)
+            }
+
+        case .openBookmarkShelf:
+            let resolvedBookmarkShelf = store.settings.resolvedBookmarkShelf
+            if !resolvedBookmarkShelf.enableBookmarkShelf {
+                // Surface settings so the user can flip the enable toggle.
+                AppContainer.shared.settingsWindowController.show(focusBookmarkShelf: true)
+                return
+            }
+            // The 50ms deferral inside handleMenuAction(_:) covers the
+            // dispatch hop, but the compiler can't see that — hop through
+            // a Task to satisfy the MainActor-isolated showPopup contract.
+            let bookmarkShelfMenuViewID = action.menuViewID
+            Task { @MainActor in
+                let anchor = bookmarkShelfMenuViewID.flatMap {
+                    AppContainer.shared.statusItemManager.statusBarButton(for: $0)
+                }
+                // `showPopup` rather than `togglePopup`: the menu-originated
+                // path is an explicit "open", so an already-open panel must
+                // stay open (and re-anchor) instead of closing.
+                BookmarkShelfController.shared.showPopup(anchor: anchor)
             }
 
         case .openBookmarkShelfSettings:

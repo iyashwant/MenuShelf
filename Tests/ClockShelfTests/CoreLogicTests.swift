@@ -14,11 +14,11 @@ import Testing
 
 // MARK: - Migration ladder
 
-@Test("migratedSettings bumps any old schema to the current version (16)")
+@Test("migratedSettings bumps any old schema to the current version (17)")
 func migrationBumpsSchemaVersion() {
     var old = AppSettings.defaults
     old.schemaVersion = 1
-    #expect(PreferencesStore.migratedSettings(old).schemaVersion == 16)
+    #expect(PreferencesStore.migratedSettings(old).schemaVersion == 17)
 }
 
 @Test("migratedSettings is idempotent")
