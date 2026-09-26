@@ -2,11 +2,32 @@ import AppKit
 import SwiftUI
 
 final class SettingsWindowController: NSObject, NSWindowDelegate {
+    /// Size the window opens at when the display has room for it. The Menu Bar
+    /// pane is four columns wide (sidebar + item list + view contents + detail)
+    /// and cannot lay out below roughly 1260pt, so opening any narrower than
+    /// this just makes SwiftUI stretch the window back out on first display.
+    private static let defaultContentSize = NSSize(width: 1280, height: 800)
+
+    /// Gap kept between the window and the edges of the screen's visible area.
+    private static let screenMargin: CGFloat = 16
+
     private let store: PreferencesStore
     private var window: NSWindow?
 
+    /// Guards against re-entering `fitWindowToScreen(_:recentering:)` from the
+    /// `windowDidResize(_:)` its own `setFrame` triggers.
+    private var isFittingWindow = false
+
     init(store: PreferencesStore) {
         self.store = store
+        super.init()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
     @objc func showFromMenu(_ sender: Any?) {
@@ -87,9 +108,19 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 .environmentObject(store)
 
             let hostingController = NSHostingController(rootView: rootView)
-            let contentSize = NSSize(width: 840, height: 620)
+
+            // The settings panes cannot lay out below ~1260pt wide. AppKit
+            // enforces that on first display by resizing the window *after* it
+            // has been positioned, anchored at the top-left corner — which is
+            // why a window opened at 840pt and centred ended up hanging off the
+            // right edge of the screen. Publish the minimum as the window's
+            // content minimum (so it can never be resized into clipping) and
+            // open at a size that already satisfies it, then keep the frame
+            // inside the screen in `fitWindowToScreen(_:recentering:)`.
+            hostingController.sizingOptions = [.minSize]
+
             let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-            let initialContentRect = NSRect(origin: .zero, size: contentSize)
+            let initialContentRect = NSRect(origin: .zero, size: Self.defaultContentSize)
 
             let settingsWindow = NSWindow(
                 contentRect: initialContentRect,
@@ -99,7 +130,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             )
             settingsWindow.contentViewController = hostingController
             settingsWindow.title = ""
-            settingsWindow.minSize = NSSize(width: 760, height: 520)
             settingsWindow.titlebarAppearsTransparent = true
             settingsWindow.titleVisibility = .hidden
             settingsWindow.isReleasedWhenClosed = false
@@ -108,11 +138,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             // Remove any stale saved frame from previous builds.
             NSWindow.removeFrame(usingName: "MenuShelfSettings")
 
-            // Set the content size explicitly, then center on screen.
-            settingsWindow.setContentSize(contentSize)
-            settingsWindow.center()
-
             window = settingsWindow
+            fitWindowToScreen(settingsWindow, recentering: true)
+        } else if let window {
+            // The window survives between openings, so the display it was last
+            // placed on may have gone away or changed resolution in the meantime.
+            fitWindowToScreen(window, recentering: false)
         }
 
         // Promote to a regular app so the Dock icon appears while the settings
@@ -123,7 +154,75 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
-        DiagnosticsLogger.shared.log("Settings window ordered front")
+        if let frame = window?.frame {
+            DiagnosticsLogger.shared.log("Settings window ordered front at \(NSStringFromRect(frame))")
+        }
+    }
+
+    // MARK: - Geometry
+
+    /// Keeps the settings window inside the visible area of its screen.
+    ///
+    /// With `recentering` the window is sized to `defaultContentSize` (shrunk to
+    /// fit if the display is smaller) and centred; otherwise the current size and
+    /// position are preserved and only clamped back on screen when they overflow,
+    /// so a window the user has resized or moved stays where they put it.
+    ///
+    /// The size is never taken below the content's own minimum: a window too
+    /// small for the panes is worse than one that overhangs a cramped display.
+    private func fitWindowToScreen(_ window: NSWindow, recentering: Bool) {
+        guard !isFittingWindow else { return }
+        guard let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+
+        let margin = Self.screenMargin
+        let minSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: window.contentMinSize)).size
+        let maxWidth = max(visibleFrame.width - margin * 2, minSize.width)
+        let maxHeight = max(visibleFrame.height - margin * 2, minSize.height)
+
+        var frame = window.frame
+
+        if recentering {
+            frame.size = window.frameRect(
+                forContentRect: NSRect(origin: .zero, size: Self.defaultContentSize)
+            ).size
+        }
+
+        frame.size.width = min(frame.width, maxWidth)
+        frame.size.height = min(frame.height, maxHeight)
+
+        if recentering {
+            frame.origin = NSPoint(
+                x: visibleFrame.midX - frame.width / 2,
+                y: visibleFrame.midY - frame.height / 2
+            )
+        }
+
+        // Prefer showing the top-left of the window when it is larger than the
+        // screen, since that is where the sidebar and the pane content start.
+        frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
+        frame.origin.y = min(visibleFrame.maxY - frame.height, max(frame.origin.y, visibleFrame.minY))
+
+        guard frame != window.frame else { return }
+
+        isFittingWindow = true
+        window.setFrame(frame, display: window.isVisible)
+        isFittingWindow = false
+    }
+
+    /// SwiftUI applies the panes' minimum width by resizing the window on first
+    /// display, keeping the top-left corner fixed. Re-clamp afterwards so that
+    /// growth can never push the window off the edge of the screen.
+    ///
+    /// Live resizes are left alone — the user dragging an edge is deliberate,
+    /// and the pointer cannot leave the screen anyway.
+    func windowDidResize(_ notification: Notification) {
+        guard let window, window.contentView?.inLiveResize != true else { return }
+        fitWindowToScreen(window, recentering: false)
+    }
+
+    @objc private func screenParametersChanged() {
+        guard let window, window.isVisible else { return }
+        fitWindowToScreen(window, recentering: false)
     }
 
     // Closing the settings window is the user's signal that they're done editing
