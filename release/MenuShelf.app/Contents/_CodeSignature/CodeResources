@@ -11,6 +11,15 @@
 	</dict>
 	<key>files2</key>
 	<dict>
+		<key>Helpers/MenuShelfLidHelper.app</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			azwrS73QpKthtiLZggQ+dSLENl4=
+			</data>
+			<key>requirement</key>
+			<string>identifier "app.menushelf.MenuShelf2.LidHelper" and certificate leaf = H"9f428fdceab9861d32af9bd6f8d691a2402fbacc"</string>
+		</dict>
 		<key>Resources/MenuShelf.icns</key>
 		<dict>
 			<key>hash2</key>
