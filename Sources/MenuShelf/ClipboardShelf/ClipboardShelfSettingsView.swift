@@ -55,7 +55,7 @@ struct ClipboardShelfSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 200)
+                .fixedSize()
             }
         }
     }

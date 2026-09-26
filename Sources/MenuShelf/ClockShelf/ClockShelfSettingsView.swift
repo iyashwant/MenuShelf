@@ -158,7 +158,7 @@ struct ClockShelfSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 200)
+                .fixedSize()
             }
 
             SettingsToggle(

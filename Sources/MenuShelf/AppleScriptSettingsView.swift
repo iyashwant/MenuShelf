@@ -40,6 +40,8 @@ struct AppleScriptSettingsView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
+            SettingsColumnHeader("AppleScripts")
+
             List(selection: Binding(
                 get: { store.selectedAppleScriptID },
                 set: { store.selectedAppleScriptID = $0 }
@@ -59,9 +61,7 @@ struct AppleScriptSettingsView: View {
                 }
             }
 
-            Divider()
-
-            HStack(spacing: 8) {
+            SettingsColumnFooter {
                 Button {
                     let new = store.addAppleScript()
                     store.selectedAppleScriptID = new.id
@@ -90,7 +90,6 @@ struct AppleScriptSettingsView: View {
 
                 Spacer()
             }
-            .padding(10)
         }
     }
 

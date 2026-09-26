@@ -68,9 +68,7 @@ struct SettingsView: View {
                         .tag(section)
                 }
 
-                Divider()
-
-                HStack(spacing: 8) {
+                SettingsColumnFooter {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .interpolation(.high)
@@ -84,8 +82,6 @@ struct SettingsView: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
         } detail: {
@@ -291,6 +287,8 @@ private struct MenuViewsSettingsView: View {
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
+                SettingsColumnHeader("Menu Bar Items")
+
                 ScrollViewReader { proxy in
                     List(selection: $selection) {
                         if !store.settings.resolvedMenuViews.isEmpty {
@@ -358,9 +356,7 @@ private struct MenuViewsSettingsView: View {
                     }
                 }
 
-                Divider()
-
-                HStack {
+                SettingsColumnFooter {
                     Menu {
                         Button {
                             store.addMenuView()
@@ -396,7 +392,6 @@ private struct MenuViewsSettingsView: View {
 
                     Spacer()
                 }
-                .padding(10)
             }
             .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
             .frame(maxHeight: .infinity)
@@ -542,6 +537,8 @@ private struct SourcesSettingsView: View {
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
+                SettingsColumnHeader("Sources")
+
                 List(selection: $store.selectedFolderID) {
                     ForEach(store.settings.folders) { folder in
                         FolderRow(folder: folder)
@@ -557,20 +554,24 @@ private struct SourcesSettingsView: View {
                     }
                 }
 
-                Divider()
+                SettingsColumnFooter {
+                    Menu {
+                        Button {
+                            store.addFolderFromPanel()
+                        } label: {
+                            Label("Add Folder", systemImage: "folder.badge.plus")
+                        }
 
-                HStack {
-                    Button {
-                        store.addFolderFromPanel()
+                        Button {
+                            store.addAppFromPanel()
+                        } label: {
+                            Label("Add App", systemImage: "app.badge.plus")
+                        }
                     } label: {
-                        Label("Add Folder", systemImage: "folder.badge.plus")
+                        Label("Add", systemImage: "plus")
                     }
-
-                    Button {
-                        store.addAppFromPanel()
-                    } label: {
-                        Label("Add App", systemImage: "app.badge.plus")
-                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
 
                     Button {
                         if let id = store.selectedFolderID {
@@ -583,9 +584,8 @@ private struct SourcesSettingsView: View {
 
                     Spacer()
                 }
-                .padding(10)
             }
-            .frame(minWidth: 170, idealWidth: 200, maxWidth: 250)
+            .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
             .frame(maxHeight: .infinity)
 
             Group {
@@ -729,7 +729,7 @@ private struct MenuViewDetailView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
-                        .frame(width: 220)
+                        .fixedSize()
                     }
 
                     SettingsRow("Layout") {
@@ -796,10 +796,7 @@ private struct MenuViewContentsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("View Contents")
-                    .font(.headline)
-                Spacer()
+            SettingsColumnHeader("View Contents") {
                 if store.isRefreshingShortcuts {
                     ProgressView()
                         .controlSize(.small)
@@ -847,9 +844,7 @@ private struct MenuViewContentsView: View {
             }
             .frame(maxHeight: .infinity)
 
-            Divider()
-
-            HStack {
+            SettingsColumnFooter {
                 Menu {
                     Button {
                         store.selectedMenuViewID = view.id
@@ -1019,7 +1014,6 @@ private struct MenuViewContentsView: View {
                 .help("Refresh Shortcuts")
                 .disabled(store.isRefreshingShortcuts)
             }
-            .padding(10)
         }
         .popover(item: $editingItem, arrowEdge: .trailing) { item in
             makePopoverEditor(for: item)
@@ -2171,7 +2165,7 @@ private struct MenuSettingsEditor: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: 200)
+                    .fixedSize()
                 }
 
                 SettingsToggle("Keep folders on top", isOn: $settings.keepFoldersOnTop)
@@ -2235,7 +2229,7 @@ private struct MenuSettingsEditor: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: 220)
+                    .fixedSize()
                 }
 
                 SettingsToggle("Show file extensions", isOn: $settings.showFileExtensions)
@@ -2435,10 +2429,9 @@ private struct ShortcutsSettingsView: View {
 
     private var allShortcutsList: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("All Shortcuts")
-                    .font(.headline)
+            SettingsColumnHeader("All Shortcuts")
 
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
@@ -2459,9 +2452,7 @@ private struct ShortcutsSettingsView: View {
                 .padding(.horizontal, 8)
                 .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+            .padding(10)
 
             Divider()
 
@@ -2506,9 +2497,7 @@ private struct ShortcutsSettingsView: View {
             }
             .frame(maxHeight: .infinity)
 
-            Divider()
-
-            HStack(spacing: 8) {
+            SettingsColumnFooter {
                 Button {
                     store.refreshShortcutsCatalog()
                 } label: {
@@ -2527,7 +2516,6 @@ private struct ShortcutsSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .padding(10)
         }
     }
 

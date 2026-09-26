@@ -196,6 +196,72 @@ struct SettingsToggle: View {
     }
 }
 
+// MARK: - Column chrome
+
+/// Fixed heights for the bars at the top and bottom of settings columns. Every
+/// split-view column and the sidebar footer use these, so their dividers line
+/// up across the window instead of each bar sizing to its own content.
+enum SettingsColumnMetrics {
+    static let headerHeight: CGFloat = 36
+    static let footerHeight: CGFloat = 44
+}
+
+/// Title bar at the top of a split-view column, followed by a divider.
+struct SettingsColumnHeader<Accessory: View>: View {
+    let title: String
+    @ViewBuilder let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                accessory
+            }
+            .padding(.horizontal, 14)
+            .frame(height: SettingsColumnMetrics.headerHeight)
+
+            Divider()
+        }
+    }
+}
+
+extension SettingsColumnHeader where Accessory == EmptyView {
+    init(_ title: String) {
+        self.init(title) { EmptyView() }
+    }
+}
+
+/// Bar pinned to the bottom of a column (buttons, counts, the sidebar's app
+/// badge), preceded by a divider.
+struct SettingsColumnFooter<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(spacing: 8) {
+                content
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: SettingsColumnMetrics.footerHeight)
+        }
+    }
+}
+
 // MARK: - Icon picker
 
 private enum IconKind: String, CaseIterable, Identifiable {
