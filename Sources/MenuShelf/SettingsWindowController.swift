@@ -4,9 +4,9 @@ import SwiftUI
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Size the window opens at when the display has room for it. The Menu Bar
     /// pane is four columns wide (sidebar + item list + view contents + detail)
-    /// and cannot lay out below roughly 1260pt, so opening any narrower than
+    /// and cannot lay out below roughly 1360pt, so opening any narrower than
     /// this just makes SwiftUI stretch the window back out on first display.
-    private static let defaultContentSize = NSSize(width: 1280, height: 800)
+    private static let defaultContentSize = NSSize(width: 1380, height: 800)
 
     /// Gap kept between the window and the edges of the screen's visible area.
     private static let screenMargin: CGFloat = 16
@@ -109,7 +109,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
             let hostingController = NSHostingController(rootView: rootView)
 
-            // The settings panes cannot lay out below ~1260pt wide. AppKit
+            // The settings panes cannot lay out below ~1360pt wide. AppKit
             // enforces that on first display by resizing the window *after* it
             // has been positioned, anchored at the top-left corner — which is
             // why a window opened at 840pt and centred ended up hanging off the

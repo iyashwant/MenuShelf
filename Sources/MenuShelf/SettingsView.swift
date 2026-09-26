@@ -438,11 +438,15 @@ private struct MenuViewsSettingsView: View {
                 .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
                 .frame(maxHeight: .infinity)
 
+                // The icon picker (preview + five-segment kind picker) and the
+                // fixed-width rows need ~470pt. Any narrower and the split view
+                // squeezes this column below its content, which then overflows
+                // and is clipped on both edges.
                 MenuViewDetailView(view: Binding(
                     get: { store.menuView(id: id) ?? currentMenuView },
                     set: { store.updateMenuView($0) }
                 ))
-                .frame(minWidth: 380)
+                .frame(minWidth: 500)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 emptySelectionPane
