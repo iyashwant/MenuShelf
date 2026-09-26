@@ -46,12 +46,7 @@ final class MenuShelfPickerController: NSObject, NSWindowDelegate {
     /// to live discovery when Browser Flip was never configured so the picker
     /// still works if MenuShelf was made default by other means.
     private func resolvedBrowsers() -> [URL] {
-        let saved = AppContainer.shared.store.settings.resolvedBrowserFlip.savedBrowsers
-        let ordered = saved
-            .filter { $0.isVisible }
-            .filter { !MenuBuilder.isAskEverytime($0) }
-            .sorted { $0.sortOrder < $1.sortOrder }
-            .map { $0.appURL }
+        let ordered = AppContainer.shared.store.visibleOrderedBrowserURLs()
 
         if !ordered.isEmpty {
             MenuShelfPickerOpener.ensureShortcutsAssigned(for: ordered)

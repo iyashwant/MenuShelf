@@ -12,6 +12,8 @@ import SwiftUI
 
 struct BrowserFlipSettingsView: View {
     @EnvironmentObject private var store: PreferencesStore
+    @AppStorage("menushelf_ask_shortcuts") private var shortcuts: [String: String] = [:]
+    @AppStorage("menushelf_ask_shortcuts_manual") private var manualShortcuts: [String: Bool] = [:]
 
     var body: some View {
         SettingsPane("Browser Flip", subtitle: "Switch your default browser from the menu bar.") {
@@ -51,6 +53,10 @@ struct BrowserFlipSettingsView: View {
                                         Text("Default")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
+                                    }
+
+                                    if browser.isVisible, !MenuBuilder.isAskEverytime(browser) {
+                                        shortcutMenu(for: browser)
                                     }
 
                                     Toggle("", isOn: Binding(
@@ -112,5 +118,62 @@ struct BrowserFlipSettingsView: View {
         let icon = NSWorkspace.shared.icon(forFile: browser.appURL.path)
         icon.size = NSSize(width: 18, height: 18)
         return icon
+    }
+
+    /// Shows the browser's current "Ask Everytime" quick key and lets the
+    /// user pin a different one, or hand it back to auto-assignment. Only
+    /// shown for visible browsers — a hidden browser has no quick key since
+    /// hiding it releases the letter for others to claim.
+    @ViewBuilder
+    private func shortcutMenu(for browser: BrowserInfo) -> some View {
+        let isManual = manualShortcuts[browser.id] == true
+        Menu {
+            Button {
+                store.setBrowserShortcut(browser, letter: nil)
+            } label: {
+                if !isManual {
+                    Label("Automatic", systemImage: "checkmark")
+                } else {
+                    Text("Automatic")
+                }
+            }
+
+            Divider()
+
+            ForEach(selectableLetters(for: browser), id: \.self) { letter in
+                let isCurrent = shortcuts[browser.id]?.uppercased() == String(letter)
+                Button {
+                    store.setBrowserShortcut(browser, letter: letter)
+                } label: {
+                    if isCurrent {
+                        Label(String(letter), systemImage: "checkmark")
+                    } else {
+                        Text(String(letter))
+                    }
+                }
+            }
+        } label: {
+            Text(shortcuts[browser.id] ?? "–")
+                .font(.caption.monospaced())
+                .frame(minWidth: 14)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Quick key used to pick \(browser.name) from the \"Ask Everytime\" picker.")
+    }
+
+    /// All A–Z letters not already claimed by another currently-visible
+    /// browser. Includes this browser's own current letter (if any), since
+    /// re-picking it is harmless.
+    private func selectableLetters(for browser: BrowserInfo) -> [Character] {
+        let usedByOthers = Set(
+            store.discoveredBrowsers
+                .filter { $0.isVisible && $0.id != browser.id }
+                .compactMap { shortcuts[$0.id]?.uppercased().first }
+        )
+        return (UInt8(ascii: "A")...UInt8(ascii: "Z")).compactMap { code in
+            let letter = Character(UnicodeScalar(code))
+            return usedByOthers.contains(letter) ? nil : letter
+        }
     }
 }

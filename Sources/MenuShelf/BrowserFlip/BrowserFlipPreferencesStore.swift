@@ -80,6 +80,7 @@ extension PreferencesStore {
         discoveredBrowsers = merged
         updateBrowserFlipSettings { $0.savedBrowsers = merged }
         currentDefaultBrowserID = DefaultBrowserService.shared.currentDefaultBrowserID()
+        reconcileQuickKeys()
     }
 
     func updateBrowserFlipSettings(_ update: (inout BrowserFlipSettings) -> Void) {
@@ -92,6 +93,7 @@ extension PreferencesStore {
         if let index = discoveredBrowsers.firstIndex(where: { $0.id == browser.id }) {
             discoveredBrowsers[index].isVisible = visible
             updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+            reconcileQuickKeys()
         }
     }
 
@@ -100,6 +102,7 @@ extension PreferencesStore {
             discoveredBrowsers[index].isVisible = true
         }
         updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+        reconcileQuickKeys()
     }
 
     func moveBrowser(from source: IndexSet, to destination: Int) {
@@ -108,6 +111,36 @@ extension PreferencesStore {
             discoveredBrowsers[index].sortOrder = index
         }
         updateBrowserFlipSettings { $0.savedBrowsers = discoveredBrowsers }
+        reconcileQuickKeys()
+    }
+
+    /// Explicitly pins `letter` as the browser's "Ask Everytime" quick key,
+    /// or clears the pin (falling back to auto-assignment) when nil.
+    func setBrowserShortcut(_ browser: BrowserInfo, letter: Character?) {
+        MenuShelfPickerOpener.setManualShortcut(
+            bundleID: browser.id,
+            letter: letter,
+            visibleBrowsers: visibleOrderedBrowserURLs()
+        )
+    }
+
+    /// The browser list the "Ask Everytime" picker shows: only visible
+    /// browsers, in the user's configured order, with the synthetic "Ask
+    /// Everytime" entry excluded. Mirrors `MenuShelfPickerController`.
+    func visibleOrderedBrowserURLs() -> [URL] {
+        discoveredBrowsers
+            .filter { $0.isVisible }
+            .filter { !MenuBuilder.isAskEverytime($0) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { $0.appURL }
+    }
+
+    /// Releases quick keys held by now-hidden/removed browsers and lets any
+    /// still-visible browser reclaim a freed letter. Called after every
+    /// visibility, order, or discovery change so the picker's badges never
+    /// drift from what Browser Flip settings currently show.
+    private func reconcileQuickKeys() {
+        MenuShelfPickerOpener.ensureShortcutsAssigned(for: visibleOrderedBrowserURLs())
     }
 
     func setEnableBrowserFlip(_ enabled: Bool) {
