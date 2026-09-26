@@ -219,11 +219,23 @@ final class CaffeineShelfController {
         }
 
         Task { @MainActor in
-            let username = NSUserName()
-            let granted = await Task.detached {
+            var granted = await Task.detached {
                 CaffeineShelfLidControl.isGrantInstalled()
-                    || CaffeineShelfLidControl.installGrant(username: username)
             }.value
+
+            // Explain before macOS asks. Reaching the authorization sheet with no
+            // context is jarring from the menu path, where — unlike Settings —
+            // there is no surrounding copy warning that approval is coming.
+            if !granted {
+                guard confirmLidGrantInstall() else {
+                    store.setKeepAwakeWithLidClosed(false)
+                    logIfVerbose("CaffeineShelf lid-closed setup declined before authorization")
+                    return
+                }
+                granted = await Task.detached {
+                    CaffeineShelfLidControl.installGrant()
+                }.value
+            }
 
             guard granted else {
                 store.setKeepAwakeWithLidClosed(false)
@@ -233,6 +245,29 @@ final class CaffeineShelfController {
             store.setKeepAwakeWithLidClosed(true)
             if isActive { applyLidFlag(true) }
         }
+    }
+
+    /// One-time explainer shown before the native authorization sheet. Returns
+    /// `true` when the user wants to continue.
+    @MainActor
+    private func confirmLidGrantInstall() -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Keep your Mac awake with the lid closed"
+        alert.informativeText = """
+            This flips a protected macOS setting (pmset disablesleep), so it needs \
+            your permission once. macOS will ask you to authenticate with Touch ID \
+            or your password. After that the switch works instantly, with no \
+            further prompts.
+
+            MenuShelf grants itself permission to run only two exact commands — \
+            turning lid-close sleep off and back on — and nothing else. You can \
+            revoke it any time from CaffeineShelf settings.
+            """
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Not Now")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Reconcile our in-memory flag after the grant is removed from Settings.
@@ -253,13 +288,16 @@ final class CaffeineShelfController {
         }
     }
 
-    /// Synchronously clear the `disablesleep` flag if we set it, so a normal
-    /// quit never leaves the Mac unable to sleep. Called from
-    /// `applicationWillTerminate` where an async reset might not finish before
-    /// the process exits.
+    /// Clear the `disablesleep` flag if we set it, so a normal quit never leaves
+    /// the Mac unable to sleep. Called from `applicationWillTerminate`.
+    ///
+    /// The reset now runs in the separate helper process, which outlives us, so
+    /// we only need to block long enough for the launch to be handed to
+    /// LaunchServices — not for the reset to finish. The short timeout keeps quit
+    /// responsive; if it elapses the helper still completes the reset on its own.
     func flushLidStateForQuit() {
         guard lidFlagApplied else { return }
-        _ = CaffeineShelfLidControl.setDisableSleep(false)
+        _ = CaffeineShelfLidControl.setDisableSleep(false, timeout: 3)
         lidFlagApplied = false
     }
 

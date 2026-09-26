@@ -8,7 +8,8 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "MenuShelf", targets: ["MenuShelf"])
+        .executable(name: "MenuShelf", targets: ["MenuShelf"]),
+        .executable(name: "MenuShelfLidHelper", targets: ["MenuShelfLidHelper"])
     ],
     dependencies: [
         .package(url: "https://github.com/Clipy/Sauce", from: "2.4.0"),
@@ -29,6 +30,17 @@ let package = Package(
                 .copy("ClipboardShelf/Vendor/Sounds/Knock.caf"),
                 .copy("ClipboardShelf/Vendor/Sounds/Write.caf")
             ],
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
+        ),
+        // Privileged companion for CaffeineShelf's lid-closed mode. Deliberately
+        // dependency-free and UI-free: build_app.sh nests it inside MenuShelf.app
+        // and signs it WITHOUT the sandbox entitlement, which is the entire point
+        // (see Sources/MenuShelfLidHelper/main.swift).
+        .executableTarget(
+            name: "MenuShelfLidHelper",
+            path: "Sources/MenuShelfLidHelper",
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]
