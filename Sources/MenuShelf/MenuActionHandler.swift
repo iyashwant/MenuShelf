@@ -48,7 +48,6 @@ enum MenuActionKind {
     case openClockShelf
     case openClipboardShelfSettings
     case openClockShelfSettings
-    case openCaffeineShelf
     case openCaffeineShelfSettings
     case openBrowserFlipSettings
     case openBookmark
@@ -483,21 +482,6 @@ final class MenuAction: NSObject {
         case .openClockShelfSettings:
             AppContainer.shared.settingsWindowController.show(focusClockShelf: true)
             DiagnosticsLogger.shared.log("Requested settings window focused on Clock Shelf")
-
-        case .openCaffeineShelf:
-            let resolvedCaffeineShelf = store.settings.resolvedCaffeineShelf
-            if !resolvedCaffeineShelf.enableCaffeineShelf {
-                AppContainer.shared.settingsWindowController.show(focusCaffeineShelf: true)
-                return
-            }
-            let caffeineMenuViewID = action.menuViewID
-            Task { @MainActor in
-                guard let menuViewID = caffeineMenuViewID,
-                      let statusItem = AppContainer.shared.statusItemManager.statusItem(for: menuViewID) else {
-                    return
-                }
-                AppContainer.shared.presentationCoordinator.presentCaffeineShelfStandalonePopup(anchoredTo: statusItem)
-            }
 
         case .openCaffeineShelfSettings:
             AppContainer.shared.settingsWindowController.show(focusCaffeineShelf: true)

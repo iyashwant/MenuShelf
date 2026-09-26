@@ -39,27 +39,6 @@ struct CaffeineShelfSettingsView: View {
             }
 
             if caffeine.enableCaffeineShelf {
-                SettingsCard("Appearance") {
-                    SettingsRow(
-                        "Menu Surface",
-                        helper: "Where CaffeineShelf surfaces inside menu views. Popover shows a single click target; Submenu lists durations inline."
-                    ) {
-                        Picker("", selection: Binding(
-                            get: { caffeine.resolvedPresentationMode },
-                            set: { value in
-                                store.updateCaffeineShelfSettings { $0.presentationMode = value }
-                            }
-                        )) {
-                            ForEach(CaffeineShelfPresentationMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .frame(width: 200)
-                    }
-                }
-
                 SettingsCard("Behavior") {
                     SettingsToggle(
                         "Allow the display to sleep",

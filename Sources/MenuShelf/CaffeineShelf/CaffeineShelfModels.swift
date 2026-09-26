@@ -11,25 +11,6 @@
 
 import Foundation
 
-// MARK: - CaffeineShelfPresentationMode
-
-/// Selector controlling whether a `CaffeineShelfMenuItemConfig` renders as a
-/// single click target opening the duration popup, or as a parent `NSMenuItem`
-/// whose `submenu` lists durations inline.
-enum CaffeineShelfPresentationMode: String, Codable, CaseIterable, Identifiable {
-    case popover
-    case submenu
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .popover: "Popover"
-        case .submenu: "Submenu"
-        }
-    }
-}
-
 // MARK: - CaffeineShelfSettings
 
 /// Top-level CaffeineShelf settings persisted to MenuShelf's `settings.json`
@@ -66,10 +47,6 @@ struct CaffeineShelfSettings: Codable, Equatable {
     /// `resolvedKeepAwakeWithLidClosed`.
     var keepAwakeWithLidClosed: Bool?
 
-    /// Optional so older settings.json decodes cleanly. UI reads through
-    /// `resolvedPresentationMode`.
-    var presentationMode: CaffeineShelfPresentationMode?
-
     static let defaults = CaffeineShelfSettings(
         enableCaffeineShelf: false,
         allowDisplaySleep: false,
@@ -77,8 +54,7 @@ struct CaffeineShelfSettings: Codable, Equatable {
         batteryAutoOffEnabled: false,
         batteryThresholdPercent: 20,
         lowPowerModeAutoOffEnabled: false,
-        keepAwakeWithLidClosed: false,
-        presentationMode: .popover
+        keepAwakeWithLidClosed: false
     )
 
     /// Battery threshold clamped to a sane `10...100` range so a stray slider
@@ -91,12 +67,6 @@ struct CaffeineShelfSettings: Codable, Equatable {
     /// the feature.
     var resolvedKeepAwakeWithLidClosed: Bool {
         keepAwakeWithLidClosed ?? false
-    }
-
-    /// Resolves the presentation mode, falling back to `.popover` when the field
-    /// is missing from persisted settings.
-    var resolvedPresentationMode: CaffeineShelfPresentationMode {
-        presentationMode ?? .popover
     }
 }
 

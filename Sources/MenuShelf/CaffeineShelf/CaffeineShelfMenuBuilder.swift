@@ -10,10 +10,16 @@
 import AppKit
 
 extension MenuBuilder {
-    /// Append a CaffeineShelf menu item to `menu`. In `.popover` mode the
-    /// entry is a single click target dispatching `.openCaffeineShelf`. In
-    /// `.submenu` mode the entry is a parent `NSMenuItem` whose `submenu`
-    /// is populated lazily by `CaffeineShelfMenuDelegate`.
+    /// Append a CaffeineShelf menu item to `menu` as a parent `NSMenuItem`
+    /// whose `submenu` is populated lazily by `CaffeineShelfMenuDelegate`.
+    ///
+    /// Unlike ClockShelf and ClipboardShelf, CaffeineShelf has no rich popover
+    /// UI to offer as an alternative surface — its standalone popup is the very
+    /// same NSMenu, presented by temporarily swapping the host status item's
+    /// menu. Embedding that as a click target meant the host menu view closed
+    /// and reopened as the caffeine menu, and silently no-opped whenever the
+    /// menu view had no resolvable status item. So an embedded CaffeineShelf is
+    /// always a real submenu, matching Browser Flip and Bookmark Shelf.
     func addCaffeineShelfMenuItem(
         _ config: CaffeineShelfMenuItemConfig,
         to menu: NSMenu,
@@ -30,43 +36,31 @@ extension MenuBuilder {
             currentSection = section
         }
 
-        let presentationMode = store.settings
-            .resolvedCaffeineShelf.resolvedPresentationMode
-
         let icon = NSImage(systemSymbolName: "cup.and.saucer", accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: "cup.and.saucer.fill", accessibilityDescription: nil)
 
-        switch presentationMode {
-        case .popover:
-            let item = actionItem(
-                config.displayTitle,
-                kind: .openCaffeineShelf,
-                menuViewID: menuViewID
-            )
-            item.image = icon
-            if !enabled {
-                item.toolTip = "CaffeineShelf is disabled in MenuShelf settings."
-            }
-            menu.addItem(item)
-
-        case .submenu:
-            let parent = NSMenuItem(
-                title: config.displayTitle,
-                action: nil,
-                keyEquivalent: ""
-            )
-            parent.image = icon
-            parent.representedObject = nil
-
-            let submenu = NSMenu(title: config.displayTitle)
-            submenu.autoenablesItems = false
-
-            let delegate = CaffeineShelfMenuDelegate(builder: self)
-            submenu.delegate = delegate
-            MenuDelegateRetainer.shared.retain(delegate, for: submenu)
-            parent.submenu = submenu
-            menu.addItem(parent)
+        let parent = NSMenuItem(
+            title: config.displayTitle,
+            action: nil,
+            keyEquivalent: ""
+        )
+        parent.image = icon
+        parent.representedObject = nil
+        if !enabled {
+            parent.toolTip = "CaffeineShelf is disabled in MenuShelf settings."
         }
+
+        let submenu = NSMenu(title: config.displayTitle)
+        submenu.autoenablesItems = false
+
+        // The delegate re-populates on every open so duration checkmarks and
+        // the awake status line reflect live controller state. The retainer
+        // keeps it alive because `NSMenu.delegate` is weak.
+        let delegate = CaffeineShelfMenuDelegate(builder: self)
+        submenu.delegate = delegate
+        MenuDelegateRetainer.shared.retain(delegate, for: submenu)
+        parent.submenu = submenu
+        menu.addItem(parent)
     }
 
     /// Lazy populate path used by `CaffeineShelfMenuDelegate`. Re-reads the
