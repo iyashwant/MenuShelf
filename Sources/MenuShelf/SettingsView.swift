@@ -802,44 +802,28 @@ private struct MenuViewContentsView: View {
                         .controlSize(.small)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            Divider()
 
             List(selection: $selectedContentItemID) {
-                ForEach(unifiedItems) { item in
-                    UnifiedContentItemRow(item: item, store: store)
-                        .tag(item.id)
-                        .contextMenu {
-                            Button {
-                                editingItem = item
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-
-                            Divider()
-
-                            Button(role: .destructive) {
-                                removeContentItem(id: item.id)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-
-                            if case .shortcut(let shortcut) = item {
-                                Button {
-                                    let identifierOrName = shortcut.shortcutIdentifier ?? shortcut.name
-                                    Task {
-                                        try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
-                                    }
-                                } label: {
-                                    Label("Open in Shortcuts", systemImage: "app.connected.to.app.below.fill")
-                                }
-                            }
+                if !contentItems.isEmpty {
+                    Section("Items") {
+                        ForEach(contentItems) { item in
+                            contentRow(item)
                         }
+                        .onMove { source, destination in
+                            handleContentMove(fromOffsets: source, toOffset: destination)
+                        }
+                    }
                 }
-                .onMove { source, destination in
-                    handleContentMove(fromOffsets: source, toOffset: destination)
+
+                if !moduleItems.isEmpty {
+                    Section("Modules") {
+                        ForEach(moduleItems) { item in
+                            contentRow(item)
+                        }
+                        .onMove { source, destination in
+                            handleModuleMove(fromOffsets: source, toOffset: destination)
+                        }
+                    }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -1022,29 +1006,63 @@ private struct MenuViewContentsView: View {
         }
     }
 
-    private var unifiedItems: [UnifiedContentItem] {
+    private func contentRow(_ item: UnifiedContentItem) -> some View {
+        UnifiedContentItemRow(item: item, store: store)
+            .tag(item.id)
+            .contextMenu {
+                Button {
+                    editingItem = item
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    removeContentItem(id: item.id)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+
+                if case .shortcut(let shortcut) = item {
+                    Button {
+                        let identifierOrName = shortcut.shortcutIdentifier ?? shortcut.name
+                        Task {
+                            try? await AppContainer.shared.shortcutsService.openShortcutForEditing(identifierOrName: identifierOrName)
+                        }
+                    } label: {
+                        Label("Open in Shortcuts", systemImage: "app.connected.to.app.below.fill")
+                    }
+                }
+            }
+    }
+
+    /// Sources, linked views, shortcuts and scripts, in menu order.
+    private var contentItems: [UnifiedContentItem] {
         var items: [UnifiedContentItem] = []
         items.append(contentsOf: view.items.map { .menuViewItem($0) })
         items.append(contentsOf: view.resolvedLinkedMenuViews.map { .linkedMenuView($0) })
         items.append(contentsOf: view.resolvedShortcutItems.map { .shortcut($0) })
         items.append(contentsOf: view.resolvedAppleScriptItems.map { .appleScript($0) })
         items.append(contentsOf: view.resolvedLinkedShortcutsFolders.map { .linkedShortcutsFolder($0) })
-        if let browserFlip = view.browserFlipItem {
-            items.append(.browserFlip(browserFlip))
-        }
-        if let clipboardShelf = view.clipboardShelfItem {
-            items.append(.clipboardShelf(clipboardShelf))
-        }
-        if let clockShelf = view.clockShelfItem {
-            items.append(.clockShelf(clockShelf))
-        }
-        if let bookmarkShelf = view.bookmarkShelfItem {
-            items.append(.bookmarkShelf(bookmarkShelf))
-        }
-        if let caffeineShelf = view.caffeineShelfItem {
-            items.append(.caffeineShelf(caffeineShelf))
-        }
         return items
+    }
+
+    /// Attached modules, in the order they appear in the menu.
+    private var moduleItems: [UnifiedContentItem] {
+        view.resolvedModuleOrder.compactMap { kind in
+            switch kind {
+            case .browserFlip: view.browserFlipItem.map { .browserFlip($0) }
+            case .clipboardShelf: view.clipboardShelfItem.map { .clipboardShelf($0) }
+            case .clockShelf: view.clockShelfItem.map { .clockShelf($0) }
+            case .bookmarkShelf: view.bookmarkShelfItem.map { .bookmarkShelf($0) }
+            case .caffeineShelf: view.caffeineShelfItem.map { .caffeineShelf($0) }
+            }
+        }
+    }
+
+    private var unifiedItems: [UnifiedContentItem] {
+        contentItems + moduleItems
     }
 
     private var appleScriptMenuSymbol: String {
@@ -1092,9 +1110,15 @@ private struct MenuViewContentsView: View {
         selectedContentItemID = nil
     }
 
+    private func handleModuleMove(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var order = view.resolvedModuleOrder
+        order.move(fromOffsets: source, toOffset: destination)
+        view.moduleOrder = order
+    }
+
     private func handleContentMove(fromOffsets source: IndexSet, toOffset destination: Int) {
         guard let sourceIndex = source.first else { return }
-        let items = unifiedItems
+        let items = contentItems
         guard sourceIndex < items.count else { return }
 
         let sourcesEnd = view.items.count
@@ -1122,20 +1146,8 @@ private struct MenuViewContentsView: View {
         case .linkedShortcutsFolder:
             if destination < appleScriptsEnd { clampedDest = appleScriptsEnd }
             if destination > linkedShortcutsFoldersEnd { clampedDest = linkedShortcutsFoldersEnd }
-        case .browserFlip:
-            // Browser flip lives in a single-slot group; reordering is a no-op.
-            return
-        case .clipboardShelf:
-            // Clipboard Shelf lives in a single-slot group; reordering is a no-op.
-            return
-        case .clockShelf:
-            // Clock Shelf lives in a single-slot group; reordering is a no-op.
-            return
-        case .bookmarkShelf:
-            // Bookmark Shelf lives in a single-slot group; reordering is a no-op.
-            return
-        case .caffeineShelf:
-            // CaffeineShelf lives in a single-slot group; reordering is a no-op.
+        case .browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf, .caffeineShelf:
+            // Modules live in their own section; see `handleModuleMove`.
             return
         }
 
@@ -1172,36 +1184,9 @@ private struct MenuViewContentsView: View {
             var arr = view.resolvedLinkedShortcutsFolders
             arr.move(fromOffsets: IndexSet(integer: sourceGroupOffset), toOffset: groupOffset)
             view.linkedShortcutsFolders = arr
-        case .browserFlip:
-            // Already handled by the early return above; the values are unused.
-            sourceGroupOffset = 0
-            groupOffset = 0
-            _ = sourceGroupOffset
-            _ = groupOffset
-        case .clipboardShelf:
-            // Already handled by the early return above; the values are unused.
-            sourceGroupOffset = 0
-            groupOffset = 0
-            _ = sourceGroupOffset
-            _ = groupOffset
-        case .clockShelf:
-            // Already handled by the early return above; the values are unused.
-            sourceGroupOffset = 0
-            groupOffset = 0
-            _ = sourceGroupOffset
-            _ = groupOffset
-        case .bookmarkShelf:
-            // Already handled by the early return above; the values are unused.
-            sourceGroupOffset = 0
-            groupOffset = 0
-            _ = sourceGroupOffset
-            _ = groupOffset
-        case .caffeineShelf:
-            // Already handled by the early return above; the values are unused.
-            sourceGroupOffset = 0
-            groupOffset = 0
-            _ = sourceGroupOffset
-            _ = groupOffset
+        case .browserFlip, .clipboardShelf, .clockShelf, .bookmarkShelf, .caffeineShelf:
+            // Already handled by the early return above.
+            return
         }
     }
 
@@ -1633,6 +1618,7 @@ private struct UnifiedContentItemRow: View {
         HStack(spacing: 10) {
             Image(systemName: item.kindIcon)
                 .foregroundStyle(item.kindIconColor)
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayTitle)

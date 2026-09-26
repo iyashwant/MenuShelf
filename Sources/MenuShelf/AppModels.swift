@@ -694,6 +694,9 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var bookmarkShelfItem: BookmarkShelfMenuItemConfig?
     var caffeineShelfItem: CaffeineShelfMenuItemConfig?
     var bookmarkContentItems: [BookmarkContentItemConfig]?
+    /// User-chosen order of the attached modules. `nil` until the user first
+    /// reorders them; see `resolvedModuleOrder`.
+    var moduleOrder: [ModuleKind]?
     var createdAt: Date
     var updatedAt: Date
 
@@ -705,6 +708,27 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
     var resolvedAppSpecificShortcutGroups: [AppSpecificShortcutGroup] { appSpecificShortcutGroups ?? [] }
     var resolvedAppleScriptItems: [AppleScriptMenuItemConfig] { appleScriptItems ?? [] }
     var resolvedBookmarkContentItems: [BookmarkContentItemConfig] { bookmarkContentItems ?? [] }
+
+    /// The modules attached to this view, in the order they appear in its
+    /// menu. Modules missing from `moduleOrder` (older settings, or ones added
+    /// since the last reorder) follow in `ModuleKind.allCases` order.
+    var resolvedModuleOrder: [ModuleKind] {
+        var ordered: [ModuleKind] = []
+        for kind in (moduleOrder ?? []) + ModuleKind.allCases where hasModule(kind) && !ordered.contains(kind) {
+            ordered.append(kind)
+        }
+        return ordered
+    }
+
+    func hasModule(_ kind: ModuleKind) -> Bool {
+        switch kind {
+        case .browserFlip: browserFlipItem != nil
+        case .clipboardShelf: clipboardShelfItem != nil
+        case .clockShelf: clockShelfItem != nil
+        case .bookmarkShelf: bookmarkShelfItem != nil
+        case .caffeineShelf: caffeineShelfItem != nil
+        }
+    }
 
     static func make(title: String = "MenuShelf", defaults: MenuSettings = .defaults, sourceIDs: [UUID] = []) -> MenuViewConfig {
         MenuViewConfig(
@@ -730,6 +754,7 @@ struct MenuViewConfig: Codable, Identifiable, Equatable {
             bookmarkShelfItem: nil,
             caffeineShelfItem: nil,
             bookmarkContentItems: nil,
+            moduleOrder: nil,
             createdAt: Date(),
             updatedAt: Date()
         )

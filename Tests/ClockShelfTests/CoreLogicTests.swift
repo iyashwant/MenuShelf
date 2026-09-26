@@ -173,3 +173,38 @@ func parseShortcutsIdentifiers() {
     #expect(parsed[1].identifier == nil)
     #expect(parsed[2].identifier == "deadbeef-0000-1111-2222-abcdefabcdef")
 }
+
+// MARK: - Menu view module order
+
+@Test("resolvedModuleOrder defaults to ModuleKind order and skips unattached modules")
+func moduleOrderDefaultsToKindOrder() {
+    var view = MenuViewConfig.make()
+    view.caffeineShelfItem = .make()
+    view.browserFlipItem = .make()
+    view.bookmarkShelfItem = .make()
+    #expect(view.resolvedModuleOrder == [.browserFlip, .bookmarkShelf, .caffeineShelf])
+}
+
+@Test("resolvedModuleOrder follows moduleOrder, drops detached kinds, and appends new ones")
+func moduleOrderFollowsStoredOrder() {
+    var view = MenuViewConfig.make()
+    view.browserFlipItem = .make()
+    view.clipboardShelfItem = .make()
+    view.caffeineShelfItem = .make()
+    view.moduleOrder = [.caffeineShelf, .clockShelf, .browserFlip, .caffeineShelf]
+    #expect(view.resolvedModuleOrder == [.caffeineShelf, .browserFlip, .clipboardShelf])
+}
+
+@Test("MenuViewConfig decodes settings written before moduleOrder existed")
+func moduleOrderDecodesLegacySettings() throws {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    var object = try #require(
+        JSONSerialization.jsonObject(with: encoder.encode(MenuViewConfig.make())) as? [String: Any]
+    )
+    object.removeValue(forKey: "moduleOrder")
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(MenuViewConfig.self, from: JSONSerialization.data(withJSONObject: object))
+    #expect(decoded.moduleOrder == nil)
+}

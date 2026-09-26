@@ -250,78 +250,82 @@ final class MenuBuilder {
                 menu.addItem(.separator())
                 currentSection = nil
             }
-            if let browserFlipItem = view.browserFlipItem {
-                addBrowserFlipMenuItem(browserFlipItem, to: menu, currentSection: &currentSection)
-            }
-            if let clipboardShelfItem = view.clipboardShelfItem {
-                if view.browserFlipItem != nil, menu.items.last?.isSeparatorItem == false {
+            // Modules render in the user's chosen order, each separated from the
+            // one before it. Bookmark content rows travel with the Bookmark
+            // Shelf module, or close the block when that module isn't attached.
+            var hasAddedModule = false
+            func beginModule() {
+                if hasAddedModule, menu.items.last?.isSeparatorItem == false {
                     menu.addItem(.separator())
                     currentSection = nil
                 }
-                addClipboardShelfMenuItem(
-                    clipboardShelfItem,
-                    to: menu,
-                    currentSection: &currentSection,
-                    menuViewID: view.id,
-                    enabled: store.settings.resolvedClipboardShelf.enableClipboardShelf
-                )
+                hasAddedModule = true
             }
-            if let clockShelfItem = view.clockShelfItem {
-                if (view.browserFlipItem != nil || view.clipboardShelfItem != nil),
-                   menu.items.last?.isSeparatorItem == false {
-                    menu.addItem(.separator())
-                    currentSection = nil
+            func addBookmarkContentItems() {
+                for contentItem in view.resolvedBookmarkContentItems {
+                    addBookmarkContentItem(
+                        contentItem,
+                        to: menu,
+                        currentSection: &currentSection,
+                        menuViewID: view.id,
+                        enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
+                    )
                 }
-                addClockShelfMenuItem(
-                    clockShelfItem,
-                    to: menu,
-                    currentSection: &currentSection,
-                    menuViewID: view.id,
-                    enabled: store.settings.resolvedClockShelf.enableClockShelf
-                )
             }
-            if let bookmarkShelfItem = view.bookmarkShelfItem {
-                if (view.browserFlipItem != nil
-                    || view.clipboardShelfItem != nil
-                    || view.clockShelfItem != nil),
-                   menu.items.last?.isSeparatorItem == false {
-                    menu.addItem(.separator())
-                    currentSection = nil
+
+            for kind in view.resolvedModuleOrder {
+                beginModule()
+                switch kind {
+                case .browserFlip:
+                    if let browserFlipItem = view.browserFlipItem {
+                        addBrowserFlipMenuItem(browserFlipItem, to: menu, currentSection: &currentSection)
+                    }
+                case .clipboardShelf:
+                    if let clipboardShelfItem = view.clipboardShelfItem {
+                        addClipboardShelfMenuItem(
+                            clipboardShelfItem,
+                            to: menu,
+                            currentSection: &currentSection,
+                            menuViewID: view.id,
+                            enabled: store.settings.resolvedClipboardShelf.enableClipboardShelf
+                        )
+                    }
+                case .clockShelf:
+                    if let clockShelfItem = view.clockShelfItem {
+                        addClockShelfMenuItem(
+                            clockShelfItem,
+                            to: menu,
+                            currentSection: &currentSection,
+                            menuViewID: view.id,
+                            enabled: store.settings.resolvedClockShelf.enableClockShelf
+                        )
+                    }
+                case .bookmarkShelf:
+                    if let bookmarkShelfItem = view.bookmarkShelfItem {
+                        addBookmarkShelfMenuItem(
+                            bookmarkShelfItem,
+                            to: menu,
+                            currentSection: &currentSection,
+                            menuViewID: view.id,
+                            enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
+                        )
+                    }
+                    addBookmarkContentItems()
+                case .caffeineShelf:
+                    if let caffeineShelfItem = view.caffeineShelfItem {
+                        addCaffeineShelfMenuItem(
+                            caffeineShelfItem,
+                            to: menu,
+                            currentSection: &currentSection,
+                            menuViewID: view.id,
+                            enabled: store.settings.resolvedCaffeineShelf.enableCaffeineShelf
+                        )
+                    }
                 }
-                addBookmarkShelfMenuItem(
-                    bookmarkShelfItem,
-                    to: menu,
-                    currentSection: &currentSection,
-                    menuViewID: view.id,
-                    enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
-                )
             }
-            for contentItem in view.resolvedBookmarkContentItems {
-                addBookmarkContentItem(
-                    contentItem,
-                    to: menu,
-                    currentSection: &currentSection,
-                    menuViewID: view.id,
-                    enabled: store.settings.resolvedBookmarkShelf.enableBookmarkShelf
-                )
-            }
-            if let caffeineShelfItem = view.caffeineShelfItem {
-                if (view.browserFlipItem != nil
-                    || view.clipboardShelfItem != nil
-                    || view.clockShelfItem != nil
-                    || view.bookmarkShelfItem != nil
-                    || !view.resolvedBookmarkContentItems.isEmpty),
-                   menu.items.last?.isSeparatorItem == false {
-                    menu.addItem(.separator())
-                    currentSection = nil
-                }
-                addCaffeineShelfMenuItem(
-                    caffeineShelfItem,
-                    to: menu,
-                    currentSection: &currentSection,
-                    menuViewID: view.id,
-                    enabled: store.settings.resolvedCaffeineShelf.enableCaffeineShelf
-                )
+            if view.bookmarkShelfItem == nil, !view.resolvedBookmarkContentItems.isEmpty {
+                beginModule()
+                addBookmarkContentItems()
             }
         }
 
