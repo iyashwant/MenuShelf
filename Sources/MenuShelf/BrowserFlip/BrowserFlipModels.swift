@@ -22,7 +22,7 @@ struct BrowserFlipMenuItemConfig: Codable, Identifiable, Equatable {
            !trimmed.isEmpty {
             return trimmed
         }
-        return "Default Browser"
+        return "Browser Shelf"
     }
 
     static func make() -> BrowserFlipMenuItemConfig {

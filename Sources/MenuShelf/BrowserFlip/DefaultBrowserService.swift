@@ -50,7 +50,7 @@ struct SwitchDiagnostics {
 
     var report: String {
         var lines = [String]()
-        lines.append("Browser Flip Diagnostics Report")
+        lines.append("Browser Shelf Diagnostics Report")
         lines.append("================================")
         lines.append("macOS Version: \(macOSVersion)")
         lines.append("Sandboxed: \(isSandboxed)")

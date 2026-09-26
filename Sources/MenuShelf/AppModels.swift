@@ -759,11 +759,21 @@ enum ModuleKind: String, Codable, CaseIterable, Equatable, Identifiable {
     /// Default `title` value applied at creation time.
     var defaultTitle: String {
         switch self {
-        case .browserFlip: "Browser Flip"
+        case .browserFlip: "Browser Shelf"
         case .clipboardShelf: "Clipboard Shelf"
         case .clockShelf: "Clock Shelf"
         case .bookmarkShelf: "Bookmark Shelf"
-        case .caffeineShelf: "CaffeineShelf"
+        case .caffeineShelf: "Caffeine Shelf"
+        }
+    }
+
+    /// Earlier `defaultTitle` values. A saved title still equal to one of
+    /// these was never edited by the user, so it follows the rename.
+    var legacyDefaultTitles: Set<String> {
+        switch self {
+        case .browserFlip: ["Browser Flip"]
+        case .caffeineShelf: ["CaffeineShelf"]
+        case .clipboardShelf, .clockShelf, .bookmarkShelf: []
         }
     }
 

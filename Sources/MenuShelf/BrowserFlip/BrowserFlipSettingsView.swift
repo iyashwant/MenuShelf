@@ -16,10 +16,10 @@ struct BrowserFlipSettingsView: View {
     @AppStorage("menushelf_ask_shortcuts_manual") private var manualShortcuts: [String: Bool] = [:]
 
     var body: some View {
-        SettingsPane("Browser Flip", subtitle: "Switch your default browser from the menu bar.") {
-            SettingsCard("Browser Flip") {
+        SettingsPane("Browser Shelf", subtitle: "Switch your default browser from the menu bar.") {
+            SettingsCard("Browser Shelf") {
                 SettingsToggle(
-                    "Enable Browser Flip",
+                    "Enable Browser Shelf",
                     helper: "Show a Browsers submenu in the management menu so you can switch your default browser quickly.",
                     isOn: Binding(
                         get: { store.settings.resolvedBrowserFlip.enableBrowserFlip },

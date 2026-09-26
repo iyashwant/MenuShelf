@@ -1180,7 +1180,7 @@ final class PreferencesStore: ObservableObject {
         if var modules = settings.standaloneModules {
             for index in modules.indices {
                 let trimmed = modules[index].title.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
+                if trimmed.isEmpty || modules[index].kind.legacyDefaultTitles.contains(trimmed) {
                     modules[index].title = modules[index].kind.defaultTitle
                 } else if trimmed.count > 200 {
                     modules[index].title = String(trimmed.prefix(200))

@@ -25,11 +25,11 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .menuDefaults: "Menu Defaults"
         case .shortcuts: "Apple Shortcuts"
         case .appleScripts: "AppleScripts"
-        case .browserFlip: "Browser Flip"
+        case .browserFlip: "Browser Shelf"
         case .clipboardShelf: "Clipboard Shelf"
         case .bookmarkShelf: "Bookmark Shelf"
         case .clockShelf: "Clock Shelf"
-        case .caffeineShelf: "CaffeineShelf"
+        case .caffeineShelf: "Caffeine Shelf"
         case .advanced: "Advanced"
         }
     }
@@ -949,7 +949,7 @@ private struct MenuViewContentsView: View {
                     Button {
                         store.addBrowserFlipItem(toMenuViewID: view.id)
                     } label: {
-                        Label("Add Default Browser", systemImage: "globe")
+                        Label("Add Browser Shelf", systemImage: "globe")
                     }
                     .disabled(view.browserFlipItem != nil)
 
@@ -977,7 +977,7 @@ private struct MenuViewContentsView: View {
                     Button {
                         store.addCaffeineShelfItem(toMenuViewID: view.id)
                     } label: {
-                        Label("Add CaffeineShelf", systemImage: "cup.and.saucer")
+                        Label("Add Caffeine Shelf", systemImage: "cup.and.saucer")
                     }
                     .disabled(view.caffeineShelfItem != nil)
                 } label: {
@@ -1292,7 +1292,7 @@ private struct MenuViewContentsView: View {
         case .browserFlip:
             if let binding = browserFlipItemBinding(for: item.id) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Edit Default Browser")
+                    Text("Edit Browser Shelf")
                         .font(.headline)
 
                     Text("Lets you switch the system default browser from this menu.")
@@ -1310,7 +1310,7 @@ private struct MenuViewContentsView: View {
                     ))
 
                     if !store.settings.resolvedBrowserFlip.enableBrowserFlip {
-                        Text("Browser Flip is disabled. Enable it in Settings → Browser Flip for the submenu to populate.")
+                        Text("Browser Shelf is disabled. Enable it in Settings → Browser Shelf for the submenu to populate.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -1440,10 +1440,10 @@ private struct MenuViewContentsView: View {
         case .caffeineShelf:
             if let binding = caffeineShelfItemBinding(for: item.id) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Edit CaffeineShelf")
+                    Text("Edit Caffeine Shelf")
                         .font(.headline)
 
-                    Text("Opens the CaffeineShelf duration menu to keep your Mac awake.")
+                    Text("Opens the Caffeine Shelf duration menu to keep your Mac awake.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -1458,7 +1458,7 @@ private struct MenuViewContentsView: View {
                     ))
 
                     if !store.settings.resolvedCaffeineShelf.enableCaffeineShelf {
-                        Text("CaffeineShelf is disabled. Enable it in Settings → CaffeineShelf for the menu to populate.")
+                        Text("Caffeine Shelf is disabled. Enable it in Settings → Caffeine Shelf for the menu to populate.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -1708,7 +1708,7 @@ private struct UnifiedContentItemRow: View {
             if let section = config.sectionName, !section.isEmpty {
                 return "Section: \(section)"
             }
-            return "Default Browser"
+            return "Browser Shelf"
         case .clipboardShelf(let config):
             if let section = config.sectionName, !section.isEmpty {
                 return "Section: \(section)"
@@ -1728,7 +1728,7 @@ private struct UnifiedContentItemRow: View {
             if let section = config.sectionName, !section.isEmpty {
                 return "Section: \(section)"
             }
-            return "CaffeineShelf"
+            return "Caffeine Shelf"
         }
     }
 }

@@ -333,7 +333,7 @@ final class CaffeineShelfController {
         let result = IOPMAssertionCreateWithName(
             type as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            "MenuShelf CaffeineShelf — keeping the Mac awake" as CFString,
+            "MenuShelf Caffeine Shelf — keeping the Mac awake" as CFString,
             &id
         )
 

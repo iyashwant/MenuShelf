@@ -4,7 +4,7 @@
 //
 //  Browser Flip menu construction. Isolated from MenuBuilder so the rest of
 //  the menu code can stay free of browser-specific concerns. Includes the
-//  "Default Browser" submenu (with "Ask Everytime") and the inline menu view
+//  "Browser Shelf" submenu (with "Ask Everytime") and the inline menu view
 //  item that surfaces the same submenu directly inside a view.
 //
 
@@ -27,10 +27,10 @@ final class BrowserFlipMenuDelegate: NSObject, NSMenuDelegate {
 }
 
 extension MenuBuilder {
-    /// "..." → "Default Browser" submenu used in the management menu.
+    /// "..." → "Browser Shelf" submenu used in the management menu.
     func browserFlipMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Default Browser", action: nil, keyEquivalent: "")
-        let submenu = NSMenu(title: "Default Browser")
+        let item = NSMenuItem(title: "Browser Shelf", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Browser Shelf")
         submenu.autoenablesItems = false
         let delegate = BrowserFlipMenuDelegate(builder: self)
         submenu.delegate = delegate

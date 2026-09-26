@@ -47,7 +47,7 @@ extension MenuBuilder {
         parent.image = icon
         parent.representedObject = nil
         if !enabled {
-            parent.toolTip = "CaffeineShelf is disabled in MenuShelf settings."
+            parent.toolTip = "Caffeine Shelf is disabled in MenuShelf settings."
         }
 
         let submenu = NSMenu(title: config.displayTitle)
@@ -73,7 +73,7 @@ extension MenuBuilder {
         let settings = store.settings.resolvedCaffeineShelf
 
         if !settings.enableCaffeineShelf {
-            addDisabled("CaffeineShelf is disabled", to: menu)
+            addDisabled("Caffeine Shelf is disabled", to: menu)
             menu.addItem(.separator())
             menu.addItem(actionItem(
                 "Open Settings…",

@@ -87,7 +87,7 @@ struct CaffeineShelfMenuItemConfig: Codable, Identifiable, Equatable {
            !trimmed.isEmpty {
             return trimmed
         }
-        return "CaffeineShelf"
+        return "Caffeine Shelf"
     }
 
     static func make() -> CaffeineShelfMenuItemConfig {

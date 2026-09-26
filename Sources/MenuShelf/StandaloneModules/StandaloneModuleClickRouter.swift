@@ -252,7 +252,7 @@ extension MenuPresentationCoordinator {
 
         // Build the popup menu with no wrapping "Browser Flip" header
         // item or other enclosing container (Requirements 7.1, 7.3).
-        let menu = NSMenu(title: "Browser Flip")
+        let menu = NSMenu(title: "Browser Shelf")
         menu.autoenablesItems = false
         menuBuilder.populateBrowserFlipMenu(menu)
 

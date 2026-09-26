@@ -329,6 +329,15 @@ final class MenuBuilder {
             menu.addItem(.separator())
             menu.addItem(managementMenuItem(for: view))
         }
+
+        // macOS 27 hides menu item images unless the item opts in. Every row
+        // in a menu view carries a deliberate icon (sources, modules,
+        // shortcuts, scripts), so keep them all visible.
+        if #available(macOS 27.0, *) {
+            for item in menu.items where item.image != nil {
+                item.preferredImageVisibility = .visible
+            }
+        }
     }
 
     private func directSingleFolderSource(for view: MenuViewConfig) -> FolderConfig? {

@@ -418,7 +418,7 @@ private struct EmptyStandaloneModulesPanel: View {
                 .foregroundStyle(.secondary)
             Text("No standalone modules yet")
                 .font(.title3.weight(.semibold))
-            Text("Add a Browser Flip, Clipboard Shelf, or Clock Shelf icon to your menu bar.")
+            Text("Add a Browser Shelf, Clipboard Shelf, or Clock Shelf icon to your menu bar.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

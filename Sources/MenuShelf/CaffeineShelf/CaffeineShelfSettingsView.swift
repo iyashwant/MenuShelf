@@ -23,13 +23,13 @@ struct CaffeineShelfSettingsView: View {
 
     var body: some View {
         SettingsPane(
-            "CaffeineShelf",
+            "Caffeine Shelf",
             subtitle: "Keep your Mac awake from the menu bar.",
             symbolName: "cup.and.saucer"
         ) {
-            SettingsCard("CaffeineShelf") {
+            SettingsCard("Caffeine Shelf") {
                 SettingsToggle(
-                    "Enable CaffeineShelf",
+                    "Enable Caffeine Shelf",
                     helper: "Add a menu-bar control that prevents your Mac from going to sleep.",
                     isOn: Binding(
                         get: { caffeine.enableCaffeineShelf },
@@ -155,7 +155,7 @@ struct CaffeineShelfSettingsView: View {
 
                 SettingsCard("Menu Bar") {
                     SettingsBlockRow {
-                        Text("Add a CaffeineShelf icon from the Menu Bar tab. Left-click it for the toggle and durations; right-click (or ⌥-click) opens these settings.")
+                        Text("Add a Caffeine Shelf icon from the Menu Bar tab. Left-click it for the toggle and durations; right-click (or ⌥-click) opens these settings.")
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

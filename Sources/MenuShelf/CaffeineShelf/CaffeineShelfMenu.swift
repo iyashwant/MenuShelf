@@ -27,7 +27,7 @@ final class CaffeineShelfMenu: NSObject {
     /// the module starts inactive — this is the awake-state off switch, which
     /// is distinct from the "Enable CaffeineShelf" feature toggle in Settings.
     func makeMenu() -> NSMenu {
-        let menu = NSMenu(title: "CaffeineShelf")
+        let menu = NSMenu(title: "Caffeine Shelf")
         populate(menu)
         return menu
     }
@@ -120,7 +120,7 @@ final class CaffeineShelfMenu: NSObject {
         menu.addItem(.separator())
 
         let settings = NSMenuItem(
-            title: "CaffeineShelf Settings…",
+            title: "Caffeine Shelf Settings…",
             action: #selector(handleOpenSettings(_:)),
             keyEquivalent: ""
         )
