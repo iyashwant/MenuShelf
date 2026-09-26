@@ -116,7 +116,9 @@ final class BookmarkShelfStorage: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: url)
-            let envelope = try JSONDecoder().decode(StorageEnvelope.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let envelope = try decoder.decode(StorageEnvelope.self, from: data)
             let migrated = Self.migratedNodes(envelope)
             let normalized = Self.normalize(migrated.nodes)
             self.nodes = normalized
