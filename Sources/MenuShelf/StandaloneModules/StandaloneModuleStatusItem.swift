@@ -28,8 +28,18 @@ extension StatusItemManager {
         button.isEnabled = true
 
         let title = visibleTitle(for: module)
-        let image = statusImage(for: module, size: 18)
+        // Active modules show the filled variant of their SF Symbol. Icons
+        // with no filled form (emoji, images, monograms, title-only) fall
+        // back to an accent tint so the active state stays visible.
+        let isActive = activeStandaloneModuleKinds.contains(module.kind)
+        let filledModule = isActive && module.menuBarStyle != .titleOnly
+            ? filledVariant(of: module)
+            : nil
+        let image = statusImage(for: filledModule ?? module, size: 18)
         image.isTemplate = shouldTemplateIcon(module)
+        button.contentTintColor = isActive && filledModule == nil
+            ? NSColor.controlAccentColor
+            : nil
 
         switch module.menuBarStyle {
         case .iconOnly:
@@ -63,6 +73,20 @@ extension StatusItemManager {
         case .folderIcon, .systemSymbol, .monogram:
             return true
         }
+    }
+
+    /// `module` with its SF Symbol swapped for the `.fill` variant, or `nil`
+    /// when the icon isn't a symbol or has no filled form.
+    func filledVariant(of module: StandaloneModuleConfig) -> StandaloneModuleConfig? {
+        guard case .systemSymbol(let name, let tint) = module.icon,
+              !name.hasSuffix(".fill") else { return nil }
+        let filledName = name + ".fill"
+        guard NSImage(systemSymbolName: filledName, accessibilityDescription: nil) != nil else {
+            return nil
+        }
+        var filled = module
+        filled.icon = .systemSymbol(name: filledName, tint: tint)
+        return filled
     }
 
     func statusImage(for module: StandaloneModuleConfig, size: CGFloat) -> NSImage {

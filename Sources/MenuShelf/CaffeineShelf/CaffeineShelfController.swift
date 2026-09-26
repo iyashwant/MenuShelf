@@ -153,7 +153,7 @@ final class CaffeineShelfController {
         }
 
         reconcileMonitors()
-        updateStatusItemTint()
+        updateStatusItemIndicator()
         // Guard against activating while already below threshold / in Low Power
         // Mode — auto-off should fire immediately, not only on the next change.
         evaluateAutoOff()
@@ -168,7 +168,7 @@ final class CaffeineShelfController {
     }
 
     /// End the session: cancel the timer, release the assertion, drop monitors,
-    /// and clear the active tint. Safe to call when already inactive.
+    /// and clear the active icon. Safe to call when already inactive.
     func deactivate() {
         expiryTimer?.invalidate()
         expiryTimer = nil
@@ -180,7 +180,7 @@ final class CaffeineShelfController {
         isActive = false
 
         teardownMonitors()
-        updateStatusItemTint()
+        updateStatusItemIndicator()
 
         // Always clear the lid-closed system flag if we set it, so a closed-lid
         // session never outlives the awake state.
@@ -486,8 +486,8 @@ final class CaffeineShelfController {
 
     // MARK: - Status item
 
-    /// Reflect the active state on the menu-bar icon (accent tint when awake).
-    private func updateStatusItemTint() {
+    /// Reflect the active state on the menu-bar icon (filled cup when awake).
+    private func updateStatusItemIndicator() {
         AppContainer.shared.statusItemManager.setStandaloneModuleActiveIndicator(
             kind: .caffeineShelf,
             isActive: isActive

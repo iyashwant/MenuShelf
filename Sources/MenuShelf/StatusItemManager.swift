@@ -26,6 +26,10 @@ final class StatusItemManager: NSObject {
 
     var statusItems: [StatusContext] = []
     var statusItemsByButton: [ObjectIdentifier: StatusContext] = [:]
+    /// Module kinds whose standalone icon should render in its "active"
+    /// appearance. Held here rather than on the items so a status-item
+    /// rebuild re-creates the icons in the right state.
+    var activeStandaloneModuleKinds: Set<ModuleKind> = []
     private var cancellable: AnyCancellable?
 
     /// Returns the `NSStatusBarButton` for the menu view with the given id,
@@ -369,15 +373,20 @@ final class StatusItemManager: NSObject {
         }
     }
 
-    /// Tint every visible standalone status item of `kind` with the system
-    /// accent color while `isActive`, clearing the tint otherwise. Used by
-    /// CaffeineShelf to reflect its keep-awake state on the menu-bar icon. A
-    /// module kind can have more than one standalone item, so all matches are
-    /// updated rather than returning on the first.
+    /// Switch every visible standalone status item of `kind` to its active
+    /// appearance (filled SF Symbol) while `isActive`, and back otherwise.
+    /// Used by CaffeineShelf to reflect its keep-awake state on the menu-bar
+    /// icon. A module kind can have more than one standalone item, so all
+    /// matches are updated rather than returning on the first.
     func setStandaloneModuleActiveIndicator(kind: ModuleKind, isActive: Bool) {
+        if isActive {
+            activeStandaloneModuleKinds.insert(kind)
+        } else {
+            activeStandaloneModuleKinds.remove(kind)
+        }
         for context in statusItems {
             if case .standaloneModule(let item, let module) = context, module.kind == kind {
-                item.button?.contentTintColor = isActive ? NSColor.controlAccentColor : nil
+                configure(button: item.button, module: module)
             }
         }
     }
