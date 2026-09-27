@@ -519,19 +519,12 @@ final class MenuBuilder {
         let submenu = NSMenu(title: "MenuShelf")
         submenu.autoenablesItems = false
 
-        submenu.addItem(actionItem("Add Item...", kind: .openSettings))
-        if let view {
-            submenu.addItem(addExistingMenuViewMenuItem(for: view))
-        }
-        submenu.addItem(.separator())
-
-        submenu.addItem(toggleMenuViewsMenuItem())
-        submenu.addItem(.separator())
-
-        if let view {
-            submenu.addItem(actionItem("Duplicate View", kind: .duplicateMenuView, menuViewID: view.id))
-            submenu.addItem(actionItem("Hide View", kind: .hideMenuView, menuViewID: view.id))
-            submenu.addItem(actionItem("Remove View...", kind: .removeMenuView, menuViewID: view.id))
+        // Without a menu view (the grouped folder menu) there is no view to
+        // edit, so its remaining actions stay at the top level.
+        if view == nil {
+            submenu.addItem(actionItem("Add Item...", kind: .openSettings))
+            submenu.addItem(.separator())
+            submenu.addItem(toggleMenuViewsMenuItem())
             submenu.addItem(.separator())
         }
 
@@ -539,6 +532,10 @@ final class MenuBuilder {
         settings.keyEquivalent = ","
         settings.keyEquivalentModifierMask = [.command]
         submenu.addItem(settings)
+
+        if let view {
+            submenu.addItem(editViewMenuItem(for: view))
+        }
 
         let more = NSMenuItem(title: "More", action: nil, keyEquivalent: "")
         let moreSubmenu = NSMenu(title: "More")
@@ -563,6 +560,28 @@ final class MenuBuilder {
 
         submenu.addItem(.separator())
         submenu.addItem(actionItem("Quit MenuShelf", kind: .quit))
+        item.submenu = submenu
+        return item
+    }
+
+    /// Actions for editing the current menu view, grouped in one submenu so
+    /// the management menu leads with Settings.
+    private func editViewMenuItem(for view: MenuViewConfig) -> NSMenuItem {
+        let item = NSMenuItem(title: "Edit View", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Edit View")
+        submenu.autoenablesItems = false
+
+        submenu.addItem(actionItem("Add Item...", kind: .openSettings))
+        submenu.addItem(addExistingMenuViewMenuItem(for: view))
+        submenu.addItem(.separator())
+
+        submenu.addItem(toggleMenuViewsMenuItem())
+        submenu.addItem(.separator())
+
+        submenu.addItem(actionItem("Duplicate View", kind: .duplicateMenuView, menuViewID: view.id))
+        submenu.addItem(actionItem("Hide View", kind: .hideMenuView, menuViewID: view.id))
+        submenu.addItem(actionItem("Remove View...", kind: .removeMenuView, menuViewID: view.id))
+
         item.submenu = submenu
         return item
     }
