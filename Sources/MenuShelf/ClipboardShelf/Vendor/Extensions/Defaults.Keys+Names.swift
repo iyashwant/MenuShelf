@@ -42,7 +42,9 @@ extension Defaults.Keys {
   static let pinTo = Key<PinsPosition>("pinTo", default: .top)
   static let popupPosition = Key<PopupPosition>("popupPosition", default: .cursor)
   static let popupScreen = Key<Int>("popupScreen", default: 0)
-  static let previewDelay = Key<Int>("previewDelay", default: 1500)
+  // MenuShelf: the preview opens on hover, so 1500ms felt like a stall. Keep a
+  // short pause so a cursor just passing over the list doesn't flash it open.
+  static let previewDelay = Key<Int>("previewDelay", default: 150)
   static let removeFormattingByDefault = Key<Bool>("removeFormattingByDefault", default: false)
   static let searchMode = Key<Search.Mode>("searchMode", default: .exact)
   static let showFooter = Key<Bool>("showFooter", default: true)

@@ -193,11 +193,8 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   }
 
   func windowDidBecomeKey(_ notification: Notification) {
+    // MenuShelf: don't start the preview here; it waits for a hover.
     ClipboardShelfState.shared.preview.enableAutoOpen()
-
-    if ClipboardShelfState.shared.navigator.leadHistoryItem != nil {
-      ClipboardShelfState.shared.preview.startAutoOpen()
-    }
   }
 
   func windowDidResignKey(_ notification: Notification) {

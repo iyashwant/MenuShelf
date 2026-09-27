@@ -159,7 +159,14 @@ class Popup {
       }
 
       if state == .cycle {
-        ClipboardShelfState.shared.navigator.highlightNext(allowCycle: true)
+        let navigator = ClipboardShelfState.shared.navigator
+        // MenuShelf: the popup opens with nothing selected. Start from the
+        // latest item so the first extra press still moves to the one before.
+        if navigator.leadSelection == nil {
+          let history = ClipboardShelfState.shared.history
+          navigator.select(item: history.firstVisibleItem(where: \.isUnpinned) ?? history.firstVisibleItem)
+        }
+        navigator.highlightNext(allowCycle: true)
         return nil
       }
 

@@ -83,6 +83,7 @@ struct KeyHandlingView<Content: View>: View {
           }
 
           appState.navigator.highlightNext()
+          appState.preview.startAutoOpen()
           return .handled
         case .moveToLast:
           guard NSApp.characterPickerWindow == nil else {
@@ -90,6 +91,7 @@ struct KeyHandlingView<Content: View>: View {
           }
 
           appState.navigator.highlightLast()
+          appState.preview.startAutoOpen()
           return .handled
         case .moveToPrevious:
           guard NSApp.characterPickerWindow == nil else {
@@ -97,6 +99,7 @@ struct KeyHandlingView<Content: View>: View {
           }
 
           appState.navigator.highlightPrevious()
+          appState.preview.startAutoOpen()
           return .handled
         case .moveToFirst:
           guard NSApp.characterPickerWindow == nil else {
@@ -104,6 +107,7 @@ struct KeyHandlingView<Content: View>: View {
           }
 
           appState.navigator.highlightFirst()
+          appState.preview.startAutoOpen()
           return .handled
         case .extendToNext:
           guard NSApp.characterPickerWindow == nil else {

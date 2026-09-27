@@ -115,13 +115,15 @@ struct HistoryListView: View {
         .onChange(of: scenePhase) {
           if scenePhase == .active {
             searchFocused = true
+            // MenuShelf: open with nothing selected, scrolled to the top. The
+            // preview waits until a row is hovered or reached with the arrow
+            // keys. Keyboard-navigating mode keeps a row that happens to be
+            // under a still cursor from being selected until the mouse moves.
             appState.navigator.isKeyboardNavigating = true
-            appState.navigator.select(
-              item: appState.history.firstVisibleItem(where: \.isUnpinned) ?? appState.history.firstVisibleItem
-            )
+            appState.navigator.select(item: nil)
+            appState.navigator.scrollTarget = appState.history.firstVisibleItem(where: \.isUnpinned)?.id
             appState.preview.enableAutoOpen()
             appState.preview.resetAutoOpenSuppression()
-            appState.preview.startAutoOpen()
           } else {
             modifierFlags.flags = []
             appState.navigator.isKeyboardNavigating = true

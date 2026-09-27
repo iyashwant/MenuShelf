@@ -7,8 +7,11 @@ struct SlideoutContentView: View {
 
   @State private var cardHeight: CGFloat = 0
 
+  // Nothing is drawn while the preview is closed: its column is then zero
+  // wide, and the glass card isn't clipped to it, so it spilled over the list.
   private var hasContent: Bool {
-    appState.navigator.leadHistoryItem != nil
+    guard appState.preview.state != .closed else { return false }
+    return appState.navigator.leadHistoryItem != nil
       || (appState.history.pasteStack != nil && appState.navigator.pasteStackSelected)
   }
 

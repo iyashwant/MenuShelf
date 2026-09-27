@@ -32,14 +32,22 @@ class NavigationManager { // swiftlint:disable:this type_body_length
     didSet {
       guard oldValue?.id != leadHistoryItem?.id else { return }
 
+      // MenuShelf: a new selection alone no longer opens the preview; only a
+      // hover or an arrow key does (see `selectFromHover` and KeyHandlingView),
+      // so selections made on open, by search or by the filter stay quiet.
       let preview = ClipboardShelfState.shared.preview
       if leadHistoryItem != nil {
         preview.resetAutoOpenSuppression()
-        preview.startAutoOpen()
       } else {
         preview.cancelAutoOpen()
       }
     }
+  }
+
+  // MenuShelf: selects the hovered row and starts the preview's open delay.
+  func selectFromHover(id: UUID) {
+    selectWithoutScrolling(id: id)
+    ClipboardShelfState.shared.preview.startAutoOpen()
   }
 
   var pasteStackSelected: Bool {
@@ -58,6 +66,7 @@ class NavigationManager { // swiftlint:disable:this type_body_length
          let hoverSelection = hoverSelectionWhileKeyboardNavigating {
         hoverSelectionWhileKeyboardNavigating = nil
         select(id: hoverSelection)
+        ClipboardShelfState.shared.preview.startAutoOpen()
       }
     }
   }
@@ -204,7 +213,11 @@ class NavigationManager { // swiftlint:disable:this type_body_length
   }
 
   func highlightPrevious() {
-    guard let lead = leadSelection else { return }
+    // MenuShelf: the popup opens with nothing selected; start from the top.
+    guard let lead = leadSelection else {
+      highlightFirst()
+      return
+    }
 
     if let historyItem = history.firstVisibleItem(where: { $0.id == lead }) {
       if let nextItem = history.visibleItem(before: historyItem) {
@@ -224,7 +237,10 @@ class NavigationManager { // swiftlint:disable:this type_body_length
   }
 
   func highlightNext(allowCycle: Bool = false) {
-    guard let lead = leadSelection else { return }
+    guard let lead = leadSelection else {
+      highlightFirst()
+      return
+    }
 
     if leadSelection == history.pasteStack?.id {
       highlightFirst()
@@ -252,7 +268,10 @@ class NavigationManager { // swiftlint:disable:this type_body_length
   }
 
   func highlightLast() {
-    guard let lead = leadSelection else { return }
+    guard let lead = leadSelection else {
+      selectFromKeyboardNavigation(item: history.lastVisibleItem)
+      return
+    }
 
     if let historyItem = history.firstVisibleItem(where: { $0.id == lead }) {
       if historyItem == history.lastVisibleItem,

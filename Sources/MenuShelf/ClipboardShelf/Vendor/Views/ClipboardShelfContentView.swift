@@ -58,17 +58,16 @@ struct ClipboardShelfContentView: View {
     .environment(modifierFlags)
     .environment(\.scenePhase, scenePhase)
     // FloatingPanel is not a scene, so let's implement custom scenePhase..
+    // MenuShelf: match the popup's panel itself. Its identifier carries a
+    // ".clipboardShelf" suffix, so the bundle-identifier check never matched
+    // and the open/close resets below never ran.
     .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
-      if let window = $0.object as? NSWindow,
-         let bundleIdentifier = Bundle.main.bundleIdentifier,
-         window.identifier == NSUserInterfaceItemIdentifier(bundleIdentifier) {
+      if let window = $0.object as? NSWindow, window === appState.panel {
         scenePhase = .active
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) {
-      if let window = $0.object as? NSWindow,
-         let bundleIdentifier = Bundle.main.bundleIdentifier,
-         window.identifier == NSUserInterfaceItemIdentifier(bundleIdentifier) {
+      if let window = $0.object as? NSWindow, window === appState.panel {
         scenePhase = .background
       }
     }

@@ -23,7 +23,8 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
         updateItems(search.search(string: searchQuery, within: all))
 
         if searchQuery.isEmpty {
-          ClipboardShelfState.shared.navigator.select(item: firstVisibleItem(where: \.isUnpinned))
+          // MenuShelf: back to the just-opened state, with nothing selected.
+          ClipboardShelfState.shared.navigator.select(item: nil)
         } else {
           ClipboardShelfState.shared.navigator.highlightFirst()
         }
@@ -39,9 +40,10 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     didSet {
       guard contentFilter != oldValue else { return }
       updateUnpinnedShortcuts()
-      ClipboardShelfState.shared.navigator.select(
-        item: firstVisibleItem(where: \.isUnpinned) ?? firstVisibleItem
-      )
+      let navigator = ClipboardShelfState.shared.navigator
+      if let lead = navigator.leadHistoryItem, !lead.isVisible {
+        navigator.select(item: nil)
+      }
       ClipboardShelfState.shared.popup.needsResize = true
     }
   }

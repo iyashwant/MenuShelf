@@ -8,7 +8,7 @@ private struct HoverSelectionModifier: ViewModifier {
     content.onHover { hovering in
       if hovering {
         if !appState.navigator.isKeyboardNavigating && !appState.navigator.isMultiSelectInProgress {
-          appState.navigator.selectWithoutScrolling(id: id)
+          appState.navigator.selectFromHover(id: id)
         } else {
           appState.navigator.hoverSelectionWhileKeyboardNavigating = id
         }

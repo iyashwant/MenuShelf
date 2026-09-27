@@ -82,6 +82,11 @@ final class ClipboardShelfState: @unchecked Sendable {
       } else {
         item.action()
       }
+    } else if history.searchQuery.isEmpty,
+              let latest = history.firstVisibleItem(where: \.isUnpinned) ?? history.firstVisibleItem {
+      // MenuShelf: the popup opens with nothing selected, so Return still
+      // pastes the latest item instead of copying the empty search text.
+      history.select(latest)
     } else {
       Clipboard.shared.copy(history.searchQuery)
       history.searchQuery = ""
