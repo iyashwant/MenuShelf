@@ -184,6 +184,7 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   }
 
   func windowWillStartLiveResize(_ notification: Notification) {
+    ClipboardShelfState.shared.preview.cancelAutoOpen()
   }
 
   func windowDidEndLiveResize(_ notification: Notification) {
@@ -214,6 +215,7 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
 
   override func close() {
     super.close()
+    ClipboardShelfState.shared.preview.cancelAutoOpen()
     ClipboardShelfState.shared.preview.state = .closed
     if isPresented {
       History.shared.popupDidClose()

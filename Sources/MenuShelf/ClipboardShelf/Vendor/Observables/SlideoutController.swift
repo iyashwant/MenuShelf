@@ -225,12 +225,16 @@ class SlideoutController {
     guard autoOpenEnabled else { return }
     guard !autoOpenSuppressed else { return }
     guard !state.isOpen else { return }
+    // MenuShelf: opening the preview on the hidden popup left it marked open,
+    // so the next open sized the window for the list alone and squeezed the
+    // preview to its minimum width.
+    guard nswindow?.isVisible == true else { return }
 
     autoOpenTask = Task { @MainActor in
       try? await Task.sleep(for: .milliseconds(Defaults[.previewDelay]))
       guard !Task.isCancelled else { return }
 
-      if !state.isOpen {
+      if !state.isOpen, nswindow?.isVisible == true {
         togglePreview(trigger: .autoOpen)
       }
     }
