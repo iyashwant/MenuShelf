@@ -336,12 +336,16 @@ final class MenuBuilder {
 
         // macOS 27 hides menu item images unless the item opts in. Every row
         // in a menu view carries a deliberate icon (sources, modules,
-        // shortcuts, scripts), so keep them all visible.
+        // shortcuts, scripts), so keep them all visible. The API only exists
+        // in the macOS 27 SDK, which ships with Swift 6.4; older toolchains
+        // (CI's macOS 26 runner) skip it and never need it.
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) {
             for item in menu.items where item.image != nil {
                 item.preferredImageVisibility = .visible
             }
         }
+        #endif
     }
 
     private func directSingleFolderSource(for view: MenuViewConfig) -> FolderConfig? {
