@@ -156,6 +156,12 @@ struct KeyHandlingView<Content: View>: View {
         case .togglePreview:
           appState.preview.togglePreview()
           return .handled
+        case .nextContentFilter:
+          appState.history.contentFilter = appState.history.contentFilter.cycled()
+          return .handled
+        case .previousContentFilter:
+          appState.history.contentFilter = appState.history.contentFilter.cycled(backwards: true)
+          return .handled
         default:
           ()
         }

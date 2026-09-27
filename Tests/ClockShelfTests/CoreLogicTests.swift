@@ -247,3 +247,37 @@ func holeFillLeavesSolidShapes() {
     }
     #expect(disc.fillingLargestEnclosedHole() === disc)
 }
+
+// MARK: - Clipboard content filter
+
+@Test("filterOnOpen opens on Text when the popup has never closed or was closed 60s+ ago")
+func contentFilterDefaultsToText() {
+    let now = Date()
+    #expect(ClipboardContentFilter.filterOnOpen(current: .images, closedAt: nil, now: now) == .text)
+    #expect(ClipboardContentFilter.filterOnOpen(current: .all, closedAt: now.addingTimeInterval(-60), now: now) == .text)
+    #expect(ClipboardContentFilter.filterOnOpen(current: .images, closedAt: now.addingTimeInterval(-600), now: now) == .text)
+}
+
+@Test("filterOnOpen keeps the last filter when the popup reopens within 60s")
+func contentFilterRemembersRecentChoice() {
+    let now = Date()
+    let recently = now.addingTimeInterval(-59)
+    #expect(ClipboardContentFilter.filterOnOpen(current: .all, closedAt: recently, now: now) == .all)
+    #expect(ClipboardContentFilter.filterOnOpen(current: .images, closedAt: recently, now: now) == .images)
+    #expect(ClipboardContentFilter.filterOnOpen(current: .text, closedAt: recently, now: now) == .text)
+}
+
+@Test("content filters include the right items and cycle in both directions")
+func contentFilterMatchingAndCycling() {
+    #expect(ClipboardContentFilter.all.includes(isImage: true))
+    #expect(ClipboardContentFilter.all.includes(isImage: false))
+    #expect(ClipboardContentFilter.text.includes(isImage: false))
+    #expect(!ClipboardContentFilter.text.includes(isImage: true))
+    #expect(ClipboardContentFilter.images.includes(isImage: true))
+    #expect(!ClipboardContentFilter.images.includes(isImage: false))
+
+    #expect(ClipboardContentFilter.all.cycled() == .text)
+    #expect(ClipboardContentFilter.images.cycled() == .all)
+    #expect(ClipboardContentFilter.all.cycled(backwards: true) == .images)
+    #expect(ClipboardContentFilter.text.cycled(backwards: true) == .all)
+}

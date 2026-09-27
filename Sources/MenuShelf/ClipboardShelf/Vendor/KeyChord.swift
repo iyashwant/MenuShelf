@@ -40,6 +40,8 @@ enum KeyChord: CaseIterable {
   case selectCurrentItem
   case close
   case togglePreview
+  case nextContentFilter
+  case previousContentFilter
   case unknown
 
   init(_ event: NSEvent?) {
@@ -123,6 +125,10 @@ enum KeyChord: CaseIterable {
       self = .close
     case (KeyChord.previewKey, KeyChord.previewModifiers):
       self = .togglePreview
+    case (.tab, []):
+      self = .nextContentFilter
+    case (.tab, [.shift]):
+      self = .previousContentFilter
     case (_, _) where !modifierFlags.isDisjoint(with: [.command, .control, .option]):
       self = .ignored
     default:

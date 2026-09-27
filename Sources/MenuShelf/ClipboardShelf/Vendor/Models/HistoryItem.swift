@@ -165,6 +165,11 @@ class HistoryItem {
     return NSImage(data: data)
   }
 
+  // MenuShelf: whether the item holds image data, without reading or decoding it.
+  var hasImageContent: Bool {
+    contentData([.tiff, .png, .jpeg, .heic]) != nil || universalClipboardImage
+  }
+
   var rtfData: Data? { contentData([.rtf]) }
   var rtf: NSAttributedString? {
     guard let data = rtfData else {

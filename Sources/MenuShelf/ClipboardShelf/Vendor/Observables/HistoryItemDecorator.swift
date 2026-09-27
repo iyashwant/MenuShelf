@@ -18,7 +18,8 @@ final class HistoryItemDecorator: Identifiable, Hashable, HasVisibility, @unchec
   var title: String = ""
   var attributedTitle: AttributedString?
 
-  var isVisible: Bool = true
+  // MenuShelf: visibility follows the popup's All / Text / Images filter.
+  var isVisible: Bool { History.shared.contentFilter.includes(isImage: isImage) }
   var selectionIndex: Int = -1
   var isSelected: Bool {
     return selectionIndex != -1
@@ -40,6 +41,16 @@ final class HistoryItemDecorator: Identifiable, Hashable, HasVisibility, @unchec
   }
 
   var hasImage: Bool { item.image != nil }
+
+  // Cached because the filter checks every item on each list update.
+  @ObservationIgnored
+  private var cachedIsImage: Bool?
+  var isImage: Bool {
+    if let cachedIsImage { return cachedIsImage }
+    let isImage = item.hasImageContent
+    cachedIsImage = isImage
+    return isImage
+  }
 
   var previewImageGenerationTask: Task<(), Error>?
   var thumbnailImageGenerationTask: Task<(), Error>?

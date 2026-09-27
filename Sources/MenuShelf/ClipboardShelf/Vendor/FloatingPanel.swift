@@ -72,6 +72,7 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   }
 
   func open(height: CGFloat, at popupPosition: PopupPosition = Defaults[.popupPosition]) {
+    History.shared.popupWillOpen()
     let size = Defaults[.windowSize]
     setContentSize(NSSize(width: min(frame.width, size.width), height: min(height, size.height)))
     setFrameOrigin(popupPosition.origin(size: frame.size, statusBarButton: statusBarButton))
@@ -201,6 +202,9 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   override func close() {
     super.close()
     ClipboardShelfState.shared.preview.state = .closed
+    if isPresented {
+      History.shared.popupDidClose()
+    }
     isPresented = false
     statusBarButton?.isHighlighted = false
     onClose()

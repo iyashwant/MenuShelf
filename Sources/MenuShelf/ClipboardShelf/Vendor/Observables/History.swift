@@ -23,7 +23,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
         updateItems(search.search(string: searchQuery, within: all))
 
         if searchQuery.isEmpty {
-          ClipboardShelfState.shared.navigator.select(item: unpinnedItems.first)
+          ClipboardShelfState.shared.navigator.select(item: firstVisibleItem(where: \.isUnpinned))
         } else {
           ClipboardShelfState.shared.navigator.highlightFirst()
         }
@@ -31,6 +31,30 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
         ClipboardShelfState.shared.popup.needsResize = true
       }
     }
+  }
+
+  // MenuShelf: items outside the content filter stay in `items` but report
+  // `isVisible == false`, so the list, navigation and shortcuts skip them.
+  var contentFilter: ClipboardContentFilter = ClipboardContentFilter.defaultFilter {
+    didSet {
+      guard contentFilter != oldValue else { return }
+      updateUnpinnedShortcuts()
+      ClipboardShelfState.shared.navigator.select(
+        item: firstVisibleItem(where: \.isUnpinned) ?? firstVisibleItem
+      )
+      ClipboardShelfState.shared.popup.needsResize = true
+    }
+  }
+
+  @ObservationIgnored
+  private var popupClosedAt: Date?
+
+  func popupWillOpen() {
+    contentFilter = ClipboardContentFilter.filterOnOpen(current: contentFilter, closedAt: popupClosedAt)
+  }
+
+  func popupDidClose() {
+    popupClosedAt = Date()
   }
 
   var pressedShortcutItem: HistoryItemDecorator? {
@@ -47,7 +71,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     }
 
     let key = Sauce.shared.key(for: Int(event.keyCode))
-    return items.first { $0.shortcuts.contains(where: { $0.key == key }) }
+    return items.first { $0.isVisible && $0.shortcuts.contains(where: { $0.key == key }) }
   }
 
   private let search = Search()
@@ -492,10 +516,13 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
   }
 
   private func updateUnpinnedShortcuts() {
-    let visibleUnpinnedItems = unpinnedItems.filter(\.isVisible)
-    for item in visibleUnpinnedItems {
+    // Clear hidden items too, so a filtered-out item keeps no stale number.
+    let unpinnedItems = unpinnedItems
+    for item in unpinnedItems {
       item.shortcuts = []
     }
+
+    let visibleUnpinnedItems = unpinnedItems.filter(\.isVisible)
 
     var index = 1
     for item in visibleUnpinnedItems.prefix(9) {
