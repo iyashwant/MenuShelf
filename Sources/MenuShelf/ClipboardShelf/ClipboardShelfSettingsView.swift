@@ -235,16 +235,6 @@ struct ClipboardShelfSettingsView: View {
                     Text("\(Int(store.settings.resolvedClipboardShelf.popupSize.width))")
                 }
             }
-
-            SettingsRow("Window height") {
-                Stepper(
-                    value: popupHeightBinding,
-                    in: 200...1200,
-                    step: 10
-                ) {
-                    Text("\(Int(store.settings.resolvedClipboardShelf.popupSize.height))")
-                }
-            }
         }
     }
 
@@ -370,18 +360,6 @@ struct ClipboardShelfSettingsView: View {
                 let clamped = min(max(newValue, 200), 1200)
                 store.updateClipboardShelfSettings {
                     $0.popupSize = CGSize(width: CGFloat(clamped), height: $0.popupSize.height)
-                }
-            }
-        )
-    }
-
-    private var popupHeightBinding: Binding<Int> {
-        Binding(
-            get: { Int(store.settings.resolvedClipboardShelf.popupSize.height) },
-            set: { newValue in
-                let clamped = min(max(newValue, 200), 1200)
-                store.updateClipboardShelfSettings {
-                    $0.popupSize = CGSize(width: $0.popupSize.width, height: CGFloat(clamped))
                 }
             }
         )

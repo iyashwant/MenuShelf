@@ -74,8 +74,9 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   func open(height: CGFloat, at popupPosition: PopupPosition = Defaults[.popupPosition]) {
     History.shared.popupWillOpen()
     let size = Defaults[.windowSize]
-    setContentSize(NSSize(width: min(frame.width, size.width), height: min(height, size.height)))
+    setContentSize(NSSize(width: min(frame.width, size.width), height: min(height, Popup.maximumHeight)))
     setFrameOrigin(popupPosition.origin(size: frame.size, statusBarButton: statusBarButton))
+    keepOnScreen()
     orderFrontRegardless()
     makeKey()
     isPresented = true
@@ -92,11 +93,24 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
     newSize.height = newHeight
     var newOrigin = frame.origin
     newOrigin.y += (frame.height - newSize.height)
+    newOrigin = originKeepingBottomOnScreen(newOrigin)
 
     NSAnimationContext.runAnimationGroup { (context) in
       context.duration = 0.2
       animator().setFrame(NSRect(origin: newOrigin, size: newSize), display: true)
     }
+  }
+
+  // MenuShelf: a popup that grows to screen height can reach past the
+  // bottom of the screen when it opens low down, so lift it back up.
+  private func keepOnScreen() {
+    setFrameOrigin(originKeepingBottomOnScreen(frame.origin))
+  }
+
+  private func originKeepingBottomOnScreen(_ origin: NSPoint) -> NSPoint {
+    guard let visibleFrame = (screen ?? NSScreen.forPopup)?.visibleFrame,
+          origin.y < visibleFrame.minY else { return origin }
+    return NSPoint(x: origin.x, y: visibleFrame.minY)
   }
 
   func determinePreviewPlacement() {
@@ -170,7 +184,6 @@ class FloatingPanel<Content: View>: NSPanel, NSWindowDelegate {
   }
 
   func windowWillStartLiveResize(_ notification: Notification) {
-    ClipboardShelfState.shared.preview.cancelAutoOpen()
   }
 
   func windowDidEndLiveResize(_ notification: Notification) {

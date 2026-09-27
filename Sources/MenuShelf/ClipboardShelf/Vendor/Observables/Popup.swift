@@ -100,8 +100,18 @@ class Popup {
     minimumHeight = max(headerHeight + Self.verticalPadding, minimumHeight)
 
     height = max(height, minimumHeight)
-    height = min(height, Defaults[.windowSize].height)
+    height = min(height, Self.maximumHeight)
     return height
+  }
+
+  // MenuShelf: the popup grows with its items up to the height of the
+  // screen it's on, minus a small gap above the Dock.
+  static var maximumHeight: CGFloat {
+    let screen = ClipboardShelfState.shared.panel?.screen ?? NSScreen.forPopup
+    guard let visibleHeight = screen?.visibleFrame.height else {
+      return Defaults[.windowSize].height
+    }
+    return visibleHeight - 10
   }
 
   func resize(height: CGFloat) {
