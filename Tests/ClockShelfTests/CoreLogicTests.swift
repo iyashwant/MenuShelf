@@ -313,3 +313,57 @@ func copyTimeOlderDates() {
     #expect(!text.contains("September"))
     #expect(text.contains("52"))
 }
+
+// MARK: - Clipboard screenshots
+
+@Test("screenshot folder follows the macOS location setting and defaults to the Desktop")
+func screenshotFolderLocation() {
+    let home = URL(fileURLWithPath: "/Users/someone", isDirectory: true)
+    #expect(ClipboardShelfScreenshots.screenshotFolder(fromLocation: nil, home: home).path == "/Users/someone/Desktop")
+    #expect(ClipboardShelfScreenshots.screenshotFolder(fromLocation: "  ", home: home).path == "/Users/someone/Desktop")
+    #expect(ClipboardShelfScreenshots.screenshotFolder(fromLocation: "~/Documents/Screenshots", home: home).path == "/Users/someone/Documents/Screenshots")
+    #expect(ClipboardShelfScreenshots.screenshotFolder(fromLocation: "/Volumes/Shots", home: home).path == "/Volumes/Shots")
+}
+
+@Test("recentImages keeps only visible images saved since the cutoff, newest first")
+func screenshotScanFiltersByTypeAndAge() throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    let now = Date()
+    func file(_ name: String, age: TimeInterval) throws {
+        let url = folder.appendingPathComponent(name)
+        try Data([0]).write(to: url)
+        let date = now.addingTimeInterval(-age)
+        try FileManager.default.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
+    }
+    try file("new.png", age: 60)
+    try file("newer.jpg", age: 10)
+    try file("old.png", age: 3 * 86_400)
+    try file("notes.txt", age: 60)
+    try file(".hidden.png", age: 60)
+
+    let files = ClipboardShelfScreenshots.recentImages(in: [folder, folder], since: now.addingTimeInterval(-2 * 86_400), limit: 10)
+    #expect(files.map(\.url.lastPathComponent) == ["newer.jpg", "new.png"])
+
+    let limited = ClipboardShelfScreenshots.recentImages(in: [folder], since: now.addingTimeInterval(-2 * 86_400), limit: 1)
+    #expect(limited.map(\.url.lastPathComponent) == ["newer.jpg"])
+}
+
+@Test("Clipboard Shelf settings written before screenshots existed decode with it off")
+func screenshotSettingsDecodeLegacy() throws {
+    var legacy = ClipboardShelfSettings.defaults
+    legacy.showScreenshots = nil
+    legacy.screenshotFolders = nil
+    legacy.screenshotMaxAgeDays = nil
+    let data = try JSONEncoder().encode(legacy)
+    let decoded = try JSONDecoder().decode(ClipboardShelfSettings.self, from: data)
+    #expect(decoded.resolvedShowScreenshots == false)
+    #expect(decoded.resolvedScreenshotFolders.isEmpty)
+    #expect(decoded.resolvedScreenshotMaxAgeDays == 2)
+
+    var tooLong = decoded
+    tooLong.screenshotMaxAgeDays = 400
+    #expect(tooLong.resolvedScreenshotMaxAgeDays == 30)
+}

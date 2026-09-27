@@ -157,6 +157,15 @@ struct ClipboardShelfSettings: Codable, Equatable {
     /// Optional so older settings.json decodes cleanly. UI reads through
     /// `resolvedPresentationMode`.
     var presentationMode: ClipboardShelfPresentationMode?
+    /// Recent images from these folders show in the popup next to copied
+    /// items. Optional so older settings.json decodes cleanly; read through
+    /// the `resolved…` accessors.
+    var showScreenshots: Bool?
+    var screenshotFolders: [ClipboardShelfScreenshotFolder]?
+    var screenshotMaxAgeDays: Int?
+
+    static let defaultScreenshotMaxAgeDays = 2
+    static let screenshotMaxAgeRange = 1...30
 
     static let defaults = ClipboardShelfSettings(
         enableClipboardShelf: false,
@@ -200,5 +209,32 @@ struct ClipboardShelfSettings: Codable, Equatable {
     /// directly and never consults this mode.
     var resolvedPresentationMode: ClipboardShelfPresentationMode {
         presentationMode ?? .submenu
+    }
+
+    var resolvedShowScreenshots: Bool {
+        showScreenshots ?? false
+    }
+
+    var resolvedScreenshotFolders: [ClipboardShelfScreenshotFolder] {
+        screenshotFolders ?? []
+    }
+
+    var resolvedScreenshotMaxAgeDays: Int {
+        let days = screenshotMaxAgeDays ?? Self.defaultScreenshotMaxAgeDays
+        return min(max(days, Self.screenshotMaxAgeRange.lowerBound), Self.screenshotMaxAgeRange.upperBound)
+    }
+}
+
+// MARK: - ClipboardShelfScreenshotFolder
+
+/// A folder whose recent images show in the Clipboard Shelf popup. The app is
+/// sandboxed, so each folder is kept as a security-scoped bookmark.
+struct ClipboardShelfScreenshotFolder: Codable, Equatable, Identifiable {
+    var id: UUID
+    var bookmarkData: Data
+    var path: String
+
+    var displayName: String {
+        URL(fileURLWithPath: path).lastPathComponent
     }
 }

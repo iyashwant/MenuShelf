@@ -18,6 +18,10 @@ extension NSPasteboard.PasteboardType: Defaults.Serializable {
   // Marks that copy was made from Maccy.
   static let fromClipboardShelf = NSPasteboard.PasteboardType(rawValue: "app.menushelf.ClipboardShelf")
 
+  // MenuShelf: marks an item read from a screenshot folder rather than copied.
+  // It only ever lives in memory and is never written to the pasteboard.
+  static let menuShelfScreenshot = NSPasteboard.PasteboardType(rawValue: "app.menushelf.ClipboardShelf.screenshot")
+
   // Types that indicate Microsoft Word bookmarks (links).
   static let microsoftObjectLink = NSPasteboard.PasteboardType(rawValue: "com.microsoft.ObjectLink")
   static let microsoftLinkSource = NSPasteboard.PasteboardType(rawValue: "com.microsoft.Link-Source")

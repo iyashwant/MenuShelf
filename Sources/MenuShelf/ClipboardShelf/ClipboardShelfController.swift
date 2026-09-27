@@ -104,6 +104,9 @@ final class ClipboardShelfController {
         }
         KeyboardShortcuts.disable([.delete, .pin])
 
+        // 6. Show recent images from the screenshot folders, if turned on.
+        ClipboardShelfScreenshots.shared.configure(with: settings)
+
         DiagnosticsLogger.shared.log("Clipboard Shelf started (interval=\(settings.clipboardCheckInterval)s, size=\(settings.size))")
         isRunning = true
     }
@@ -116,6 +119,7 @@ final class ClipboardShelfController {
 
         Clipboard.shared.clearHooks()
         Clipboard.shared.stop()
+        ClipboardShelfScreenshots.shared.stop()
 
         panel?.close()
         ClipboardShelfState.shared.panel = nil
@@ -150,6 +154,7 @@ final class ClipboardShelfController {
             Clipboard.shared.restart()
         }
 
+        ClipboardShelfScreenshots.shared.configure(with: settings)
         lastAppliedSettings = settings
     }
 

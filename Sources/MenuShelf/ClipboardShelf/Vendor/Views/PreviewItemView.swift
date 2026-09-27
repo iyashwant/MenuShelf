@@ -86,7 +86,18 @@ struct PreviewItemView: View {
         .lineLimit(1)
       }
 
-      if item.item.numberOfCopies > 1 {
+      if item.item.isScreenshot {
+        // A screenshot shows the folder it's in and when it was saved.
+        if let folder = item.item.fileURLs.first?.deletingLastPathComponent() {
+          HStack(spacing: 3) {
+            Image(systemName: "folder")
+              .font(.system(size: 10))
+            Text(folder.lastPathComponent)
+          }
+          .lineLimit(1)
+        }
+        detailRow("Saved at", ClipboardShelfCopyTime.string(for: item.item.lastCopiedAt))
+      } else if item.item.numberOfCopies > 1 {
         detailRow("First copied at", ClipboardShelfCopyTime.string(for: item.item.firstCopiedAt))
         detailRow("Last copied at", ClipboardShelfCopyTime.string(for: item.item.lastCopiedAt))
         detailRow("Copies", String(item.item.numberOfCopies))

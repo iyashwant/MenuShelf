@@ -77,6 +77,12 @@ struct ToolbarView: View {
     return appState.navigator.selection.items.allSatisfy { $0.isPinned }
   }
 
+  // MenuShelf: screenshots are files in the user's folders, so they can't be
+  // pinned or deleted from here.
+  private var selectionIsScreenshot: Bool {
+    return appState.navigator.selection.items.contains { $0.item.isScreenshot }
+  }
+
   private var pinActionDisabled: Bool {
     return appState.navigator.selection.items.contains { $0.isPinned }
       && appState.navigator.selection.items.contains { !$0.isPinned }
@@ -84,7 +90,7 @@ struct ToolbarView: View {
 
   var body: some View {
     HStack {
-      if !appState.navigator.selection.isEmpty {
+      if !appState.navigator.selection.isEmpty && !selectionIsScreenshot {
         Spacer()
 
         ToolbarButton {

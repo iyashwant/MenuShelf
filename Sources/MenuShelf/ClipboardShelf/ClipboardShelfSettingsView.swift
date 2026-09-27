@@ -28,6 +28,7 @@ struct ClipboardShelfSettingsView: View {
                 hotkeyCard
                 behaviorCard
                 captureCard
+                screenshotsCard
                 popupCard
                 ignoreCard
                 storageCard
@@ -213,6 +214,130 @@ struct ClipboardShelfSettingsView: View {
                 }
             }
         }
+    }
+
+    private var screenshotsCard: some View {
+        let settings = store.settings.resolvedClipboardShelf
+        let systemFolder = ClipboardShelfScreenshots.systemScreenshotFolder()
+        let hasSystemFolder = settings.resolvedScreenshotFolders.contains { isSameFolder($0.path, systemFolder.path) }
+        let days = settings.resolvedScreenshotMaxAgeDays
+
+        return SettingsCard("Screenshots") {
+            SettingsToggle(
+                "Show recent screenshots",
+                helper: "Images saved in these folders appear in the popup next to copied items. They aren't added to your clipboard history and can't be deleted from the popup.",
+                isOn: Binding(
+                    get: { settings.resolvedShowScreenshots },
+                    set: { setShowScreenshots($0, systemFolder: systemFolder) }
+                )
+            )
+
+            if settings.resolvedShowScreenshots {
+                SettingsBlockRow {
+                    Text("Folders")
+                        .font(.subheadline)
+
+                    ForEach(settings.resolvedScreenshotFolders) { folder in
+                        screenshotFolderRow(folder, isSystemFolder: isSameFolder(folder.path, systemFolder.path))
+                    }
+
+                    if !hasSystemFolder {
+                        HStack(spacing: 8) {
+                            Text("macOS saves screenshots to \(abbreviatedPath(systemFolder.path)).")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Add") {
+                                addScreenshotFolder(startingAt: systemFolder)
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button("Add Folder…") {
+                            addScreenshotFolder(startingAt: nil)
+                        }
+                        Spacer()
+                    }
+                }
+
+                SettingsRow(
+                    "Show images from the last",
+                    helper: "Older images drop out of the popup. They stay in their folders."
+                ) {
+                    Stepper(
+                        value: Binding(
+                            get: { days },
+                            set: { value in store.updateClipboardShelfSettings { $0.screenshotMaxAgeDays = value } }
+                        ),
+                        in: ClipboardShelfSettings.screenshotMaxAgeRange
+                    ) {
+                        Text(days == 1 ? "1 day" : "\(days) days")
+                    }
+                }
+            }
+        }
+    }
+
+    private func screenshotFolderRow(_ folder: ClipboardShelfScreenshotFolder, isSystemFolder: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "folder")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(folder.displayName)
+                Text(isSystemFolder ? "macOS screenshot folder · \(abbreviatedPath(folder.path))" : abbreviatedPath(folder.path))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button {
+                store.updateClipboardShelfSettings { settings in
+                    settings.screenshotFolders = settings.resolvedScreenshotFolders.filter { $0.id != folder.id }
+                }
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .help("Stop showing images from this folder")
+        }
+    }
+
+    /// Turning the feature on with no folders asks for the macOS screenshot
+    /// folder first, and stays off if the user cancels.
+    private func setShowScreenshots(_ isOn: Bool, systemFolder: URL) {
+        guard isOn, store.settings.resolvedClipboardShelf.resolvedScreenshotFolders.isEmpty else {
+            store.updateClipboardShelfSettings { $0.showScreenshots = isOn }
+            return
+        }
+        addScreenshotFolder(startingAt: systemFolder)
+    }
+
+    private func addScreenshotFolder(startingAt folder: URL?) {
+        guard let added = ClipboardShelfScreenshots.requestAccess(to: folder, reusing: store.settings.folders) else {
+            return
+        }
+        store.updateClipboardShelfSettings { settings in
+            var folders = settings.resolvedScreenshotFolders
+            if !folders.contains(where: { isSameFolder($0.path, added.path) }) {
+                folders.append(added)
+            }
+            settings.screenshotFolders = folders
+            settings.showScreenshots = true
+        }
+    }
+
+    private func isSameFolder(_ lhs: String, _ rhs: String) -> Bool {
+        let standardized = { (path: String) in
+            URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+        }
+        return standardized(lhs) == standardized(rhs)
+    }
+
+    private func abbreviatedPath(_ path: String) -> String {
+        let home = ClipboardShelfScreenshots.realHomeDirectory.path
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }
 
     private var popupCard: some View {

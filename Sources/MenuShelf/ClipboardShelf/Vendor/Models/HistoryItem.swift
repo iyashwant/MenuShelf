@@ -86,6 +86,12 @@ class HistoryItem {
   }
 
   func generateTitle() -> String {
+    // MenuShelf: screenshots are titled by file name, so search can find them
+    // without running text recognition on every one.
+    if isScreenshot, let url = fileURLs.first {
+      return url.deletingPathExtension().lastPathComponent
+    }
+
     guard image == nil else {
       Task {
         self.performTextRecognition()
@@ -150,7 +156,8 @@ class HistoryItem {
   var imageData: Data? {
     var data: Data?
     data = contentData([.tiff, .png, .jpeg, .heic])
-    if data == nil, universalClipboardImage, let url = fileURLs.first {
+    // MenuShelf: screenshots are read from their file when first shown.
+    if data == nil, universalClipboardImage || isScreenshot, let url = fileURLs.first {
       data = try? Data(contentsOf: url)
     }
 
@@ -167,7 +174,12 @@ class HistoryItem {
 
   // MenuShelf: whether the item holds image data, without reading or decoding it.
   var hasImageContent: Bool {
-    contentData([.tiff, .png, .jpeg, .heic]) != nil || universalClipboardImage
+    contentData([.tiff, .png, .jpeg, .heic]) != nil || universalClipboardImage || isScreenshot
+  }
+
+  // MenuShelf: an image from a screenshot folder, shown but never stored.
+  var isScreenshot: Bool {
+    contents.contains { $0.type == NSPasteboard.PasteboardType.menuShelfScreenshot.rawValue }
   }
 
   var rtfData: Data? { contentData([.rtf]) }

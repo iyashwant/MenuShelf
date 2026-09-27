@@ -20,7 +20,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
   var searchQuery: String = "" {
     didSet {
       throttler.throttle { [self] in
-        updateItems(search.search(string: searchQuery, within: all))
+        updateItems(search.search(string: searchQuery, within: allWithScreenshots()))
 
         if searchQuery.isEmpty {
           // MenuShelf: back to the just-opened state, with nothing selected.
@@ -51,8 +51,35 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
   @ObservationIgnored
   private var popupClosedAt: Date?
 
+  @MainActor
   func popupWillOpen() {
     contentFilter = ClipboardContentFilter.filterOnOpen(current: contentFilter, closedAt: popupClosedAt)
+    ClipboardShelfScreenshots.shared.refresh()
+  }
+
+  // MenuShelf: recent images from the screenshot folders. They sit in the
+  // list next to copied items but are never stored in the history.
+  @ObservationIgnored
+  private(set) var screenshotItems: [HistoryItemDecorator] = []
+
+  @MainActor
+  func setScreenshotItems(_ newItems: [HistoryItemDecorator]) {
+    screenshotItems = newItems
+    if searchQuery.isEmpty {
+      items = allWithScreenshots()
+      updateUnpinnedShortcuts()
+    } else {
+      updateItems(search.search(string: searchQuery, within: allWithScreenshots()))
+    }
+    ClipboardShelfState.shared.popup.needsResize = true
+  }
+
+  // History items and screenshots in one list, ordered by the sort setting.
+  private func allWithScreenshots() -> [HistoryItemDecorator] {
+    guard !screenshotItems.isEmpty else { return all }
+    let decorators = all + screenshotItems
+    let byItem = Dictionary(decorators.map { (ObjectIdentifier($0.item), $0) }, uniquingKeysWith: { first, _ in first })
+    return sorter.sort(decorators.map(\.item)).compactMap { byItem[ObjectIdentifier($0)] }
   }
 
   func popupDidClose() {
@@ -130,7 +157,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     let descriptor = FetchDescriptor<HistoryItem>()
     let results = try Storage.shared.context.fetch(descriptor)
     all = sorter.sort(results).map { HistoryItemDecorator($0) }
-    items = all
+    items = allWithScreenshots()
 
     limitHistorySize(to: Defaults[.size])
 
@@ -212,7 +239,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
         all.insert(itemDecorator, at: index)
       }
 
-      items = all
+      items = allWithScreenshots()
       updateUnpinnedShortcuts()
       ClipboardShelfState.shared.popup.needsResize = true
     }
@@ -243,7 +270,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       }
       all.removeAll(where: \.isUnpinned)
       sessionLog.removeValues { $0.pin == nil }
-      items = all
+      items = allWithScreenshots()
 
       try? Storage.shared.context.transaction {
         try? Storage.shared.context.delete(
@@ -274,7 +301,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       }
       all.removeAll()
       sessionLog.removeAll()
-      items = all
+      items = allWithScreenshots()
 
       try? Storage.shared.context.delete(model: HistoryItem.self)
       Storage.shared.context.processPendingChanges()
@@ -290,7 +317,8 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   @MainActor
   func delete(_ item: HistoryItemDecorator?) {
-    guard let item else { return }
+    // MenuShelf: a screenshot is a file in the user's folder, not history.
+    guard let item, !item.item.isScreenshot else { return }
 
     cleanup(item)
     withLogging("Removing history item") {
@@ -325,12 +353,18 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     guard let item else {
       return
     }
+    // MenuShelf: a screenshot is copied as its image, read from the file.
+    guard let copied = item.item.isScreenshot
+      ? ClipboardShelfScreenshots.pasteboardItem(for: item.item)
+      : item.item else {
+      return
+    }
 
     let modifierFlags = currentModifierFlags()
 
     if modifierFlags.isEmpty {
       ClipboardShelfState.shared.popup.close()
-      Clipboard.shared.copy(item.item, removeFormatting: Defaults[.removeFormattingByDefault])
+      Clipboard.shared.copy(copied, removeFormatting: Defaults[.removeFormattingByDefault])
       if Defaults[.pasteByDefault] {
         Clipboard.shared.paste()
       }
@@ -338,14 +372,14 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       switch HistoryItemAction(modifierFlags) {
       case .copy:
         ClipboardShelfState.shared.popup.close()
-        Clipboard.shared.copy(item.item)
+        Clipboard.shared.copy(copied)
       case .paste:
         ClipboardShelfState.shared.popup.close()
-        Clipboard.shared.copy(item.item)
+        Clipboard.shared.copy(copied)
         Clipboard.shared.paste()
       case .pasteWithoutFormatting:
         ClipboardShelfState.shared.popup.close()
-        Clipboard.shared.copy(item.item, removeFormatting: true)
+        Clipboard.shared.copy(copied, removeFormatting: true)
         Clipboard.shared.paste()
       case .unknown:
         return
@@ -447,7 +481,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   @MainActor
   func togglePin(_ item: HistoryItemDecorator?) {
-    guard let item else { return }
+    guard let item, !item.item.isScreenshot else { return }
 
     item.togglePin()
 
@@ -458,7 +492,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       all.insert(item, at: newIndex)
     }
 
-    items = all
+    items = allWithScreenshots()
 
     searchQuery = ""
     updateUnpinnedShortcuts()
