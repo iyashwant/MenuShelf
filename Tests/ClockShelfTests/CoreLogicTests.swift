@@ -281,3 +281,35 @@ func contentFilterMatchingAndCycling() {
     #expect(ClipboardContentFilter.all.cycled(backwards: true) == .images)
     #expect(ClipboardContentFilter.text.cycled(backwards: true) == .all)
 }
+
+// MARK: - Clipboard copy time
+
+private func copyTimeFixture() -> (calendar: Calendar, locale: Locale, now: Date) {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 15, minute: 30))!
+    return (calendar, Locale(identifier: "en_GB"), now)
+}
+
+@Test("copy time says Today or Yesterday with the time for recent copies")
+func copyTimeRelativeDays() {
+    let (calendar, locale, now) = copyTimeFixture()
+    let earlierToday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 0, minute: 58))!
+    let yesterday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 26, hour: 21, minute: 14))!
+    let today = ClipboardShelfCopyTime.string(for: earlierToday, now: now, calendar: calendar, locale: locale)
+    let yday = ClipboardShelfCopyTime.string(for: yesterday, now: now, calendar: calendar, locale: locale)
+    #expect(today.hasPrefix("Today, "))
+    #expect(today.contains("58"))
+    #expect(yday.hasPrefix("Yesterday, "))
+    #expect(yday.contains("14"))
+}
+
+@Test("copy time shows the full date with a short month before yesterday")
+func copyTimeOlderDates() {
+    let (calendar, locale, now) = copyTimeFixture()
+    let older = calendar.date(from: DateComponents(year: 2026, month: 9, day: 25, hour: 4, minute: 52))!
+    let text = ClipboardShelfCopyTime.string(for: older, now: now, calendar: calendar, locale: locale)
+    #expect(text.hasPrefix("25 Sept 2026, ") || text.hasPrefix("25 Sep 2026, "))
+    #expect(!text.contains("September"))
+    #expect(text.contains("52"))
+}

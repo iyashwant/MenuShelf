@@ -72,35 +72,42 @@ struct PreviewItemView: View {
       Divider()
         .padding(.vertical)
 
+      // MenuShelf: readable labels (the vendored string table isn't bundled,
+      // so the raw keys showed), one "Copied at" line for a single copy, and
+      // the source app shown by its icon and name alone.
       if let application = item.application {
         HStack(spacing: 3) {
-          Text("Application", tableName: "PreviewItemView")
           AppImageView(
             appImage: item.applicationImage,
             size: NSSize(width: 11, height: 11)
           )
           Text(application)
         }
+        .lineLimit(1)
       }
 
-      HStack(spacing: 3) {
-        Text("FirstCopyTime", tableName: "PreviewItemView")
-        Text(item.item.firstCopiedAt, style: .date)
-        Text(item.item.firstCopiedAt, style: .time)
-      }
-
-      HStack(spacing: 3) {
-        Text("LastCopyTime", tableName: "PreviewItemView")
-        Text(item.item.lastCopiedAt, style: .date)
-        Text(item.item.lastCopiedAt, style: .time)
-      }
-
-      HStack(spacing: 3) {
-        Text("NumberOfCopies", tableName: "PreviewItemView")
-        Text(String(item.item.numberOfCopies))
+      if item.item.numberOfCopies > 1 {
+        detailRow("First copied at", ClipboardShelfCopyTime.string(for: item.item.firstCopiedAt))
+        detailRow("Last copied at", ClipboardShelfCopyTime.string(for: item.item.lastCopiedAt))
+        detailRow("Copies", String(item.item.numberOfCopies))
+      } else {
+        detailRow("Copied at", ClipboardShelfCopyTime.string(for: item.item.lastCopiedAt))
       }
     }
     .controlSize(.small)
+  }
+
+  private func detailLabel(_ label: String) -> some View {
+    Text(label)
+      .foregroundStyle(.secondary)
+  }
+
+  private func detailRow(_ label: String, _ value: String) -> some View {
+    HStack(spacing: 3) {
+      detailLabel(label)
+      Text(value)
+    }
+    .lineLimit(1)
   }
 }
 
