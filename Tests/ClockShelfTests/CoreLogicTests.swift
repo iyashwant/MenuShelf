@@ -8,6 +8,7 @@
 //  Shortcuts CLI line parser.
 //
 
+import AppKit
 import Foundation
 import Testing
 @testable import MenuShelf
@@ -207,4 +208,42 @@ func moduleOrderDecodesLegacySettings() throws {
     decoder.dateDecodingStrategy = .iso8601
     let decoded = try decoder.decode(MenuViewConfig.self, from: JSONSerialization.data(withJSONObject: object))
     #expect(decoded.moduleOrder == nil)
+}
+
+// MARK: - Status icon hole filling
+
+private func testImage(_ draw: @escaping (NSRect) -> Void) -> NSImage {
+    NSImage(size: NSSize(width: 20, height: 20), flipped: false) { rect in
+        NSColor.black.set()
+        draw(rect)
+        return true
+    }
+}
+
+private func alpha(of image: NSImage, x: Int, y: Int) -> CGFloat? {
+    let rep = image.representations
+        .compactMap { $0 as? NSBitmapImageRep }
+        .max { $0.pixelsWide < $1.pixelsWide }
+    return rep?.colorAt(x: x, y: y)?.alphaComponent
+}
+
+@Test("fillingLargestEnclosedHole fills a ring's centre and leaves the outside clear")
+func holeFillFillsEnclosedRegion() throws {
+    let ring = testImage { rect in
+        let path = NSBezierPath(ovalIn: rect.insetBy(dx: 3, dy: 3))
+        path.lineWidth = 2
+        path.stroke()
+    }
+    let filled = ring.fillingLargestEnclosedHole()
+    #expect(filled !== ring)
+    #expect(try #require(alpha(of: filled, x: 20, y: 20)) == 1)
+    #expect(try #require(alpha(of: filled, x: 0, y: 0)) == 0)
+}
+
+@Test("fillingLargestEnclosedHole returns the image unchanged when nothing is enclosed")
+func holeFillLeavesSolidShapes() {
+    let disc = testImage { rect in
+        NSBezierPath(ovalIn: rect.insetBy(dx: 3, dy: 3)).fill()
+    }
+    #expect(disc.fillingLargestEnclosedHole() === disc)
 }

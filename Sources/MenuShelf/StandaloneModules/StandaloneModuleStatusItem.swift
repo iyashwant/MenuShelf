@@ -35,7 +35,11 @@ extension StatusItemManager {
         let filledModule = isActive && module.menuBarStyle != .titleOnly
             ? filledVariant(of: module)
             : nil
-        let image = statusImage(for: filledModule ?? module, size: 18)
+        var image = statusImage(for: filledModule ?? module, size: 18)
+        if let filledModule, case .systemSymbol(let name, _) = filledModule.icon,
+           Self.symbolsWithOpenTop.contains(name) {
+            image = image.fillingLargestEnclosedHole()
+        }
         image.isTemplate = shouldTemplateIcon(module)
         button.contentTintColor = isActive && filledModule == nil
             ? NSColor.controlAccentColor
@@ -74,6 +78,10 @@ extension StatusItemManager {
             return true
         }
     }
+
+    /// Filled symbols that SF Symbols still draws with a cut-out opening at
+    /// the top. The active icon closes it so the whole cup reads as filled.
+    private static let symbolsWithOpenTop: Set<String> = ["cup.and.saucer.fill", "mug.fill"]
 
     /// `module` with its SF Symbol swapped for the `.fill` variant, or `nil`
     /// when the icon isn't a symbol or has no filled form.
@@ -129,5 +137,103 @@ extension MenuBuilder {
             updatedAt: module.updatedAt
         )
         return icon(for: pseudoSource, size: size)
+    }
+}
+
+// MARK: - Hole filling
+
+extension NSImage {
+    /// A copy with its largest fully enclosed transparent region painted in
+    /// the image's own colour, rendered at 1x and 2x. Returns `self` when
+    /// there is no enclosed region.
+    func fillingLargestEnclosedHole() -> NSImage {
+        let reps = [1, 2].compactMap { holeFilledRep(scale: CGFloat($0)) }
+        guard !reps.isEmpty else { return self }
+        let result = NSImage(size: size)
+        reps.forEach(result.addRepresentation)
+        return result
+    }
+
+    private func holeFilledRep(scale: CGFloat) -> NSBitmapImageRep? {
+        let width = Int((size.width * scale).rounded())
+        let height = Int((size.height * scale).rounded())
+        guard width > 2, height > 2,
+              let rep = NSBitmapImageRep(
+                  bitmapDataPlanes: nil,
+                  pixelsWide: width,
+                  pixelsHigh: height,
+                  bitsPerSample: 8,
+                  samplesPerPixel: 4,
+                  hasAlpha: true,
+                  isPlanar: false,
+                  colorSpaceName: .deviceRGB,
+                  bytesPerRow: width * 4,
+                  bitsPerPixel: 32
+              ) else { return nil }
+        rep.size = size
+        guard let context = NSGraphicsContext(bitmapImageRep: rep),
+              let pixels = rep.bitmapData else { return nil }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        let count = width * height
+        func alpha(_ index: Int) -> UInt8 { pixels[index * 4 + 3] }
+
+        // Mark every clear pixel reachable from the border as outside; the
+        // clear pixels left over are holes enclosed by the glyph.
+        var isOutside = [Bool](repeating: false, count: count)
+        var stack: [Int] = []
+        for x in 0..<width { stack.append(x); stack.append((height - 1) * width + x) }
+        for y in 0..<height { stack.append(y * width); stack.append(y * width + width - 1) }
+        while let index = stack.popLast() {
+            guard !isOutside[index], alpha(index) < 128 else { continue }
+            isOutside[index] = true
+            let x = index % width, y = index / width
+            if x > 0 { stack.append(index - 1) }
+            if x < width - 1 { stack.append(index + 1) }
+            if y > 0 { stack.append(index - width) }
+            if y < height - 1 { stack.append(index + width) }
+        }
+
+        var visited = isOutside
+        var largestHole: [Int] = []
+        for start in 0..<count where !visited[start] && alpha(start) < 128 {
+            var hole: [Int] = []
+            stack = [start]
+            while let index = stack.popLast() {
+                guard !visited[index], alpha(index) < 128 else { continue }
+                visited[index] = true
+                hole.append(index)
+                let x = index % width, y = index / width
+                if x > 0 { stack.append(index - 1) }
+                if x < width - 1 { stack.append(index + 1) }
+                if y > 0 { stack.append(index - width) }
+                if y < height - 1 { stack.append(index + width) }
+            }
+            if hole.count > largestHole.count { largestHole = hole }
+        }
+        guard !largestHole.isEmpty,
+              let opaque = (0..<count).max(by: { alpha($0) < alpha($1) }),
+              alpha(opaque) > 0 else { return nil }
+
+        // Paint the hole plus a one-pixel ring, so the anti-aliased edge
+        // where it meets the glyph doesn't leave a faint outline.
+        for index in largestHole {
+            let x = index % width, y = index / width
+            for dy in -1...1 {
+                for dx in -1...1 {
+                    let nx = x + dx, ny = y + dy
+                    guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                    let target = (ny * width + nx) * 4
+                    for channel in 0..<4 {
+                        pixels[target + channel] = pixels[opaque * 4 + channel]
+                    }
+                }
+            }
+        }
+        return rep
     }
 }
