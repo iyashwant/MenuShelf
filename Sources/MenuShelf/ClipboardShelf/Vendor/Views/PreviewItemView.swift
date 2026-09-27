@@ -11,6 +11,12 @@ struct PreviewItemView: View {
       .clipShape(.rect(cornerRadius: 5))
   }
 
+  private var previewText: some View {
+    Text(item.text)
+      .font(.body)
+      .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       if item.hasImage {
@@ -18,9 +24,11 @@ struct PreviewItemView: View {
           return await item.asyncGetPreviewImage()
         } content: { image in
           if let image = image {
-            previewImage {
-              Image(nsImage: image)
-                .resizable()
+            FittedImageLayout(naturalSize: image.size) {
+              previewImage {
+                Image(nsImage: image)
+                  .resizable()
+              }
             }
           } else {
             previewImage {
@@ -50,13 +58,16 @@ struct PreviewItemView: View {
           }
         }
       } else {
-        ScrollView {
-          Text(item.text)
-            .font(.body)
+        // MenuShelf: short text sizes the card to fit; long text scrolls
+        // inside the tallest card the popup allows.
+        ViewThatFits(in: .vertical) {
+          previewText
+            .fixedSize(horizontal: false, vertical: true)
+          ScrollView {
+            previewText
+          }
         }
       }
-
-      Spacer(minLength: 0)
 
       Divider()
         .padding(.vertical)
@@ -90,5 +101,26 @@ struct PreviewItemView: View {
       }
     }
     .controlSize(.small)
+  }
+}
+
+// MenuShelf: sizes an image to fit the space offered without stretching it
+// past its own size, and reports that size rather than filling the space, so
+// the preview card stays as small as its content.
+private struct FittedImageLayout: Layout {
+  let naturalSize: CGSize
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard naturalSize.width > 0, naturalSize.height > 0 else { return .zero }
+    let width = min(proposal.width ?? naturalSize.width, naturalSize.width)
+    let height = min(proposal.height ?? naturalSize.height, naturalSize.height)
+    let scale = min(width / naturalSize.width, height / naturalSize.height)
+    return CGSize(width: naturalSize.width * scale, height: naturalSize.height * scale)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    for subview in subviews {
+      subview.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
   }
 }

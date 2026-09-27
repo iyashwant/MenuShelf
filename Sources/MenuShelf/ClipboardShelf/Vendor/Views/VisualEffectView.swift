@@ -31,6 +31,13 @@ struct GlassEffectView: NSViewRepresentable {
   }
 }
 
+// MenuShelf: the list and the preview card each get their own glass, and
+// both sit in one `GlassEffectContainer`. Where the card touches the list the
+// two merge into a single piece; the space around the card stays see-through.
+enum PanelGlass {
+  static let cornerRadius = Popup.cornerRadius + Popup.horizontalPadding
+}
+
 #Preview {
   VisualEffectView(
     material: .popover,

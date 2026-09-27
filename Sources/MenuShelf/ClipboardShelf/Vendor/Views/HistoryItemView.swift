@@ -31,6 +31,14 @@ struct HistoryItemView: View {
 
   @Environment(ClipboardShelfState.self) private var appState
 
+  @State private var rowFrame: CGRect?
+
+  // MenuShelf: tells the preview card where the selected row is.
+  private func reportFrameIfSelected() {
+    guard item.isSelected, let rowFrame else { return }
+    appState.preview.leadRowFrame = rowFrame
+  }
+
   var body: some View {
     ListItemView(
       id: item.id,
@@ -48,6 +56,13 @@ struct HistoryItemView: View {
     }
     .onAppear {
       item.ensureThumbnailImage()
+    }
+    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+      rowFrame = frame
+      reportFrameIfSelected()
+    }
+    .onChange(of: item.isSelected, initial: true) {
+      reportFrameIfSelected()
     }
     .onTapGesture {
       if NSEvent.modifierFlags.contains(.command) && appState.multiSelectionEnabled {

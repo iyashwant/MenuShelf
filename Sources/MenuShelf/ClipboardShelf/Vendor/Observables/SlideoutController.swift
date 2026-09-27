@@ -97,6 +97,10 @@ class SlideoutController {
   var state: SlideoutState = .closed
   var resizingMode: ResizingMode = .none
 
+  // MenuShelf: the selected row's frame in window coordinates. The preview
+  // card is centred on it.
+  var leadRowFrame: CGRect?
+
   var nswindow: NSWindow? {
     return ClipboardShelfState.shared.panel
   }

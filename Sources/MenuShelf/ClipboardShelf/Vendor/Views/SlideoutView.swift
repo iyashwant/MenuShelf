@@ -107,6 +107,8 @@ where Content: View, Slideout: View {
       .frame(
         width: !isContentResizing ? controller.contentWidth.rounded() : nil
       )
+      .frame(maxHeight: .infinity)
+      .glassEffect(.regular, in: .rect(cornerRadius: PanelGlass.cornerRadius))
       .fixedSize(
         horizontal: isAnimating || isSlideoutResizing,
         vertical: false

@@ -10,14 +10,11 @@ struct ClipboardShelfContentView: View {
 
   var body: some View {
     ZStack {
-      if #available(macOS 26.0, *) {
-        GlassEffectView()
-      } else {
-        VisualEffectView()
-      }
-
+      // MenuShelf: no window-wide background. `SlideoutView` draws the list's
+      // glass and `SlideoutContentView` the preview card's; the container
+      // merges the two where they touch.
       KeyHandlingView(searchQuery: $appState.history.searchQuery, searchFocused: $searchFocused) {
-        VStack(spacing: 0) {
+        GlassEffectContainer {
           SlideoutView(controller: appState.preview) {
             HeaderView(
               controller: appState.preview,
